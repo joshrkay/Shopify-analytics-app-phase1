@@ -56,6 +56,7 @@ jobs:
           DATABASE_URL: "sqlite:///:memory:"
           REDIS_URL: "redis://localhost:6379"
           ENV: "test"
+          PYTHONPATH: "${{ github.workspace }}/backend"
         run: |
           echo "=========================================="
           echo "Running Epic 0 Quality Gate Tests"
@@ -75,6 +76,7 @@ jobs:
           DATABASE_URL: "sqlite:///:memory:"
           REDIS_URL: "redis://localhost:6379"
           ENV: "test"
+          PYTHONPATH: "${{ github.workspace }}/backend"
         run: |
           echo "=========================================="
           echo "Running Tenant Isolation Tests"
@@ -138,6 +140,7 @@ jobs:
           DATABASE_URL: "sqlite:///:memory:"
           REDIS_URL: "redis://localhost:6379"
           ENV: "test"
+          PYTHONPATH: "${{ github.workspace }}/backend"
         run: |
           pytest src/tests/platform/ \
             -v \
