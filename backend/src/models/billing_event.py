@@ -7,8 +7,7 @@ Used for audit trail and reconciliation with Shopify Billing API.
 
 import uuid
 import enum
-from sqlalchemy import Column, String, Integer, Numeric, DateTime, ForeignKey, Index, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, String, Integer, Numeric, DateTime, ForeignKey, Index, func, JSON
 
 from src.repositories.base_repo import Base
 from src.models.base import TenantScopedMixin
@@ -99,7 +98,7 @@ class BillingEvent(Base, TenantScopedMixin):
     
     extra_metadata = Column(
         "metadata",
-        JSONB,
+        JSON,
         nullable=True,
         comment="Additional event metadata (JSON)"
     )

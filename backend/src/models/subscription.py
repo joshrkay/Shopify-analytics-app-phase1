@@ -10,9 +10,8 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, String, Integer, DateTime, Enum, Text,
-    ForeignKey, Index, UniqueConstraint, text
+    ForeignKey, Index, UniqueConstraint, text, JSON
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from src.models.base import TimestampMixin, TenantScopedMixin
@@ -118,7 +117,7 @@ class Subscription(Base, TimestampMixin, TenantScopedMixin):
     
     extra_metadata = Column(
         "metadata",
-        JSONB,
+        JSON,
         nullable=True,
         comment="Additional subscription metadata"
     )

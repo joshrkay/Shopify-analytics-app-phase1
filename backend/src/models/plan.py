@@ -5,8 +5,7 @@ Plans are global (not tenant-scoped) and define available subscription tiers.
 PlanFeatures link plans to enabled features with optional limits.
 """
 
-from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, UniqueConstraint, JSON
 from sqlalchemy.orm import relationship
 
 from src.repositories.base_repo import Base
@@ -132,7 +131,7 @@ class PlanFeature(Base, TimestampMixin):
     )
     
     limits = Column(
-        JSONB,
+        JSON,
         nullable=True,
         comment="Optional limits object (e.g., {'ai_insights_per_month': 100})"
     )

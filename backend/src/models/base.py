@@ -18,7 +18,7 @@ from src.repositories.base_repo import Base
 
 
 def generate_uuid() -> str:
-    """Generate a UUID4 string for use as a primary key."""
+    """Generate a UUID4 string for use as a primary key default."""
     return str(uuid.uuid4())
 
 
