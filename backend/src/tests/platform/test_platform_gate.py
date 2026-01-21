@@ -106,6 +106,13 @@ def app_with_middleware():
         tenant_ctx = get_tenant_context(request)
         return {"tenant_id": tenant_ctx.tenant_id, "data": "test"}
     
+    @app.post("/api/data")
+    async def post_data(request: Request):
+        """POST endpoint to test tenant_id from body is ignored."""
+        tenant_ctx = get_tenant_context(request)
+        # CRITICAL: tenant_id comes from JWT, not request body
+        return {"tenant_id": tenant_ctx.tenant_id, "message": "tenant_id from JWT only"}
+    
     @app.get("/api/admin-only")
     async def admin_only(request: Request):
         tenant_ctx = get_tenant_context(request)
@@ -120,12 +127,39 @@ def app_with_middleware():
     return app
 
 
+class ExtraFieldsFormatter(logging.Formatter):
+    """Custom formatter that includes extra fields in log output."""
+    
+    def format(self, record):
+        # Add extra fields to the message
+        extra_fields = []
+        for key, value in record.__dict__.items():
+            if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName', 
+                          'levelname', 'levelno', 'lineno', 'module', 'msecs', 
+                          'message', 'pathname', 'process', 'processName', 'relativeCreated',
+                          'thread', 'threadName', 'exc_info', 'exc_text', 'stack_info']:
+                extra_fields.append(f"{key}={value}")
+        
+        # Format the base message
+        base_msg = super().format(record)
+        
+        # Append extra fields
+        if extra_fields:
+            base_msg += " " + " ".join(extra_fields)
+        
+        return base_msg
+
+
 @pytest.fixture
 def log_capture():
     """Capture log output for testing."""
     log_stream = StringIO()
     handler = logging.StreamHandler(log_stream)
     handler.setLevel(logging.INFO)
+    
+    # Configure formatter to include extra fields
+    formatter = ExtraFieldsFormatter('%(levelname)s %(name)s %(message)s')
+    handler.setFormatter(formatter)
     
     logger = logging.getLogger()
     logger.addHandler(handler)
@@ -234,15 +268,17 @@ class TestTenantIsolation:
         from sqlalchemy.orm import sessionmaker
         from src.repositories.base_repo import Base
         
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(engine)
-        Session = sessionmaker(bind=engine)
-        session = Session()
-        
+        # Define model first
         class TestModel(Base):
             __tablename__ = "test"
             id = Column(String, primary_key=True)
             tenant_id = Column(String, nullable=False)
+        
+        # Create engine and tables after model is defined
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         
         class TestRepo(BaseRepository[TestModel]):
             def _get_model_class(self):
@@ -255,7 +291,7 @@ class TestTenantIsolation:
         repo_b = TestRepo(session, "tenant-b")
         
         # Create entity for tenant A
-        entity_a = repo_a.create({"id": "entity-1", "name": "test"})
+        entity_a = repo_a.create({"id": "entity-1"})
         assert entity_a.tenant_id == "tenant-a"
         
         # CRITICAL: Tenant B cannot access Tenant A's entity
