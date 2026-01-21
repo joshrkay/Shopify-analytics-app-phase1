@@ -132,12 +132,16 @@ class BillingService:
         # Create Shopify billing client
         async with ShopifyBillingClient(shop_domain, access_token) as client:
             # Configure plan for Shopify
+            # Use test mode based on environment
+            import os
+            is_test_mode = os.getenv("SHOPIFY_BILLING_TEST_MODE", "false").lower() == "true"
+
             shopify_plan = ShopifyPlanConfig(
                 name=plan.display_name,
                 price=plan.price_monthly_cents / 100 if plan.price_monthly_cents else 0,
                 interval="EVERY_30_DAYS",
                 trial_days=0,
-                test=False,  # Set to True for testing
+                test=is_test_mode,  # Enable via SHOPIFY_BILLING_TEST_MODE=true
             )
 
             try:
