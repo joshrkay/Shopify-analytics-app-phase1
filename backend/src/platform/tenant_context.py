@@ -88,12 +88,19 @@ class TenantContextMiddleware:
     """
     
     def __init__(self):
-        client_id = os.getenv("FRONTEGG_CLIENT_ID")
-        if not client_id:
-            raise ValueError("FRONTEGG_CLIENT_ID environment variable is required")
-        
-        self.jwks_client = FronteggJWKSClient(client_id)
+        # Lazy initialization - jwks_client will be created on first use
+        # Environment variables are validated in app lifespan startup
+        self._jwks_client = None
         self.issuer = "https://api.frontegg.com"
+    
+    def _get_jwks_client(self):
+        """Get or create JWKS client (lazy initialization)."""
+        if self._jwks_client is None:
+            client_id = os.getenv("FRONTEGG_CLIENT_ID")
+            if not client_id:
+                raise ValueError("FRONTEGG_CLIENT_ID environment variable is required")
+            self._jwks_client = FronteggJWKSClient(client_id)
+        return self._jwks_client
     
     async def __call__(self, request: Request, call_next):
         """
@@ -122,14 +129,15 @@ class TenantContextMiddleware:
         
         try:
             # Get signing key from JWKS (PyJWKClient handles fetching/caching)
-            signing_key = self.jwks_client.get_signing_key(token)
+            jwks_client = self._get_jwks_client()
+            signing_key = jwks_client.get_signing_key(token)
             
             # Decode and verify token using PyJWT
             payload = jwt.decode(
                 token,
                 signing_key.key,
                 algorithms=["RS256"],  # Frontegg uses RS256
-                audience=self.jwks_client.client_id,
+                audience=jwks_client.client_id,
                 issuer=self.issuer,
                 options={
                     "verify_signature": True,

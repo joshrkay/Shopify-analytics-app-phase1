@@ -40,6 +40,14 @@ async def lifespan(app: FastAPI):
     
     logger.info("Environment variables validated")
     
+    # Pre-initialize middleware JWKS client to verify configuration
+    try:
+        tenant_middleware._get_jwks_client()
+        logger.info("Tenant context middleware initialized and ready")
+    except Exception as e:
+        logger.error(f"Failed to initialize tenant context middleware: {e}")
+        raise
+    
     yield
     
     # Shutdown
@@ -64,14 +72,9 @@ app.add_middleware(
 )
 
 # CRITICAL: Add tenant context middleware
-# This MUST be added before route handlers
-try:
-    tenant_middleware = TenantContextMiddleware()
-    app.middleware("http")(tenant_middleware)
-    logger.info("Tenant context middleware enabled")
-except Exception as e:
-    logger.error(f"Failed to initialize tenant context middleware: {e}")
-    raise
+# Middleware uses lazy initialization - env vars validated in lifespan startup
+tenant_middleware = TenantContextMiddleware()
+app.middleware("http")(tenant_middleware)
 
 
 # Include health route (bypasses authentication)
