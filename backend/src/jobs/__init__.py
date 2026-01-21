@@ -1,4 +1,7 @@
-"""Jobs package for background tasks."""
-from src.jobs.reconcile_subscriptions import SubscriptionReconciliationJob
+"""
+Background jobs module.
+"""
 
-__all__ = ["SubscriptionReconciliationJob"]
+from src.jobs.reconcile_subscriptions import run_reconciliation
+
+__all__ = ["run_reconciliation"]

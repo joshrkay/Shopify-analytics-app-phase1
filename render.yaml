@@ -104,7 +104,7 @@ services:
     dockerfilePath: ./docker/worker.Dockerfile
     dockerContext: .
     # Command to execute
-    command: python -m jobs.reconcile_subscriptions
+    command: python -m src.jobs.reconcile_subscriptions
     region: oregon
     # Environment variables (same as worker)
     envVars:

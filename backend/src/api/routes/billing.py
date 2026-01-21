@@ -1,57 +1,61 @@
 """
-Billing API routes for managing Shopify subscriptions.
+Billing API routes for subscription management.
 
-All routes require tenant context from JWT.
-tenant_id is NEVER accepted from request body.
+All routes require JWT authentication with tenant context.
 """
 
+import os
 import logging
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, Request, HTTPException, status, Depends
+from fastapi import APIRouter, Request, HTTPException, status, Depends, Query
 from pydantic import BaseModel, Field
 
-from src.platform.tenant_context import get_tenant_context
-from src.services.billing_service import BillingService, BillingServiceError
+from src.platform.tenant_context import get_tenant_context, TenantContext
+from src.services.billing_service import (
+    BillingService,
+    BillingServiceError,
+    PlanNotFoundError,
+    StoreNotFoundError,
+    SubscriptionError
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 
-# Request/Response Models
-
+# Request/Response models
 class CreateCheckoutRequest(BaseModel):
     """Request to create a checkout URL."""
     plan_id: str = Field(..., description="Plan ID to subscribe to")
-    return_url: str = Field(..., description="URL to redirect after checkout")
-    shop_domain: str = Field(..., description="Shopify shop domain")
-    # Note: access_token should come from stored credentials, not request
+    return_url: Optional[str] = Field(None, description="URL to redirect after checkout")
+    test_mode: Optional[bool] = Field(False, description="Create test charge (no real money)")
 
 
-class CreateCheckoutResponse(BaseModel):
+class CheckoutResponse(BaseModel):
     """Response with checkout URL."""
     checkout_url: str
     subscription_id: str
-    plan_id: str
+    shopify_subscription_id: Optional[str] = None
+    success: bool
 
 
 class SubscriptionResponse(BaseModel):
-    """Subscription details response."""
-    id: str
-    tenant_id: str
+    """Current subscription information."""
+    subscription_id: Optional[str]
     plan_id: str
     plan_name: str
     status: str
-    shopify_subscription_id: Optional[str]
-    current_period_end: Optional[datetime]
-    cancelled_at: Optional[datetime]
-    created_at: datetime
+    is_active: bool
+    current_period_end: Optional[str]
+    trial_end: Optional[str]
+    can_access_features: bool
+    downgraded_reason: Optional[str] = None
 
 
 class PlanResponse(BaseModel):
-    """Plan details response."""
+    """Plan information."""
     id: str
     name: str
     display_name: str
@@ -61,125 +65,123 @@ class PlanResponse(BaseModel):
     is_active: bool
 
 
-class EntitlementCheckResponse(BaseModel):
-    """Entitlement check response."""
-    feature_key: str
-    has_access: bool
-    plan_id: Optional[str]
-    plan_name: Optional[str]
+class PlansListResponse(BaseModel):
+    """List of available plans."""
+    plans: list[PlanResponse]
+
+
+class CallbackResponse(BaseModel):
+    """Response after billing callback."""
+    success: bool
+    subscription_id: Optional[str]
+    status: str
+    message: str
 
 
 # Dependency to get database session
-def get_db_session(request: Request):
-    """Get database session from request state."""
-    if hasattr(request.app.state, "db_session"):
-        return request.app.state.db_session
-    # For now, raise error - in production, use proper session management
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Database not configured"
-    )
-
-
-@router.get("/plans", response_model=List[PlanResponse])
-async def list_plans(request: Request):
+async def get_db_session():
     """
-    List all available subscription plans.
+    Get database session.
 
-    Returns active plans that merchants can subscribe to.
-    This endpoint does not require tenant context.
+    TODO: Implement proper session management with connection pooling.
+    This is a placeholder that should be replaced with actual implementation.
     """
-    from src.models.plan import Plan
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
 
-    try:
-        db_session = get_db_session(request)
-        plans = db_session.query(Plan).filter(Plan.is_active == True).all()
-
-        return [
-            PlanResponse(
-                id=plan.id,
-                name=plan.name,
-                display_name=plan.display_name,
-                description=plan.description,
-                price_monthly_cents=plan.price_monthly_cents,
-                price_yearly_cents=plan.price_yearly_cents,
-                is_active=plan.is_active,
-            )
-            for plan in plans
-        ]
-    except Exception as e:
-        logger.error("Failed to list plans", extra={"error": str(e)})
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve plans"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not configured"
         )
 
+    # Handle Render's postgres:// URL format
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-@router.post("/checkout", response_model=CreateCheckoutResponse)
-async def create_checkout(request: Request, checkout_request: CreateCheckoutRequest):
+    engine = create_engine(database_url, pool_pre_ping=True)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def get_billing_service(request: Request, db_session=Depends(get_db_session)) -> BillingService:
+    """Get billing service with tenant context."""
+    tenant_ctx = get_tenant_context(request)
+    return BillingService(db_session, tenant_ctx.tenant_id)
+
+
+@router.post("/checkout", response_model=CheckoutResponse)
+async def create_checkout(
+    request: Request,
+    checkout_request: CreateCheckoutRequest,
+    billing_service: BillingService = Depends(get_billing_service)
+):
     """
-    Create a Shopify checkout URL for subscription.
+    Create a Shopify Billing checkout URL.
 
-    Redirects the merchant to Shopify to approve the subscription charge.
-    tenant_id is extracted from JWT, not from request body.
+    The merchant will be redirected to Shopify to approve the charge.
+    After approval, they are redirected to the return_url with charge status.
+
+    Returns:
+        CheckoutResponse with confirmation URL for redirect
     """
     tenant_ctx = get_tenant_context(request)
 
     logger.info("Creating checkout URL", extra={
         "tenant_id": tenant_ctx.tenant_id,
-        "plan_id": checkout_request.plan_id,
-        "shop_domain": checkout_request.shop_domain,
+        "plan_id": checkout_request.plan_id
     })
 
     try:
-        db_session = get_db_session(request)
-
-        # Get shop's access token from store record
-        from src.models.store import ShopifyStore
-        store = db_session.query(ShopifyStore).filter(
-            ShopifyStore.tenant_id == tenant_ctx.tenant_id,
-            ShopifyStore.shop_domain == checkout_request.shop_domain,
-        ).first()
-
-        if not store:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Store not found for this tenant"
-            )
-
-        # Decrypt access token (implementation depends on encryption method)
-        access_token = store.access_token_encrypted  # TODO: Add decryption
-
-        billing_service = BillingService(db_session, tenant_ctx.tenant_id)
-
         result = await billing_service.create_checkout_url(
             plan_id=checkout_request.plan_id,
             return_url=checkout_request.return_url,
-            shop_domain=checkout_request.shop_domain,
-            access_token=access_token,
+            test_mode=checkout_request.test_mode or False
         )
 
-        return CreateCheckoutResponse(
+        return CheckoutResponse(
             checkout_url=result.checkout_url,
             subscription_id=result.subscription_id,
-            plan_id=result.plan_id,
+            shopify_subscription_id=result.shopify_subscription_id,
+            success=result.success
         )
 
-    except BillingServiceError as e:
-        logger.warning("Checkout creation failed", extra={
+    except PlanNotFoundError as e:
+        logger.warning("Plan not found", extra={
             "tenant_id": tenant_ctx.tenant_id,
-            "error": str(e),
+            "plan_id": checkout_request.plan_id
+        })
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except StoreNotFoundError as e:
+        logger.warning("Store not found", extra={
+            "tenant_id": tenant_ctx.tenant_id
+        })
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except SubscriptionError as e:
+        logger.error("Subscription error", extra={
+            "tenant_id": tenant_ctx.tenant_id,
+            "error": str(e)
         })
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Unexpected error creating checkout", extra={
+    except BillingServiceError as e:
+        logger.error("Billing service error", extra={
             "tenant_id": tenant_ctx.tenant_id,
-            "error": str(e),
+            "error": str(e)
         })
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -187,118 +189,146 @@ async def create_checkout(request: Request, checkout_request: CreateCheckoutRequ
         )
 
 
-@router.get("/subscription", response_model=Optional[SubscriptionResponse])
-async def get_current_subscription(request: Request):
+@router.get("/subscription", response_model=SubscriptionResponse)
+async def get_subscription(
+    request: Request,
+    billing_service: BillingService = Depends(get_billing_service)
+):
     """
-    Get the current active subscription for the tenant.
+    Get current subscription information.
 
-    Returns the active or trialing subscription, or null if none exists.
+    Returns subscription status, plan details, and access permissions.
     """
     tenant_ctx = get_tenant_context(request)
 
+    logger.info("Getting subscription info", extra={
+        "tenant_id": tenant_ctx.tenant_id
+    })
+
     try:
-        db_session = get_db_session(request)
-        billing_service = BillingService(db_session, tenant_ctx.tenant_id)
-
-        subscription = billing_service.get_subscription()
-
-        if not subscription:
-            return None
+        info = billing_service.get_subscription_info()
 
         return SubscriptionResponse(
-            id=subscription.id,
-            tenant_id=subscription.tenant_id,
-            plan_id=subscription.plan_id,
-            plan_name=subscription.plan_name,
-            status=subscription.status,
-            shopify_subscription_id=subscription.shopify_subscription_id,
-            current_period_end=subscription.current_period_end,
-            cancelled_at=subscription.cancelled_at,
-            created_at=subscription.created_at,
+            subscription_id=info.subscription_id,
+            plan_id=info.plan_id,
+            plan_name=info.plan_name,
+            status=info.status,
+            is_active=info.is_active,
+            current_period_end=info.current_period_end.isoformat() if info.current_period_end else None,
+            trial_end=info.trial_end.isoformat() if info.trial_end else None,
+            can_access_features=info.can_access_features,
+            downgraded_reason=info.downgraded_reason
         )
-
     except Exception as e:
-        logger.error("Failed to get subscription", extra={
+        logger.error("Error getting subscription", extra={
             "tenant_id": tenant_ctx.tenant_id,
-            "error": str(e),
+            "error": str(e)
         })
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve subscription"
+            detail="Failed to get subscription information"
         )
 
 
-@router.get("/subscriptions", response_model=List[SubscriptionResponse])
-async def list_subscriptions(request: Request):
+@router.get("/callback")
+async def billing_callback(
+    request: Request,
+    shop: str = Query(..., description="Shop domain"),
+    charge_id: Optional[str] = Query(None, description="Shopify charge ID"),
+    billing_service: BillingService = Depends(get_billing_service)
+):
     """
-    List all subscriptions for the tenant (including cancelled).
+    Handle callback from Shopify Billing after merchant approval/decline.
 
-    Returns subscription history for the tenant.
+    This endpoint is called when the merchant returns from Shopify checkout.
+    The charge_id parameter indicates the result of the charge.
     """
     tenant_ctx = get_tenant_context(request)
 
-    try:
-        db_session = get_db_session(request)
-        billing_service = BillingService(db_session, tenant_ctx.tenant_id)
+    logger.info("Billing callback received", extra={
+        "tenant_id": tenant_ctx.tenant_id,
+        "shop": shop,
+        "charge_id": charge_id
+    })
 
-        subscriptions = billing_service.get_all_subscriptions()
+    # The actual subscription activation happens via webhooks
+    # This callback just confirms the redirect happened
 
-        return [
-            SubscriptionResponse(
-                id=sub.id,
-                tenant_id=sub.tenant_id,
-                plan_id=sub.plan_id,
-                plan_name=sub.plan_name,
-                status=sub.status,
-                shopify_subscription_id=sub.shopify_subscription_id,
-                current_period_end=sub.current_period_end,
-                cancelled_at=sub.cancelled_at,
-                created_at=sub.created_at,
+    info = billing_service.get_subscription_info()
+
+    return CallbackResponse(
+        success=info.is_active or info.status == "pending",
+        subscription_id=info.subscription_id,
+        status=info.status,
+        message="Subscription processing. Status will be updated via webhook."
+    )
+
+
+@router.get("/plans", response_model=PlansListResponse)
+async def list_plans(
+    request: Request,
+    db_session=Depends(get_db_session)
+):
+    """
+    List all available subscription plans.
+
+    Returns active plans that can be subscribed to.
+    """
+    from src.models.plan import Plan
+
+    tenant_ctx = get_tenant_context(request)
+
+    logger.info("Listing plans", extra={
+        "tenant_id": tenant_ctx.tenant_id
+    })
+
+    plans = db_session.query(Plan).filter(Plan.is_active == True).all()
+
+    return PlansListResponse(
+        plans=[
+            PlanResponse(
+                id=plan.id,
+                name=plan.name,
+                display_name=plan.display_name,
+                description=plan.description,
+                price_monthly_cents=plan.price_monthly_cents,
+                price_yearly_cents=plan.price_yearly_cents,
+                is_active=plan.is_active
             )
-            for sub in subscriptions
+            for plan in plans
         ]
-
-    except Exception as e:
-        logger.error("Failed to list subscriptions", extra={
-            "tenant_id": tenant_ctx.tenant_id,
-            "error": str(e),
-        })
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve subscriptions"
-        )
+    )
 
 
-@router.get("/entitlement/{feature_key}", response_model=EntitlementCheckResponse)
-async def check_entitlement(request: Request, feature_key: str):
+@router.post("/cancel")
+async def cancel_subscription(
+    request: Request,
+    billing_service: BillingService = Depends(get_billing_service)
+):
     """
-    Check if the tenant has access to a specific feature.
+    Request subscription cancellation.
 
-    Used for feature gating based on subscription plan.
+    Note: Actual cancellation is processed by Shopify and confirmed via webhook.
+    This endpoint initiates the cancellation request.
     """
     tenant_ctx = get_tenant_context(request)
 
-    try:
-        db_session = get_db_session(request)
-        billing_service = BillingService(db_session, tenant_ctx.tenant_id)
+    logger.info("Cancellation requested", extra={
+        "tenant_id": tenant_ctx.tenant_id
+    })
 
-        has_access = billing_service.check_entitlement(feature_key)
-        subscription = billing_service.get_subscription()
+    info = billing_service.get_subscription_info()
 
-        return EntitlementCheckResponse(
-            feature_key=feature_key,
-            has_access=has_access,
-            plan_id=subscription.plan_id if subscription else None,
-            plan_name=subscription.plan_name if subscription else None,
-        )
-
-    except Exception as e:
-        logger.error("Failed to check entitlement", extra={
-            "tenant_id": tenant_ctx.tenant_id,
-            "feature_key": feature_key,
-            "error": str(e),
-        })
+    if not info.subscription_id:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to check entitlement"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active subscription found"
         )
+
+    # For Shopify apps, merchants cancel through Shopify admin
+    # We just acknowledge the request
+    return {
+        "message": "To cancel your subscription, please visit your Shopify admin and manage app subscriptions.",
+        "subscription_id": info.subscription_id,
+        "current_plan": info.plan_name
+    }

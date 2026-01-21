@@ -1,249 +1,211 @@
 """
-UsageRecord and UsageAggregate models - Usage tracking and aggregation.
+Usage tracking models for API call metering.
 
-UsageRecord: Individual API calls (high volume, append-only)
-UsageAggregate: Aggregated usage counters per tenant per feature
+UsageRecord: High-volume table for individual API calls
+UsageAggregate: Rolled-up usage for efficient querying
 """
 
-import uuid
-import enum
-from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, UniqueConstraint, Index, func, text
-from sqlalchemy.dialects.postgresql import JSONB
+from datetime import datetime, timezone
 
-from src.repositories.base_repo import Base
-from src.models.base import TimestampMixin, TenantScopedMixin
+from sqlalchemy import (
+    Column, String, Integer, DateTime, Enum,
+    ForeignKey, Index, UniqueConstraint
+)
+from sqlalchemy.orm import relationship
 
-
-class UsageEventType(str, enum.Enum):
-    """Usage event type enumeration."""
-    INCREMENT = "increment"
-    SET = "set"
-    RESET = "reset"
-
-
-class PeriodType(str, enum.Enum):
-    """Billing period type enumeration."""
-    MONTHLY = "monthly"
-    YEARLY = "yearly"
-    LIFETIME = "lifetime"
-
-
-class MeterType(str, enum.Enum):
-    """Usage meter type enumeration."""
-    COUNTER = "counter"  # Increments
-    GAUGE = "gauge"  # Current value
-    CUMULATIVE = "cumulative"  # Never resets
+from src.models.base import Base, TimestampMixin, TenantScopedMixin, generate_uuid
 
 
 class UsageRecord(Base, TenantScopedMixin):
     """
-    Individual API call record (high volume, append-only).
-    
-    SECURITY: This is append-only. No UPDATE or DELETE operations allowed.
-    Used for audit trail and reconciliation.
+    Individual API call tracking.
+
+    HIGH VOLUME TABLE - written on every billable API request.
+    Aggregated hourly into UsageAggregate, then deleted after retention period.
+
+    NOTE: Does not include TimestampMixin to reduce storage (uses recorded_at).
     """
-    
-    __tablename__ = "usage_events"
-    
+
+    __tablename__ = "usage_records"
+
+    # Primary key
     id = Column(
-        String(255),
+        String(36),
         primary_key=True,
-        default=lambda: str(uuid.uuid4()),
-        comment="Primary key (UUID)"
+        default=generate_uuid
     )
-    
+
+    # Foreign key to store
     store_id = Column(
-        String(255),
-        nullable=True,
-        index=True,
-        comment="Foreign key to shopify_stores.id (optional)"
+        String(36),
+        ForeignKey("shopify_stores.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
     )
-    
+
+    # Request details
     endpoint = Column(
         String(255),
-        nullable=True,
-        index=True,
-        comment="API endpoint that was called"
+        nullable=False,
+        comment="API endpoint path"
     )
-    
     method = Column(
         String(10),
-        nullable=True,
+        nullable=False,
         comment="HTTP method (GET, POST, etc.)"
     )
-    
-    feature_key = Column(
+    user_id = Column(
         String(255),
-        nullable=False,
-        index=True,
-        comment="Feature identifier (e.g., 'ai_insights')"
-    )
-    
-    meter_id = Column(
-        String(255),
-        ForeignKey("usage_meters.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
-        comment="Optional foreign key to usage_meters.id"
+        comment="User who made the request (from JWT)"
     )
-    
-    event_type = Column(
+
+    # Metering
+    usage_type = Column(
         String(50),
-        nullable=False,
-        comment="Event type: increment, set, reset"
+        default="api_call",
+        comment="Type of usage (api_call, ai_tokens, storage_mb)"
     )
-    
-    value = Column(
-        Numeric(20, 2),
-        nullable=False,
-        comment="Event value"
+    quantity = Column(
+        Integer,
+        default=1,
+        comment="Units consumed (usually 1 for API calls)"
     )
-    
-    previous_value = Column(
-        Numeric(20, 2),
-        nullable=True,
-        comment="Value before this event"
-    )
-    
-    period_type = Column(
-        String(50),
-        nullable=False,
-        comment="Billing period type: monthly, yearly, lifetime"
-    )
-    
-    period_start = Column(
-        DateTime(timezone=True),
-        nullable=True,
-        index=True,
-        comment="Start of billing period"
-    )
-    
-    extra_metadata = Column(
-        "metadata",
-        JSONB,
-        nullable=True,
-        comment="Additional event context (user_id, request_id, etc.)"
-    )
-    
+
+    # Timing
     recorded_at = Column(
         DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
         index=True,
-        comment="When the API call was recorded"
+        comment="When the usage occurred"
     )
-    
-    # Note: No updated_at - this is append-only
-    created_at = Column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="Timestamp when record was created (append-only)"
+
+    # Response info (optional, for debugging)
+    response_status = Column(
+        Integer,
+        nullable=True,
+        comment="HTTP response status code"
     )
-    
-    # Indexes
+    response_time_ms = Column(
+        Integer,
+        nullable=True,
+        comment="Response time in milliseconds"
+    )
+
+    # Relationship
+    store = relationship("ShopifyStore", back_populates="usage_records")
+
+    # Indexes for efficient querying and cleanup
     __table_args__ = (
-        Index(
-            "idx_usage_events_tenant_feature_created",
-            "tenant_id",
-            "feature_key",
-            "created_at",
-            postgresql_ops={"created_at": "DESC"}
-        ),
-        Index(
-            "idx_usage_events_period",
-            "tenant_id",
-            "period_type",
-            "period_start",
-            postgresql_where=text("period_start IS NOT NULL")
-        ),
+        Index("ix_usage_records_tenant_store_time", "tenant_id", "store_id", "recorded_at"),
+        Index("ix_usage_records_store_time", "store_id", "recorded_at"),
+        Index("ix_usage_records_recorded_at", "recorded_at"),  # For cleanup job
     )
-    
+
     def __repr__(self) -> str:
-        return f"<UsageRecord(id={self.id}, tenant_id={self.tenant_id}, feature_key={self.feature_key}, value={self.value})>"
+        return f"<UsageRecord(store_id={self.store_id}, endpoint={self.endpoint}, recorded_at={self.recorded_at})>"
 
 
 class UsageAggregate(Base, TimestampMixin, TenantScopedMixin):
     """
-    Aggregated usage counter per tenant per feature.
-    
-    Updated from UsageRecord events.
-    Used for fast entitlement checks.
+    Hourly/daily aggregated usage for efficient querying.
+
+    Populated by background job from UsageRecord.
+    Used for usage reports and limit enforcement.
     """
-    
-    __tablename__ = "usage_meters"
-    
+
+    __tablename__ = "usage_aggregates"
+
+    # Primary key
     id = Column(
-        String(255),
+        String(36),
         primary_key=True,
-        default=lambda: str(uuid.uuid4()),
-        comment="Primary key (UUID)"
+        default=generate_uuid
     )
-    
-    feature_key = Column(
-        String(255),
+
+    # Foreign key to store
+    store_id = Column(
+        String(36),
+        ForeignKey("shopify_stores.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
-        comment="Feature identifier (e.g., 'ai_insights', 'openrouter_tokens')"
+        index=True
     )
-    
-    meter_type = Column(
-        String(50),
-        nullable=False,
-        comment="Meter type: counter (increments), gauge (current value), cumulative (never resets)"
-    )
-    
-    period_type = Column(
-        String(50),
-        nullable=False,
-        comment="Period type: monthly, yearly, lifetime"
-    )
-    
-    current_value = Column(
-        Numeric(20, 2),
-        nullable=False,
-        default=0,
-        comment="Current usage value"
-    )
-    
-    limit_value = Column(
-        Numeric(20, 2),
-        nullable=True,
-        comment="Usage limit (NULL means unlimited)"
-    )
-    
-    reset_at = Column(
+
+    # Aggregation period
+    period_start = Column(
         DateTime(timezone=True),
-        nullable=True,
-        index=True,
-        comment="When meter resets (for monthly/yearly)"
+        nullable=False,
+        comment="Start of aggregation period"
     )
-    
-    extra_metadata = Column(
-        "metadata",
-        JSONB,
-        nullable=True,
-        comment="Additional meter configuration"
+    period_end = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="End of aggregation period"
     )
-    
-    # Constraints
+    period_type = Column(
+        Enum("hourly", "daily", "monthly", name="period_type"),
+        default="hourly",
+        comment="Aggregation granularity"
+    )
+
+    # Usage type
+    usage_type = Column(
+        String(50),
+        default="api_call",
+        comment="Type of usage being aggregated"
+    )
+
+    # Aggregated metrics
+    total_quantity = Column(
+        Integer,
+        default=0,
+        comment="Total units consumed in period"
+    )
+    unique_endpoints = Column(
+        Integer,
+        default=0,
+        comment="Number of unique endpoints called"
+    )
+    unique_users = Column(
+        Integer,
+        default=0,
+        comment="Number of unique users"
+    )
+    success_count = Column(
+        Integer,
+        default=0,
+        comment="Number of successful requests (2xx)"
+    )
+    error_count = Column(
+        Integer,
+        default=0,
+        comment="Number of error requests (4xx, 5xx)"
+    )
+    avg_response_time_ms = Column(
+        Integer,
+        nullable=True,
+        comment="Average response time in milliseconds"
+    )
+
+    # Constraints and indexes
     __table_args__ = (
         UniqueConstraint(
-            "tenant_id",
-            "feature_key",
-            "period_type",
-            name="uk_usage_meters_tenant_feature_period"
+            "store_id", "period_start", "period_type", "usage_type",
+            name="uq_usage_aggregate"
         ),
-        Index(
-            "idx_usage_meters_tenant_feature",
-            "tenant_id",
-            "feature_key"
-        ),
-        Index(
-            "idx_usage_meters_reset_at",
-            "reset_at",
-            postgresql_where=text("reset_at IS NOT NULL")
-        ),
+        Index("ix_usage_agg_store_period", "store_id", "period_start"),
+        Index("ix_usage_agg_tenant_period", "tenant_id", "period_start"),
     )
-    
+
     def __repr__(self) -> str:
-        return f"<UsageAggregate(id={self.id}, tenant_id={self.tenant_id}, feature_key={self.feature_key}, current_value={self.current_value})>"
+        return f"<UsageAggregate(store_id={self.store_id}, period={self.period_type}, total={self.total_quantity})>"
+
+
+class UsageType:
+    """Standard usage types for metering."""
+    API_CALL = "api_call"
+    AI_TOKENS = "ai_tokens"
+    STORAGE_MB = "storage_mb"
+    EXPORT_COUNT = "export_count"
+    REPORT_GENERATION = "report_generation"

@@ -1,1 +1,3 @@
-"""Integrations package for external services."""
+"""
+External integrations module.
+"""

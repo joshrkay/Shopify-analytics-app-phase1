@@ -2,31 +2,41 @@
 Billing service for managing Shopify subscriptions.
 
 Orchestrates:
-- Subscription creation via Shopify Billing API
-- Subscription state persistence
-- Webhook event processing
-- Entitlement management based on subscription status
+- Checkout URL creation
+- Subscription storage
+- Status updates
+- Entitlement enforcement
+
+CRITICAL: All operations are tenant-scoped via tenant_id from JWT.
 """
 
-import logging
+import os
 import uuid
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
+import logging
+from typing import Optional
+from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
 from src.integrations.shopify.billing_client import (
     ShopifyBillingClient,
-    ShopifyPlanConfig,
-    ShopifyBillingError,
+    BillingInterval,
+    ShopifyAPIError,
+    get_billing_client
 )
 from src.models.subscription import Subscription, SubscriptionStatus
-from src.models.billing_event import BillingEvent, BillingEventType
 from src.models.plan import Plan
 from src.models.store import ShopifyStore
+from src.models.billing_event import BillingEvent, BillingEventType
 
 logger = logging.getLogger(__name__)
+
+# Default free plan ID
+FREE_PLAN_ID = "plan_free"
+
+# Grace period for failed payments (days)
+PAYMENT_GRACE_PERIOD_DAYS = 3
 
 
 @dataclass
@@ -34,25 +44,42 @@ class CheckoutResult:
     """Result of creating a checkout URL."""
     checkout_url: str
     subscription_id: str
-    plan_id: str
+    shopify_subscription_id: Optional[str] = None
+    success: bool = True
+    error: Optional[str] = None
 
 
 @dataclass
 class SubscriptionInfo:
-    """Subscription information for API responses."""
-    id: str
-    tenant_id: str
+    """Current subscription information for a tenant."""
+    subscription_id: Optional[str]
     plan_id: str
     plan_name: str
     status: str
-    shopify_subscription_id: Optional[str]
+    is_active: bool
     current_period_end: Optional[datetime]
-    cancelled_at: Optional[datetime]
-    created_at: datetime
+    trial_end: Optional[datetime]
+    can_access_features: bool
+    downgraded_reason: Optional[str] = None
 
 
 class BillingServiceError(Exception):
-    """Error from billing service operations."""
+    """Base exception for billing service errors."""
+    pass
+
+
+class PlanNotFoundError(BillingServiceError):
+    """Requested plan does not exist."""
+    pass
+
+
+class StoreNotFoundError(BillingServiceError):
+    """Store not found for tenant."""
+    pass
+
+
+class SubscriptionError(BillingServiceError):
+    """Error creating or updating subscription."""
     pass
 
 
@@ -60,518 +87,579 @@ class BillingService:
     """
     Service for managing Shopify billing operations.
 
-    SECURITY: tenant_id is ALWAYS from JWT, never from request.
-    All operations are scoped by tenant_id.
+    All methods require tenant_id from JWT context.
     """
 
     def __init__(self, db_session: Session, tenant_id: str):
         """
-        Initialize billing service with tenant scope.
+        Initialize billing service.
 
         Args:
-            db_session: SQLAlchemy database session
-            tenant_id: Tenant identifier (from JWT only)
-
-        Raises:
-            ValueError: If tenant_id is empty
+            db_session: Database session
+            tenant_id: Tenant ID from JWT (org_id)
         """
         if not tenant_id:
-            raise ValueError("tenant_id is required and cannot be empty")
+            raise ValueError("tenant_id is required")
 
-        self.db_session = db_session
+        self.db = db_session
         self.tenant_id = tenant_id
+
+    def _get_store(self) -> ShopifyStore:
+        """Get the Shopify store for current tenant."""
+        store = self.db.query(ShopifyStore).filter(
+            ShopifyStore.tenant_id == self.tenant_id,
+            ShopifyStore.status == "active"
+        ).first()
+
+        if not store:
+            raise StoreNotFoundError(f"No active store found for tenant {self.tenant_id}")
+
+        return store
+
+    def _get_plan(self, plan_id: str) -> Plan:
+        """Get plan by ID."""
+        plan = self.db.query(Plan).filter(
+            Plan.id == plan_id,
+            Plan.is_active == True
+        ).first()
+
+        if not plan:
+            raise PlanNotFoundError(f"Plan not found or inactive: {plan_id}")
+
+        return plan
+
+    def _get_active_subscription(self) -> Optional[Subscription]:
+        """Get active subscription for tenant."""
+        return self.db.query(Subscription).filter(
+            Subscription.tenant_id == self.tenant_id,
+            Subscription.status.in_([
+                SubscriptionStatus.ACTIVE.value,
+                SubscriptionStatus.PENDING.value,
+                SubscriptionStatus.FROZEN.value
+            ])
+        ).first()
+
+    def _decrypt_access_token(self, encrypted_token: str) -> str:
+        """
+        Decrypt the Shopify access token.
+
+        TODO: Implement proper encryption using a key management service.
+        For now, returns token as-is (assumes token storage handles encryption).
+        """
+        # SECURITY: In production, use proper encryption (e.g., AWS KMS, HashiCorp Vault)
+        # This is a placeholder - the actual implementation should decrypt the token
+        return encrypted_token
+
+    def _log_billing_event(
+        self,
+        event_type: str,
+        store_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
+        from_plan_id: Optional[str] = None,
+        to_plan_id: Optional[str] = None,
+        amount_cents: Optional[int] = None,
+        shopify_subscription_id: Optional[str] = None,
+        metadata: Optional[dict] = None
+    ) -> BillingEvent:
+        """Log a billing event (append-only audit log)."""
+        event = BillingEvent(
+            id=str(uuid.uuid4()),
+            tenant_id=self.tenant_id,
+            event_type=event_type,
+            store_id=store_id,
+            subscription_id=subscription_id,
+            from_plan_id=from_plan_id,
+            to_plan_id=to_plan_id,
+            amount_cents=amount_cents,
+            shopify_subscription_id=shopify_subscription_id,
+            extra_metadata=metadata
+        )
+        self.db.add(event)
+        return event
 
     async def create_checkout_url(
         self,
         plan_id: str,
-        return_url: str,
-        shop_domain: str,
-        access_token: str,
+        return_url: Optional[str] = None,
+        test_mode: bool = False
     ) -> CheckoutResult:
         """
-        Create a Shopify checkout URL for subscription.
+        Create a Shopify Billing checkout URL for a plan.
+
+        This creates a pending subscription and returns a URL
+        where the merchant can approve the charge.
 
         Args:
-            plan_id: Internal plan ID to subscribe to
-            return_url: URL to redirect after checkout
-            shop_domain: Shopify shop domain
-            access_token: Shop's Shopify access token
+            plan_id: Plan ID to subscribe to
+            return_url: URL to redirect after approval (optional)
+            test_mode: If True, creates a test charge (no real money)
 
         Returns:
             CheckoutResult with checkout URL
 
         Raises:
-            BillingServiceError: If plan not found or checkout creation fails
+            PlanNotFoundError: If plan doesn't exist
+            StoreNotFoundError: If store not found for tenant
+            SubscriptionError: If subscription creation fails
         """
-        # Get plan details
-        plan = self.db_session.query(Plan).filter(
-            Plan.id == plan_id,
-            Plan.is_active == True,
-        ).first()
-
-        if not plan:
-            logger.warning("Plan not found for checkout", extra={
-                "tenant_id": self.tenant_id,
-                "plan_id": plan_id,
-            })
-            raise BillingServiceError(f"Plan not found: {plan_id}")
+        # Get store and plan
+        store = self._get_store()
+        plan = self._get_plan(plan_id)
 
         # Check for existing active subscription
-        existing = self.db_session.query(Subscription).filter(
-            Subscription.tenant_id == self.tenant_id,
-            Subscription.status == SubscriptionStatus.ACTIVE.value,
-        ).first()
-
-        if existing:
-            logger.warning("Tenant already has active subscription", extra={
+        existing_sub = self._get_active_subscription()
+        if existing_sub and existing_sub.status == SubscriptionStatus.ACTIVE.value:
+            # Already has active subscription - Shopify will replace it
+            logger.info("Replacing existing subscription", extra={
                 "tenant_id": self.tenant_id,
-                "existing_subscription_id": existing.id,
+                "existing_plan_id": existing_sub.plan_id,
+                "new_plan_id": plan_id
             })
-            raise BillingServiceError("Active subscription already exists")
 
-        # Create Shopify billing client
-        async with ShopifyBillingClient(shop_domain, access_token) as client:
-            # Configure plan for Shopify
-            # Use test mode based on environment
-            import os
-            is_test_mode = os.getenv("SHOPIFY_BILLING_TEST_MODE", "false").lower() == "true"
+        # Determine billing interval based on plan
+        interval = BillingInterval.EVERY_30_DAYS
+        price_cents = plan.price_monthly_cents
 
-            shopify_plan = ShopifyPlanConfig(
-                name=plan.display_name,
-                price=plan.price_monthly_cents / 100 if plan.price_monthly_cents else 0,
-                interval="EVERY_30_DAYS",
-                trial_days=0,
-                test=is_test_mode,  # Enable via SHOPIFY_BILLING_TEST_MODE=true
-            )
+        if not price_cents:
+            # Free plan - no checkout needed
+            return await self._activate_free_plan(store, plan)
 
-            try:
-                # Create subscription in Shopify
-                result = await client.create_subscription(shopify_plan, return_url)
+        price_amount = price_cents / 100.0
+
+        # Build return URL
+        if not return_url:
+            app_url = os.getenv("APP_URL", f"https://{store.shop_domain}")
+            return_url = f"{app_url}/billing/callback?shop={store.shop_domain}"
+
+        # Decrypt access token
+        if not store.access_token_encrypted:
+            raise SubscriptionError("Store has no access token")
+
+        access_token = self._decrypt_access_token(store.access_token_encrypted)
+
+        # Determine if test mode
+        is_test = test_mode or os.getenv("SHOPIFY_BILLING_TEST_MODE", "false").lower() == "true"
+
+        try:
+            async with get_billing_client(store.shop_domain, access_token) as client:
+                result = await client.create_subscription(
+                    name=f"AI Growth Analytics - {plan.display_name}",
+                    price_amount=price_amount,
+                    currency_code=store.currency or "USD",
+                    interval=interval,
+                    return_url=return_url,
+                    trial_days=0,  # Configure trial in plan if needed
+                    test=is_test,
+                    replacement_behavior="APPLY_IMMEDIATELY"
+                )
+
+                if not result.success:
+                    error_msg = "; ".join([e.get("message", str(e)) for e in result.user_errors])
+                    logger.error("Shopify subscription creation failed", extra={
+                        "tenant_id": self.tenant_id,
+                        "plan_id": plan_id,
+                        "errors": result.user_errors
+                    })
+                    raise SubscriptionError(f"Shopify error: {error_msg}")
 
                 # Create pending subscription record
-                subscription = Subscription(
-                    id=str(uuid.uuid4()),
-                    tenant_id=self.tenant_id,
-                    plan_id=plan_id,
-                    shopify_subscription_id=result.subscription_id,
-                    status=SubscriptionStatus.TRIALING.value,  # Pending approval
-                    current_period_end=result.current_period_end,
+                shopify_sub_id = result.app_subscription.id if result.app_subscription else None
+                subscription = self._create_or_update_subscription(
+                    store=store,
+                    plan=plan,
+                    status=SubscriptionStatus.PENDING,
+                    shopify_subscription_id=shopify_sub_id
                 )
 
-                self.db_session.add(subscription)
-
-                # Record billing event
-                event = BillingEvent(
-                    id=str(uuid.uuid4()),
-                    tenant_id=self.tenant_id,
+                # Log billing event
+                self._log_billing_event(
                     event_type=BillingEventType.SUBSCRIPTION_CREATED.value,
+                    store_id=store.id,
                     subscription_id=subscription.id,
                     to_plan_id=plan_id,
-                    shopify_subscription_id=result.subscription_id,
-                    extra_metadata={
-                        "checkout_url": result.confirmation_url,
-                        "shop_domain": shop_domain,
-                    },
+                    amount_cents=price_cents,
+                    shopify_subscription_id=shopify_sub_id,
+                    metadata={"test_mode": is_test}
                 )
-                self.db_session.add(event)
 
-                self.db_session.commit()
+                self.db.commit()
 
                 logger.info("Checkout URL created", extra={
                     "tenant_id": self.tenant_id,
-                    "subscription_id": subscription.id,
                     "plan_id": plan_id,
+                    "subscription_id": subscription.id,
+                    "shopify_subscription_id": shopify_sub_id
                 })
 
                 return CheckoutResult(
                     checkout_url=result.confirmation_url,
                     subscription_id=subscription.id,
-                    plan_id=plan_id,
+                    shopify_subscription_id=shopify_sub_id,
+                    success=True
                 )
 
-            except ShopifyBillingError as e:
-                self.db_session.rollback()
-                logger.error("Shopify checkout creation failed", extra={
-                    "tenant_id": self.tenant_id,
-                    "plan_id": plan_id,
-                    "error": str(e),
-                })
-                raise BillingServiceError(f"Checkout creation failed: {str(e)}")
+        except ShopifyAPIError as e:
+            logger.error("Shopify API error during checkout", extra={
+                "tenant_id": self.tenant_id,
+                "plan_id": plan_id,
+                "error": str(e)
+            })
+            raise SubscriptionError(f"Failed to create checkout: {e}")
 
-    def get_subscription(self) -> Optional[SubscriptionInfo]:
-        """
-        Get the current active subscription for the tenant.
-
-        Returns:
-            SubscriptionInfo or None if no active subscription
-        """
-        subscription = self.db_session.query(Subscription).filter(
-            Subscription.tenant_id == self.tenant_id,
-            Subscription.status.in_([
-                SubscriptionStatus.ACTIVE.value,
-                SubscriptionStatus.TRIALING.value,
-            ]),
-        ).first()
-
-        if not subscription:
-            return None
-
-        plan = self.db_session.query(Plan).filter(Plan.id == subscription.plan_id).first()
-
-        return SubscriptionInfo(
-            id=subscription.id,
-            tenant_id=subscription.tenant_id,
-            plan_id=subscription.plan_id,
-            plan_name=plan.display_name if plan else "Unknown",
-            status=subscription.status,
-            shopify_subscription_id=subscription.shopify_subscription_id,
-            current_period_end=subscription.current_period_end,
-            cancelled_at=subscription.cancelled_at,
-            created_at=subscription.created_at,
+    async def _activate_free_plan(self, store: ShopifyStore, plan: Plan) -> CheckoutResult:
+        """Activate a free plan without Shopify checkout."""
+        subscription = self._create_or_update_subscription(
+            store=store,
+            plan=plan,
+            status=SubscriptionStatus.ACTIVE,
+            shopify_subscription_id=None
         )
 
-    def get_all_subscriptions(self) -> list[SubscriptionInfo]:
-        """
-        Get all subscriptions for the tenant (including cancelled).
+        self._log_billing_event(
+            event_type=BillingEventType.SUBSCRIPTION_CREATED.value,
+            store_id=store.id,
+            subscription_id=subscription.id,
+            to_plan_id=plan.id,
+            amount_cents=0,
+            metadata={"free_plan": True}
+        )
 
-        Returns:
-            List of SubscriptionInfo
-        """
-        subscriptions = self.db_session.query(Subscription).filter(
+        self.db.commit()
+
+        return CheckoutResult(
+            checkout_url="",  # No checkout needed for free plan
+            subscription_id=subscription.id,
+            success=True
+        )
+
+    def _create_or_update_subscription(
+        self,
+        store: ShopifyStore,
+        plan: Plan,
+        status: SubscriptionStatus,
+        shopify_subscription_id: Optional[str] = None,
+        current_period_end: Optional[datetime] = None
+    ) -> Subscription:
+        """Create or update subscription record."""
+        # Check for existing subscription
+        existing = self.db.query(Subscription).filter(
             Subscription.tenant_id == self.tenant_id,
-        ).order_by(Subscription.created_at.desc()).all()
+            Subscription.store_id == store.id
+        ).first()
 
-        results = []
-        for sub in subscriptions:
-            plan = self.db_session.query(Plan).filter(Plan.id == sub.plan_id).first()
-            results.append(SubscriptionInfo(
-                id=sub.id,
-                tenant_id=sub.tenant_id,
-                plan_id=sub.plan_id,
-                plan_name=plan.display_name if plan else "Unknown",
-                status=sub.status,
-                shopify_subscription_id=sub.shopify_subscription_id,
-                current_period_end=sub.current_period_end,
-                cancelled_at=sub.cancelled_at,
-                created_at=sub.created_at,
-            ))
+        now = datetime.now(timezone.utc)
 
-        return results
+        if existing:
+            # Update existing
+            existing.plan_id = plan.id
+            existing.status = status.value
+            existing.shopify_subscription_id = shopify_subscription_id or existing.shopify_subscription_id
+            existing.current_period_start = now
+            existing.current_period_end = current_period_end
+            return existing
+        else:
+            # Create new
+            subscription = Subscription(
+                id=str(uuid.uuid4()),
+                tenant_id=self.tenant_id,
+                store_id=store.id,
+                plan_id=plan.id,
+                status=status.value,
+                shopify_subscription_id=shopify_subscription_id,
+                current_period_start=now,
+                current_period_end=current_period_end
+            )
+            self.db.add(subscription)
+            return subscription
 
-    def handle_subscription_activated(
+    def activate_subscription(
         self,
         shopify_subscription_id: str,
-        current_period_end: Optional[datetime] = None,
+        current_period_end: Optional[datetime] = None
     ) -> Optional[Subscription]:
         """
-        Handle subscription activation (from webhook).
+        Activate a pending subscription after merchant approval.
+
+        Called by webhook handler when subscription is approved.
 
         Args:
             shopify_subscription_id: Shopify subscription GID
-            current_period_end: End of current billing period
+            current_period_end: When the current billing period ends
 
         Returns:
-            Updated subscription or None if not found
+            Updated Subscription or None if not found
         """
-        subscription = self.db_session.query(Subscription).filter(
+        subscription = self.db.query(Subscription).filter(
             Subscription.tenant_id == self.tenant_id,
-            Subscription.shopify_subscription_id == shopify_subscription_id,
+            Subscription.shopify_subscription_id == shopify_subscription_id
         ).first()
 
         if not subscription:
             logger.warning("Subscription not found for activation", extra={
                 "tenant_id": self.tenant_id,
-                "shopify_subscription_id": shopify_subscription_id,
+                "shopify_subscription_id": shopify_subscription_id
             })
             return None
 
         old_status = subscription.status
         subscription.status = SubscriptionStatus.ACTIVE.value
-        if current_period_end:
-            subscription.current_period_end = current_period_end
+        subscription.current_period_end = current_period_end
 
-        # Record event
-        event = BillingEvent(
-            id=str(uuid.uuid4()),
-            tenant_id=self.tenant_id,
+        self._log_billing_event(
             event_type=BillingEventType.SUBSCRIPTION_UPDATED.value,
+            store_id=subscription.store_id,
             subscription_id=subscription.id,
             shopify_subscription_id=shopify_subscription_id,
-            extra_metadata={
+            metadata={
                 "old_status": old_status,
                 "new_status": SubscriptionStatus.ACTIVE.value,
-            },
+                "action": "activated"
+            }
         )
-        self.db_session.add(event)
-        self.db_session.commit()
+
+        self.db.commit()
 
         logger.info("Subscription activated", extra={
             "tenant_id": self.tenant_id,
             "subscription_id": subscription.id,
-            "shopify_subscription_id": shopify_subscription_id,
+            "shopify_subscription_id": shopify_subscription_id
         })
 
         return subscription
 
-    def handle_subscription_cancelled(
+    def cancel_subscription(
         self,
         shopify_subscription_id: str,
+        cancelled_at: Optional[datetime] = None
     ) -> Optional[Subscription]:
         """
-        Handle subscription cancellation (from webhook).
+        Cancel a subscription.
 
-        Downgrades entitlements immediately.
+        Called by webhook handler when subscription is cancelled.
+        This triggers downgrade to free plan.
 
         Args:
             shopify_subscription_id: Shopify subscription GID
+            cancelled_at: When the cancellation occurred
 
         Returns:
-            Updated subscription or None if not found
+            Updated Subscription or None if not found
         """
-        subscription = self.db_session.query(Subscription).filter(
+        subscription = self.db.query(Subscription).filter(
             Subscription.tenant_id == self.tenant_id,
-            Subscription.shopify_subscription_id == shopify_subscription_id,
+            Subscription.shopify_subscription_id == shopify_subscription_id
         ).first()
 
         if not subscription:
             logger.warning("Subscription not found for cancellation", extra={
                 "tenant_id": self.tenant_id,
-                "shopify_subscription_id": shopify_subscription_id,
+                "shopify_subscription_id": shopify_subscription_id
             })
             return None
 
         old_status = subscription.status
-        subscription.status = SubscriptionStatus.CANCELLED.value
-        subscription.cancelled_at = datetime.now(timezone.utc)
+        old_plan_id = subscription.plan_id
 
-        # Record event
-        event = BillingEvent(
-            id=str(uuid.uuid4()),
-            tenant_id=self.tenant_id,
+        subscription.status = SubscriptionStatus.CANCELLED.value
+        subscription.cancelled_at = cancelled_at or datetime.now(timezone.utc)
+
+        self._log_billing_event(
             event_type=BillingEventType.SUBSCRIPTION_CANCELLED.value,
+            store_id=subscription.store_id,
             subscription_id=subscription.id,
+            from_plan_id=old_plan_id,
             shopify_subscription_id=shopify_subscription_id,
-            extra_metadata={
+            metadata={
                 "old_status": old_status,
-            },
+                "cancelled_at": subscription.cancelled_at.isoformat()
+            }
         )
-        self.db_session.add(event)
-        self.db_session.commit()
+
+        self.db.commit()
 
         logger.info("Subscription cancelled", extra={
             "tenant_id": self.tenant_id,
             "subscription_id": subscription.id,
-            "shopify_subscription_id": shopify_subscription_id,
+            "shopify_subscription_id": shopify_subscription_id
         })
-
-        # Downgrade entitlements
-        self._downgrade_entitlements()
 
         return subscription
 
-    def handle_payment_failed(
+    def freeze_subscription(
         self,
         shopify_subscription_id: str,
+        reason: str = "payment_failed"
     ) -> Optional[Subscription]:
         """
-        Handle failed payment (from webhook).
+        Freeze subscription due to payment failure.
 
-        Downgrades access after payment failure.
+        Subscription enters grace period where access is maintained
+        but limited. After grace period, access is revoked.
 
         Args:
             shopify_subscription_id: Shopify subscription GID
+            reason: Reason for freezing
 
         Returns:
-            Updated subscription or None if not found
+            Updated Subscription or None if not found
         """
-        subscription = self.db_session.query(Subscription).filter(
+        subscription = self.db.query(Subscription).filter(
             Subscription.tenant_id == self.tenant_id,
-            Subscription.shopify_subscription_id == shopify_subscription_id,
+            Subscription.shopify_subscription_id == shopify_subscription_id
         ).first()
 
         if not subscription:
             return None
 
-        # Record failed payment event
-        event = BillingEvent(
-            id=str(uuid.uuid4()),
-            tenant_id=self.tenant_id,
+        old_status = subscription.status
+        subscription.status = SubscriptionStatus.FROZEN.value
+        subscription.grace_period_ends_on = datetime.now(timezone.utc) + timedelta(days=PAYMENT_GRACE_PERIOD_DAYS)
+
+        self._log_billing_event(
             event_type=BillingEventType.CHARGE_FAILED.value,
+            store_id=subscription.store_id,
             subscription_id=subscription.id,
             shopify_subscription_id=shopify_subscription_id,
+            metadata={
+                "old_status": old_status,
+                "reason": reason,
+                "grace_period_ends_on": subscription.grace_period_ends_on.isoformat()
+            }
         )
-        self.db_session.add(event)
 
-        # Mark subscription as expired
-        subscription.status = SubscriptionStatus.EXPIRED.value
-        self.db_session.commit()
+        self.db.commit()
 
-        logger.warning("Payment failed, subscription expired", extra={
+        logger.warning("Subscription frozen due to payment failure", extra={
             "tenant_id": self.tenant_id,
             "subscription_id": subscription.id,
+            "grace_period_ends_on": subscription.grace_period_ends_on.isoformat()
         })
-
-        # Downgrade entitlements
-        self._downgrade_entitlements()
 
         return subscription
 
-    def _downgrade_entitlements(self) -> None:
+    def get_subscription_info(self) -> SubscriptionInfo:
         """
-        Downgrade tenant entitlements to free tier.
+        Get current subscription information for tenant.
 
-        Called when subscription is cancelled or payment fails.
-        """
-        logger.info("Downgrading entitlements to free tier", extra={
-            "tenant_id": self.tenant_id,
-        })
-        # Entitlement enforcement is typically done at access time
-        # by checking subscription status. This method is a hook
-        # for any immediate cleanup needed.
-        pass
-
-    def check_entitlement(self, feature_key: str) -> bool:
-        """
-        Check if tenant has entitlement to a feature.
-
-        Args:
-            feature_key: Feature identifier to check
+        Used for entitlement checks and displaying subscription status.
 
         Returns:
-            True if tenant has access to the feature
+            SubscriptionInfo with current status and access permissions
         """
-        subscription = self.get_subscription()
+        subscription = self._get_active_subscription()
 
         if not subscription:
-            # No active subscription - check free tier
-            return self._check_free_tier_feature(feature_key)
+            # No subscription - default to free plan
+            free_plan = self.db.query(Plan).filter(Plan.id == FREE_PLAN_ID).first()
+            return SubscriptionInfo(
+                subscription_id=None,
+                plan_id=FREE_PLAN_ID,
+                plan_name=free_plan.display_name if free_plan else "Free",
+                status="none",
+                is_active=False,
+                current_period_end=None,
+                trial_end=None,
+                can_access_features=True,  # Free tier always accessible
+                downgraded_reason="No active subscription"
+            )
 
-        # Check plan features
-        from src.models.plan import PlanFeature
-        feature = self.db_session.query(PlanFeature).filter(
-            PlanFeature.plan_id == subscription.plan_id,
-            PlanFeature.feature_key == feature_key,
-            PlanFeature.is_enabled == True,
-        ).first()
+        plan = self.db.query(Plan).filter(Plan.id == subscription.plan_id).first()
 
-        return feature is not None
+        # Determine access permissions
+        can_access = True
+        downgraded_reason = None
 
-    def _check_free_tier_feature(self, feature_key: str) -> bool:
-        """Check if feature is available in free tier."""
-        from src.models.plan import PlanFeature
-        free_plan = self.db_session.query(Plan).filter(
-            Plan.name == "free",
-            Plan.is_active == True,
-        ).first()
+        if subscription.status == SubscriptionStatus.CANCELLED.value:
+            can_access = False
+            downgraded_reason = "Subscription cancelled"
+        elif subscription.status == SubscriptionStatus.FROZEN.value:
+            # Check if grace period has expired
+            if subscription.grace_period_ends_on and datetime.now(timezone.utc) > subscription.grace_period_ends_on:
+                can_access = False
+                downgraded_reason = "Payment failed - grace period expired"
+            else:
+                can_access = True  # Still in grace period
+                downgraded_reason = "Payment failed - in grace period"
+        elif subscription.status == SubscriptionStatus.DECLINED.value:
+            can_access = False
+            downgraded_reason = "Subscription declined"
+        elif subscription.status == SubscriptionStatus.EXPIRED.value:
+            can_access = False
+            downgraded_reason = "Trial expired"
 
-        if not free_plan:
-            return False
+        return SubscriptionInfo(
+            subscription_id=subscription.id,
+            plan_id=subscription.plan_id,
+            plan_name=plan.display_name if plan else "Unknown",
+            status=subscription.status,
+            is_active=subscription.status == SubscriptionStatus.ACTIVE.value,
+            current_period_end=subscription.current_period_end,
+            trial_end=subscription.trial_end,
+            can_access_features=can_access,
+            downgraded_reason=downgraded_reason
+        )
 
-        feature = self.db_session.query(PlanFeature).filter(
-            PlanFeature.plan_id == free_plan.id,
-            PlanFeature.feature_key == feature_key,
-            PlanFeature.is_enabled == True,
-        ).first()
-
-        return feature is not None
-
-
-class WebhookProcessor:
-    """
-    Processor for Shopify billing webhooks.
-
-    Handles webhook events and updates subscription state.
-    """
-
-    def __init__(self, db_session: Session):
-        """Initialize webhook processor."""
-        self.db_session = db_session
-
-    def process_webhook(
-        self,
-        topic: str,
-        shop_domain: str,
-        payload: Dict[str, Any],
-    ) -> bool:
+    def sync_with_shopify(self, shopify_subscription_id: str, shopify_status: str) -> Optional[Subscription]:
         """
-        Process a Shopify billing webhook.
+        Sync local subscription status with Shopify.
+
+        Used by reconciliation job to ensure consistency.
 
         Args:
-            topic: Webhook topic (e.g., 'app_subscriptions/update')
-            shop_domain: Shop domain that triggered the webhook
-            payload: Webhook payload
+            shopify_subscription_id: Shopify subscription GID
+            shopify_status: Status from Shopify API
 
         Returns:
-            True if processed successfully
+            Updated Subscription or None if not found
         """
-        logger.info("Processing Shopify webhook", extra={
-            "topic": topic,
-            "shop_domain": shop_domain,
-        })
-
-        # Find tenant by shop domain
-        store = self.db_session.query(ShopifyStore).filter(
-            ShopifyStore.shop_domain == shop_domain,
+        subscription = self.db.query(Subscription).filter(
+            Subscription.shopify_subscription_id == shopify_subscription_id
         ).first()
 
-        if not store:
-            logger.warning("Store not found for webhook", extra={
-                "shop_domain": shop_domain,
-                "topic": topic,
+        if not subscription:
+            return None
+
+        # Map Shopify status to our status
+        status_map = {
+            "ACTIVE": SubscriptionStatus.ACTIVE,
+            "PENDING": SubscriptionStatus.PENDING,
+            "FROZEN": SubscriptionStatus.FROZEN,
+            "CANCELLED": SubscriptionStatus.CANCELLED,
+            "DECLINED": SubscriptionStatus.DECLINED,
+            "EXPIRED": SubscriptionStatus.EXPIRED
+        }
+
+        new_status = status_map.get(shopify_status.upper())
+        if not new_status:
+            logger.warning("Unknown Shopify status", extra={
+                "shopify_status": shopify_status,
+                "shopify_subscription_id": shopify_subscription_id
             })
-            return False
+            return subscription
 
-        tenant_id = store.tenant_id
-        billing_service = BillingService(self.db_session, tenant_id)
+        if subscription.status != new_status.value:
+            old_status = subscription.status
+            subscription.status = new_status.value
 
-        # Route to appropriate handler
-        if topic == "app_subscriptions/update":
-            return self._handle_subscription_update(billing_service, payload)
-        elif topic == "subscription_billing_attempts/success":
-            return self._handle_billing_success(billing_service, payload)
-        elif topic == "subscription_billing_attempts/failure":
-            return self._handle_billing_failure(billing_service, payload)
-        else:
-            logger.warning("Unhandled webhook topic", extra={"topic": topic})
-            return False
+            self._log_billing_event(
+                event_type=BillingEventType.SUBSCRIPTION_UPDATED.value,
+                store_id=subscription.store_id,
+                subscription_id=subscription.id,
+                shopify_subscription_id=shopify_subscription_id,
+                metadata={
+                    "old_status": old_status,
+                    "new_status": new_status.value,
+                    "source": "reconciliation"
+                }
+            )
 
-    def _handle_subscription_update(
-        self,
-        billing_service: BillingService,
-        payload: Dict[str, Any],
-    ) -> bool:
-        """Handle app_subscriptions/update webhook."""
-        subscription_id = payload.get("app_subscription", {}).get("admin_graphql_api_id")
-        status = payload.get("app_subscription", {}).get("status")
+            self.db.commit()
 
-        if not subscription_id:
-            return False
+            logger.info("Subscription synced with Shopify", extra={
+                "tenant_id": subscription.tenant_id,
+                "subscription_id": subscription.id,
+                "old_status": old_status,
+                "new_status": new_status.value
+            })
 
-        if status == "ACTIVE":
-            billing_service.handle_subscription_activated(subscription_id)
-        elif status == "CANCELLED":
-            billing_service.handle_subscription_cancelled(subscription_id)
-
-        return True
-
-    def _handle_billing_success(
-        self,
-        billing_service: BillingService,
-        payload: Dict[str, Any],
-    ) -> bool:
-        """Handle successful billing attempt."""
-        subscription_id = payload.get("subscription_contract", {}).get("admin_graphql_api_id")
-        if subscription_id:
-            billing_service.handle_subscription_activated(subscription_id)
-        return True
-
-    def _handle_billing_failure(
-        self,
-        billing_service: BillingService,
-        payload: Dict[str, Any],
-    ) -> bool:
-        """Handle failed billing attempt."""
-        subscription_id = payload.get("subscription_contract", {}).get("admin_graphql_api_id")
-        if subscription_id:
-            billing_service.handle_payment_failed(subscription_id)
-        return True
+        return subscription

@@ -1,25 +1,34 @@
 """
-Subscription model - Per-store subscription to a plan.
+Subscription model for tracking store subscriptions.
 
-Links a ShopifyStore to a Plan via Shopify Billing API.
+CRITICAL: One subscription per store (Shopify limitation).
+Subscription status is synced with Shopify via webhooks and reconciliation.
 """
 
 import uuid
-import enum
-from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint, Index, text
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    Column, String, Integer, DateTime, Enum, Text,
+    ForeignKey, Index, UniqueConstraint, text
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
-from src.repositories.base_repo import Base
 from src.models.base import TimestampMixin, TenantScopedMixin
+from src.repositories.base_repo import Base
 
 
-class SubscriptionStatus(str, enum.Enum):
-    """Subscription status enumeration."""
-    ACTIVE = "active"
-    CANCELLED = "cancelled"
-    EXPIRED = "expired"
-    TRIALING = "trialing"
+from enum import Enum as PyEnum
+
+class SubscriptionStatus(str, PyEnum):
+    """Subscription status values."""
+    PENDING = "pending"          # Charge created, awaiting merchant approval
+    ACTIVE = "active"            # Merchant approved, subscription active
+    FROZEN = "frozen"            # Payment failed, in grace period
+    CANCELLED = "cancelled"      # Merchant cancelled
+    DECLINED = "declined"        # Merchant declined charge
+    EXPIRED = "expired"          # Trial expired without conversion
 
 
 class Subscription(Base, TimestampMixin, TenantScopedMixin):
@@ -41,6 +50,7 @@ class Subscription(Base, TimestampMixin, TenantScopedMixin):
     
     store_id = Column(
         String(255),
+        ForeignKey("shopify_stores.id"),
         nullable=True,
         index=True,
         comment="Foreign key to shopify_stores.id (optional, can link via tenant_id)"
@@ -115,6 +125,7 @@ class Subscription(Base, TimestampMixin, TenantScopedMixin):
     
     # Relationships
     plan = relationship("Plan", foreign_keys=[plan_id])
+    store = relationship("ShopifyStore", back_populates="subscription")
     
     # Constraints and indexes
     __table_args__ = (

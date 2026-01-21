@@ -1,17 +1,18 @@
 """
-Shopify Billing API client for managing recurring subscriptions.
+Shopify Billing API client for subscription management.
 
-Uses Shopify's GraphQL Admin API for billing operations.
-All billing MUST go through Shopify Billing API for public apps.
+Uses Shopify GraphQL Admin API for recurring app charges.
+All public Shopify apps MUST use Shopify Billing API for payments.
+
+Documentation: https://shopify.dev/docs/apps/billing
 """
 
 import os
-import hmac
-import hashlib
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 
 import httpx
 
@@ -52,45 +53,42 @@ class ShopifyBillingError(Exception):
 
 class ShopifyBillingClient:
     """
-    Client for Shopify Billing API (GraphQL Admin API).
+    Client for Shopify Billing API operations.
 
     Handles:
-    - Creating recurring application charges
+    - Creating recurring app subscriptions
     - Querying subscription status
-    - Managing subscription lifecycle
+    - Cancelling subscriptions
+    - Usage-based billing (if needed)
+
+    SECURITY: Access token must be encrypted at rest and decrypted only when needed.
     """
 
-    GRAPHQL_API_VERSION = "2024-01"
-
-    def __init__(
-        self,
-        shop_domain: str,
-        access_token: str,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-    ):
+    def __init__(self, shop_domain: str, access_token: str):
         """
-        Initialize Shopify Billing client.
+        Initialize billing client for a specific shop.
 
         Args:
-            shop_domain: The shop's myshopify.com domain (e.g., 'example.myshopify.com')
-            access_token: Shop's access token for API calls
-            api_key: Shopify app API key (from env if not provided)
-            api_secret: Shopify app API secret (from env if not provided)
+            shop_domain: Shopify store domain (e.g., 'mystore.myshopify.com')
+            access_token: Decrypted Shopify access token
         """
-        self.shop_domain = shop_domain.replace("https://", "").replace("http://", "")
+        if not shop_domain:
+            raise ValueError("shop_domain is required")
+        if not access_token:
+            raise ValueError("access_token is required")
+
+        self.shop_domain = shop_domain.replace("https://", "").replace("http://", "").rstrip("/")
         self.access_token = access_token
-        self.api_key = api_key or os.getenv("SHOPIFY_API_KEY")
-        self.api_secret = api_secret or os.getenv("SHOPIFY_API_SECRET")
+        self.api_version = SHOPIFY_API_VERSION
+        self.graphql_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/graphql.json"
 
-        self.graphql_url = f"https://{self.shop_domain}/admin/api/{self.GRAPHQL_API_VERSION}/graphql.json"
-
+        # HTTP client with appropriate timeouts
         self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0),
             headers={
-                "X-Shopify-Access-Token": self.access_token,
                 "Content-Type": "application/json",
-            },
-            timeout=30.0,
+                "X-Shopify-Access-Token": self.access_token
+            }
         )
 
     async def close(self):
@@ -108,14 +106,14 @@ class ShopifyBillingClient:
         Execute a GraphQL query against Shopify Admin API.
 
         Args:
-            query: GraphQL query string
-            variables: Optional variables for the query
+            query: GraphQL query or mutation
+            variables: Optional query variables
 
         Returns:
-            Response data from Shopify
+            GraphQL response data
 
         Raises:
-            ShopifyBillingError: If the API call fails
+            ShopifyAPIError: If the API call fails
         """
         payload = {"query": query}
         if variables:
@@ -123,61 +121,120 @@ class ShopifyBillingClient:
 
         try:
             response = await self._client.post(self.graphql_url, json=payload)
-            response.raise_for_status()
 
-            data = response.json()
-
-            if "errors" in data:
-                errors = data["errors"]
-                error_msg = errors[0].get("message", "Unknown GraphQL error") if errors else "Unknown error"
-                logger.error("Shopify GraphQL error", extra={
+            if response.status_code == 401:
+                logger.error("Shopify API authentication failed", extra={
                     "shop_domain": self.shop_domain,
-                    "errors": errors,
+                    "status_code": response.status_code
                 })
-                raise ShopifyBillingError(error_msg, details={"errors": errors})
+                raise ShopifyAPIError(
+                    "Authentication failed - access token may be invalid or expired",
+                    status_code=401
+                )
 
-            return data.get("data", {})
+            if response.status_code == 402:
+                logger.error("Shopify store frozen or payment required", extra={
+                    "shop_domain": self.shop_domain
+                })
+                raise ShopifyAPIError(
+                    "Store is frozen or payment required",
+                    status_code=402
+                )
 
-        except httpx.HTTPStatusError as e:
-            logger.error("Shopify API HTTP error", extra={
+            if response.status_code == 429:
+                logger.warning("Shopify API rate limited", extra={
+                    "shop_domain": self.shop_domain
+                })
+                raise ShopifyAPIError(
+                    "Rate limited - please retry after a delay",
+                    status_code=429
+                )
+
+            if response.status_code >= 400:
+                logger.error("Shopify API error", extra={
+                    "shop_domain": self.shop_domain,
+                    "status_code": response.status_code,
+                    "response_text": response.text[:500]
+                })
+                raise ShopifyAPIError(
+                    f"Shopify API error: {response.status_code}",
+                    status_code=response.status_code,
+                    response=response.json() if response.text else None
+                )
+
+            result = response.json()
+
+            # Check for GraphQL errors
+            if "errors" in result:
+                logger.error("GraphQL errors", extra={
+                    "shop_domain": self.shop_domain,
+                    "errors": result["errors"]
+                })
+                raise ShopifyAPIError(
+                    f"GraphQL errors: {result['errors']}",
+                    response=result
+                )
+
+            return result.get("data", {})
+
+        except httpx.TimeoutException as e:
+            logger.error("Shopify API timeout", extra={
                 "shop_domain": self.shop_domain,
-                "status_code": e.response.status_code,
-                "response": e.response.text[:500],
+                "error": str(e)
             })
-            raise ShopifyBillingError(
-                f"Shopify API error: {e.response.status_code}",
-                code=str(e.response.status_code),
-            )
+            raise ShopifyAPIError(f"Request timeout: {e}")
         except httpx.RequestError as e:
             logger.error("Shopify API request error", extra={
                 "shop_domain": self.shop_domain,
-                "error": str(e),
+                "error": str(e)
             })
-            raise ShopifyBillingError(f"Request failed: {str(e)}")
+            raise ShopifyAPIError(f"Request error: {e}")
 
     async def create_subscription(
         self,
-        plan: ShopifyPlanConfig,
-        return_url: str,
-    ) -> ShopifySubscriptionResponse:
+        name: str,
+        price_amount: float,
+        currency_code: str = "USD",
+        interval: BillingInterval = BillingInterval.EVERY_30_DAYS,
+        return_url: str = None,
+        trial_days: int = 0,
+        test: bool = False,
+        replacement_behavior: str = "APPLY_IMMEDIATELY"
+    ) -> CreateSubscriptionResult:
         """
-        Create a recurring application subscription.
+        Create a new recurring app subscription.
+
+        This creates a charge that the merchant must approve in Shopify admin.
+        After approval, the subscription becomes active.
 
         Args:
-            plan: Plan configuration with name, price, interval
-            return_url: URL to redirect merchant after approval
+            name: Subscription name (displayed to merchant)
+            price_amount: Price in currency units (e.g., 9.99)
+            currency_code: ISO 4217 currency code (default: USD)
+            interval: Billing interval (EVERY_30_DAYS or ANNUAL)
+            return_url: URL to redirect merchant after approval/decline
+            trial_days: Number of trial days (0 for no trial)
+            test: Whether this is a test charge (won't charge real money)
+            replacement_behavior: How to handle existing subscriptions
 
         Returns:
-            ShopifySubscriptionResponse with confirmation_url for merchant approval
+            CreateSubscriptionResult with confirmation_url for merchant redirect
+
+        Raises:
+            ShopifyAPIError: If the API call fails
         """
+        if not return_url:
+            return_url = os.getenv("SHOPIFY_BILLING_RETURN_URL", f"https://{self.shop_domain}/admin/apps")
+
         mutation = """
-        mutation appSubscriptionCreate($name: String!, $returnUrl: URL!, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!, $trialDays: Int) {
+        mutation appSubscriptionCreate($name: String!, $returnUrl: URL!, $lineItems: [AppSubscriptionLineItemInput!]!, $trialDays: Int, $test: Boolean, $replacementBehavior: AppSubscriptionReplacementBehavior) {
             appSubscriptionCreate(
                 name: $name
                 returnUrl: $returnUrl
-                test: $test
-                trialDays: $trialDays
                 lineItems: $lineItems
+                trialDays: $trialDays
+                test: $test
+                replacementBehavior: $replacementBehavior
             ) {
                 appSubscription {
                     id
@@ -185,7 +242,26 @@ class ShopifyBillingClient:
                     status
                     createdAt
                     currentPeriodEnd
+                    trialDays
                     test
+                    lineItems(first: 10) {
+                        edges {
+                            node {
+                                id
+                                plan {
+                                    pricingDetails {
+                                        ... on AppRecurringPricing {
+                                            price {
+                                                amount
+                                                currencyCode
+                                            }
+                                            interval
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 confirmationUrl
                 userErrors {
@@ -221,44 +297,39 @@ class ShopifyBillingClient:
 
         user_errors = result.get("userErrors", [])
         if user_errors:
-            error_msg = user_errors[0].get("message", "Subscription creation failed")
-            logger.error("Shopify subscription creation failed", extra={
+            logger.warning("Subscription creation had user errors", extra={
                 "shop_domain": self.shop_domain,
-                "user_errors": user_errors,
+                "user_errors": user_errors
             })
-            raise ShopifyBillingError(error_msg, details={"user_errors": user_errors})
 
-        subscription = result.get("appSubscription", {})
-        confirmation_url = result.get("confirmationUrl")
+        app_subscription = None
+        if result.get("appSubscription"):
+            sub_data = result["appSubscription"]
+            app_subscription = ShopifySubscription(
+                id=sub_data["id"],
+                name=sub_data["name"],
+                status=sub_data["status"],
+                created_at=datetime.fromisoformat(sub_data["createdAt"].replace("Z", "+00:00")) if sub_data.get("createdAt") else None,
+                current_period_end=datetime.fromisoformat(sub_data["currentPeriodEnd"].replace("Z", "+00:00")) if sub_data.get("currentPeriodEnd") else None,
+                trial_days=sub_data.get("trialDays", 0),
+                test=sub_data.get("test", False)
+            )
 
-        if not subscription or not confirmation_url:
-            raise ShopifyBillingError("No subscription returned from Shopify")
-
-        logger.info("Shopify subscription created", extra={
-            "shop_domain": self.shop_domain,
-            "subscription_id": subscription.get("id"),
-            "plan_name": plan.name,
-        })
-
-        return ShopifySubscriptionResponse(
-            subscription_id=subscription.get("id"),
-            confirmation_url=confirmation_url,
-            status=subscription.get("status"),
-            current_period_end=self._parse_datetime(subscription.get("currentPeriodEnd")),
-            created_at=self._parse_datetime(subscription.get("createdAt")),
-            name=subscription.get("name"),
-            test=subscription.get("test", False),
+        return CreateSubscriptionResult(
+            confirmation_url=result.get("confirmationUrl", ""),
+            app_subscription=app_subscription,
+            user_errors=user_errors
         )
 
-    async def get_subscription(self, subscription_id: str) -> Optional[ShopifySubscriptionResponse]:
+    async def get_subscription(self, subscription_gid: str) -> Optional[ShopifySubscription]:
         """
-        Get subscription details by ID.
+        Get subscription details by GraphQL ID.
 
         Args:
-            subscription_id: Shopify subscription GID
+            subscription_gid: Shopify GraphQL ID (e.g., 'gid://shopify/AppSubscription/12345')
 
         Returns:
-            ShopifySubscriptionResponse or None if not found
+            ShopifySubscription if found, None otherwise
         """
         query = """
         query getSubscription($id: ID!) {
@@ -269,33 +340,53 @@ class ShopifyBillingClient:
                     status
                     createdAt
                     currentPeriodEnd
+                    trialDays
                     test
+                    lineItems(first: 10) {
+                        edges {
+                            node {
+                                id
+                                plan {
+                                    pricingDetails {
+                                        ... on AppRecurringPricing {
+                                            price {
+                                                amount
+                                                currencyCode
+                                            }
+                                            interval
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         """
 
-        data = await self._execute_graphql(query, {"id": subscription_id})
+        data = await self._execute_graphql(query, {"id": subscription_gid})
         node = data.get("node")
 
-        if not node:
+        if not node or node.get("__typename") != "AppSubscription":
             return None
 
-        return ShopifySubscriptionResponse(
-            subscription_id=node.get("id"),
-            status=node.get("status"),
-            current_period_end=self._parse_datetime(node.get("currentPeriodEnd")),
-            created_at=self._parse_datetime(node.get("createdAt")),
-            name=node.get("name"),
-            test=node.get("test", False),
+        return ShopifySubscription(
+            id=node["id"],
+            name=node["name"],
+            status=node["status"],
+            created_at=datetime.fromisoformat(node["createdAt"].replace("Z", "+00:00")) if node.get("createdAt") else None,
+            current_period_end=datetime.fromisoformat(node["currentPeriodEnd"].replace("Z", "+00:00")) if node.get("currentPeriodEnd") else None,
+            trial_days=node.get("trialDays", 0),
+            test=node.get("test", False)
         )
 
-    async def get_active_subscriptions(self) -> list[ShopifySubscriptionResponse]:
+    async def get_active_subscriptions(self) -> list[ShopifySubscription]:
         """
-        Get all active subscriptions for the shop.
+        Get all active subscriptions for the current app.
 
         Returns:
-            List of active subscriptions
+            List of active ShopifySubscription objects
         """
         query = """
         query getActiveSubscriptions {
@@ -306,37 +397,57 @@ class ShopifyBillingClient:
                     status
                     createdAt
                     currentPeriodEnd
+                    trialDays
                     test
+                    lineItems(first: 10) {
+                        edges {
+                            node {
+                                id
+                                plan {
+                                    pricingDetails {
+                                        ... on AppRecurringPricing {
+                                            price {
+                                                amount
+                                                currencyCode
+                                            }
+                                            interval
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         """
 
         data = await self._execute_graphql(query)
-        installation = data.get("currentAppInstallation", {})
-        subscriptions = installation.get("activeSubscriptions", [])
+        subscriptions_data = data.get("currentAppInstallation", {}).get("activeSubscriptions", [])
 
-        return [
-            ShopifySubscriptionResponse(
-                subscription_id=sub.get("id"),
-                status=sub.get("status"),
-                current_period_end=self._parse_datetime(sub.get("currentPeriodEnd")),
-                created_at=self._parse_datetime(sub.get("createdAt")),
-                name=sub.get("name"),
-                test=sub.get("test", False),
-            )
-            for sub in subscriptions
-        ]
+        subscriptions = []
+        for sub_data in subscriptions_data:
+            subscriptions.append(ShopifySubscription(
+                id=sub_data["id"],
+                name=sub_data["name"],
+                status=sub_data["status"],
+                created_at=datetime.fromisoformat(sub_data["createdAt"].replace("Z", "+00:00")) if sub_data.get("createdAt") else None,
+                current_period_end=datetime.fromisoformat(sub_data["currentPeriodEnd"].replace("Z", "+00:00")) if sub_data.get("currentPeriodEnd") else None,
+                trial_days=sub_data.get("trialDays", 0),
+                test=sub_data.get("test", False)
+            ))
 
-    async def cancel_subscription(self, subscription_id: str) -> bool:
+        return subscriptions
+
+    async def cancel_subscription(self, subscription_gid: str) -> bool:
         """
-        Cancel an active subscription.
+        Cancel an app subscription.
 
         Args:
-            subscription_id: Shopify subscription GID
+            subscription_gid: Shopify GraphQL ID of the subscription
 
         Returns:
-            True if successfully cancelled
+            True if cancelled successfully, False otherwise
         """
         mutation = """
         mutation appSubscriptionCancel($id: ID!) {
@@ -353,70 +464,43 @@ class ShopifyBillingClient:
         }
         """
 
-        data = await self._execute_graphql(mutation, {"id": subscription_id})
+        logger.info("Cancelling Shopify subscription", extra={
+            "shop_domain": self.shop_domain,
+            "subscription_gid": subscription_gid
+        })
+
+        data = await self._execute_graphql(mutation, {"id": subscription_gid})
         result = data.get("appSubscriptionCancel", {})
 
         user_errors = result.get("userErrors", [])
         if user_errors:
-            error_msg = user_errors[0].get("message", "Cancellation failed")
-            logger.error("Shopify subscription cancellation failed", extra={
+            logger.warning("Subscription cancellation had user errors", extra={
                 "shop_domain": self.shop_domain,
-                "subscription_id": subscription_id,
-                "user_errors": user_errors,
+                "subscription_gid": subscription_gid,
+                "user_errors": user_errors
             })
-            raise ShopifyBillingError(error_msg, details={"user_errors": user_errors})
-
-        subscription = result.get("appSubscription", {})
-        logger.info("Shopify subscription cancelled", extra={
-            "shop_domain": self.shop_domain,
-            "subscription_id": subscription_id,
-            "new_status": subscription.get("status"),
-        })
-
-        return True
-
-    @staticmethod
-    def verify_webhook_signature(
-        payload: bytes,
-        signature: str,
-        secret: Optional[str] = None,
-    ) -> bool:
-        """
-        Verify Shopify webhook HMAC signature.
-
-        Args:
-            payload: Raw request body bytes
-            signature: X-Shopify-Hmac-Sha256 header value
-            secret: Webhook secret (uses SHOPIFY_API_SECRET env var if not provided)
-
-        Returns:
-            True if signature is valid
-        """
-        secret = secret or os.getenv("SHOPIFY_API_SECRET")
-        if not secret:
-            logger.error("SHOPIFY_API_SECRET not configured for webhook verification")
             return False
 
-        computed_hmac = hmac.new(
-            secret.encode("utf-8"),
-            payload,
-            hashlib.sha256,
-        ).digest()
+        app_subscription = result.get("appSubscription")
+        if app_subscription and app_subscription.get("status") == "CANCELLED":
+            logger.info("Subscription cancelled successfully", extra={
+                "shop_domain": self.shop_domain,
+                "subscription_gid": subscription_gid
+            })
+            return True
 
-        import base64
-        computed_signature = base64.b64encode(computed_hmac).decode("utf-8")
+        return False
 
-        return hmac.compare_digest(computed_signature, signature)
 
-    @staticmethod
-    def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
-        """Parse ISO datetime string from Shopify."""
-        if not value:
-            return None
-        try:
-            # Handle both formats Shopify might return
-            if value.endswith("Z"):
-                value = value[:-1] + "+00:00"
-            return datetime.fromisoformat(value)
-        except (ValueError, TypeError):
-            return None
+def get_billing_client(shop_domain: str, access_token: str) -> ShopifyBillingClient:
+    """
+    Factory function to create a ShopifyBillingClient.
+
+    Args:
+        shop_domain: Shopify store domain
+        access_token: Decrypted access token
+
+    Returns:
+        Configured ShopifyBillingClient instance
+    """
+    return ShopifyBillingClient(shop_domain, access_token)
