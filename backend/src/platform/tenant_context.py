@@ -88,8 +88,13 @@ class TenantContextMiddleware:
     """
     
     def __init__(self):
-        # Lazy initialization - jwks_client will be created on first use
-        # Environment variables are validated in app lifespan startup
+        """
+        Initialize middleware with lazy JWKS client creation.
+        
+        Environment variables are NOT checked here to allow module import
+        without env vars present. Validation happens in app lifespan startup,
+        and JWKS client is created lazily on first request.
+        """
         self._jwks_client = None
         self.issuer = "https://api.frontegg.com"
     
