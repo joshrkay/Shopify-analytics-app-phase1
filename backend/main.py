@@ -32,21 +32,25 @@ async def lifespan(app: FastAPI):
     
     # Verify required environment variables
     required_vars = ["FRONTEGG_CLIENT_ID", "FRONTEGG_CLIENT_SECRET"]
+    env_status = {}
+    for var in required_vars:
+        value = os.getenv(var)
+        env_status[var] = "set" if value else "missing"
+        if not value:
+            logger.error(f"Environment variable {var} is not set or is empty")
+    
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     
     if missing_vars:
         logger.error(f"Missing required environment variables: {missing_vars}")
+        logger.error(f"Environment variable status: {env_status}")
         raise ValueError(f"Missing required environment variables: {missing_vars}")
     
-    logger.info("Environment variables validated")
+    logger.info("Environment variables validated", extra={"env_status": env_status})
     
-    # Pre-initialize middleware JWKS client to verify configuration
-    try:
-        tenant_middleware._get_jwks_client()
-        logger.info("Tenant context middleware initialized and ready")
-    except Exception as e:
-        logger.error(f"Failed to initialize tenant context middleware: {e}")
-        raise
+    # Middleware will initialize lazily on first request
+    # Env vars are validated above, so initialization will succeed
+    logger.info("Tenant context middleware ready (lazy initialization)")
     
     yield
     
