@@ -5,9 +5,19 @@ from src.repositories.base_repo import (
     TenantIsolationError,
     Base,
 )
+from src.repositories.plans_repo import (
+    PlansRepository,
+    PlanRepositoryError,
+    PlanNotFoundError,
+    PlanAlreadyExistsError,
+)
 
 __all__ = [
     "BaseRepository",
     "TenantIsolationError",
     "Base",
+    "PlansRepository",
+    "PlanRepositoryError",
+    "PlanNotFoundError",
+    "PlanAlreadyExistsError",
 ]
