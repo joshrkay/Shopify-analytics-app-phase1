@@ -5,15 +5,18 @@ CRITICAL: One subscription per store (Shopify limitation).
 Subscription status is synced with Shopify via webhooks and reconciliation.
 """
 
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, String, Integer, DateTime, Enum, Text,
-    ForeignKey, Index, UniqueConstraint
+    ForeignKey, Index, UniqueConstraint, text
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
-from src.models.base import Base, TimestampMixin, TenantScopedMixin, generate_uuid
+from src.models.base import TimestampMixin, TenantScopedMixin
+from src.repositories.base_repo import Base
 
 
 from enum import Enum as PyEnum
@@ -47,6 +50,7 @@ class Subscription(Base, TimestampMixin, TenantScopedMixin):
     
     store_id = Column(
         String(255),
+        ForeignKey("shopify_stores.id"),
         nullable=True,
         index=True,
         comment="Foreign key to shopify_stores.id (optional, can link via tenant_id)"
@@ -121,6 +125,7 @@ class Subscription(Base, TimestampMixin, TenantScopedMixin):
     
     # Relationships
     plan = relationship("Plan", foreign_keys=[plan_id])
+    store = relationship("ShopifyStore", back_populates="subscription")
     
     # Constraints and indexes
     __table_args__ = (

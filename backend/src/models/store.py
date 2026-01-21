@@ -5,9 +5,11 @@ SECURITY: tenant_id is ONLY extracted from JWT, never from client input.
 """
 
 import uuid
-from sqlalchemy import Column, String, Enum
-from sqlalchemy.dialects.postgresql import UUID
 import enum
+
+from sqlalchemy import Column, String, Enum, DateTime, Text, UniqueConstraint, Index
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from src.repositories.base_repo import Base
 from src.models.base import TimestampMixin, TenantScopedMixin

@@ -113,8 +113,8 @@ class TenantContextMiddleware:
 
         SECURITY: tenant_id is ONLY extracted from JWT, never from request body/query.
         """
-        # Skip tenant check for health endpoint
-        if request.url.path == "/health":
+        # Skip tenant check for health endpoint and webhooks (webhooks use HMAC verification)
+        if request.url.path == "/health" or request.url.path.startswith("/api/webhooks/"):
             return await call_next(request)
 
         # Check if authentication is configured (set in app lifespan)
