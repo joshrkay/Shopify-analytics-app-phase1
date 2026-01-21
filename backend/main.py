@@ -17,6 +17,7 @@ from src.platform.tenant_context import TenantContextMiddleware, get_tenant_cont
 from src.api.routes import health
 from src.api.routes import billing
 from src.api.routes import webhooks_shopify
+from src.api.routes import admin_plans
 
 # Configure structured logging
 logging.basicConfig(
@@ -96,6 +97,9 @@ app.include_router(billing.router)
 
 # Include Shopify webhook routes (uses HMAC verification, not JWT)
 app.include_router(webhooks_shopify.router)
+
+# Include admin routes (requires admin role)
+app.include_router(admin_plans.router)
 
 
 # Example protected endpoint
