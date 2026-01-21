@@ -1,0 +1,27 @@
+# FastAPI and web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Authentication and JWT
+PyJWT==2.8.0
+cryptography==41.0.7
+httpx==0.25.1
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+
+# Redis
+redis==5.0.1
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+
+# Logging and monitoring
+structlog==23.2.0

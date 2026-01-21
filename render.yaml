@@ -1,0 +1,155 @@
+# Render Blueprint for Shopify Analytics App
+# This file enables one-click deployment of the entire application stack
+# Deploy via: https://render.com/docs/blueprint-spec
+
+services:
+  # ============================================
+  # WEB API SERVICE (FastAPI)
+  # ============================================
+  - type: web
+    name: shopify-analytics-api
+    runtime: docker
+    # Dockerfile path relative to repo root
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    # Deploy from main branch (production)
+    branch: main
+    # Auto-deploy on push to main
+    autoDeploy: true
+    # Health check endpoint for Render monitoring
+    healthCheckPath: /health
+    # Region for deployment
+    region: oregon
+    # Environment variables
+    envVars:
+      # Environment identifier
+      - key: ENV
+        value: production
+      # Database connection (auto-injected from database service)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: shopify-analytics-db
+          property: connectionString
+      # Redis connection (auto-injected from Redis service)
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: shopify-analytics-redis
+          property: connectionString
+      # Frontend authentication (set via Render dashboard)
+      - key: FRONTEGG_CLIENT_ID
+        sync: false
+      - key: FRONTEGG_CLIENT_SECRET
+        sync: false
+      # Shopify API credentials (set via Render dashboard)
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      # OpenRouter API key for AI features (set via Render dashboard)
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # LaunchDarkly feature flags (set via Render dashboard)
+      - key: LAUNCHDARKLY_SDK_KEY
+        sync: false
+
+  # ============================================
+  # BACKGROUND WORKER SERVICE
+  # ============================================
+  - type: worker
+    name: shopify-analytics-worker
+    runtime: docker
+    # Uses worker Dockerfile
+    dockerfilePath: ./docker/worker.Dockerfile
+    dockerContext: .
+    # Deploy from main branch
+    branch: main
+    # Auto-deploy on push to main
+    autoDeploy: true
+    region: oregon
+    # Same environment variables as API (workers need DB/Redis access)
+    envVars:
+      - key: ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: shopify-analytics-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: shopify-analytics-redis
+          property: connectionString
+      - key: FRONTEGG_CLIENT_ID
+        sync: false
+      - key: FRONTEGG_CLIENT_SECRET
+        sync: false
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LAUNCHDARKLY_SDK_KEY
+        sync: false
+
+  # ============================================
+  # CRON JOB: RECONCILE SUBSCRIPTIONS
+  # ============================================
+  - type: cron
+    name: shopify-analytics-reconcile-subscriptions
+    # Schedule: runs every hour
+    schedule: "0 * * * *"
+    # Uses worker Dockerfile (same runtime environment)
+    dockerfilePath: ./docker/worker.Dockerfile
+    dockerContext: .
+    # Command to execute
+    command: python -m jobs.reconcile_subscriptions
+    region: oregon
+    # Environment variables (same as worker)
+    envVars:
+      - key: ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: shopify-analytics-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: shopify-analytics-redis
+          property: connectionString
+      - key: FRONTEGG_CLIENT_ID
+        sync: false
+      - key: FRONTEGG_CLIENT_SECRET
+        sync: false
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LAUNCHDARKLY_SDK_KEY
+        sync: false
+
+  # ============================================
+  # REDIS: IN-MEMORY CACHE & QUEUE
+  # ============================================
+  - type: redis
+    name: shopify-analytics-redis
+    plan: starter
+    region: oregon
+    # Redis eviction policy
+    redisMaxmemoryPolicy: allkeys-lru
+
+# ============================================
+# DATABASE: POSTGRES
+# ============================================
+databases:
+  - name: shopify-analytics-db
+    databaseName: shopify_analytics
+    user: shopify_analytics_user
+    plan: starter
+    region: oregon
+    # PostgreSQL version
+    postgresMajorVersion: 15
