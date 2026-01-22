@@ -11,7 +11,6 @@ from src.models.plan import Plan, PlanFeature
 from src.models.subscription import Subscription
 from src.models.usage import UsageRecord, UsageAggregate
 from src.models.billing_event import BillingEvent
-from src.models.oauth_state import OAuthState
 
 __all__ = [
     "TimestampMixin",
@@ -23,5 +22,4 @@ __all__ = [
     "UsageRecord",
     "UsageAggregate",
     "BillingEvent",
-    "OAuthState",
 ]

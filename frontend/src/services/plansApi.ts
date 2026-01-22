@@ -28,33 +28,8 @@ class ApiError extends Error {
   }
 }
 
-// Session token getter (set by ShopifyApiProvider for embedded apps)
-let sessionTokenGetter: (() => Promise<string | null>) | null = null;
-
-/**
- * Set the session token getter function.
- * Called by ShopifyApiProvider to enable session token authentication.
- */
-export function setSessionTokenGetter(getter: () => Promise<string | null>) {
-  sessionTokenGetter = getter;
-}
-
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-  let token: string | null = null;
-
-  // Try session token first (for embedded apps)
-  if (sessionTokenGetter) {
-    try {
-      token = await sessionTokenGetter();
-    } catch (error) {
-      console.warn('Failed to get session token:', error);
-    }
-  }
-
-  // Fallback to localStorage token (for admin routes)
-  if (!token) {
-    token = localStorage.getItem('auth_token');
-  }
+  const token = localStorage.getItem('auth_token');
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
