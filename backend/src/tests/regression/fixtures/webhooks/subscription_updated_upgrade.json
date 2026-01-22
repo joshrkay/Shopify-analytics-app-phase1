@@ -1,0 +1,11 @@
+{
+  "app_subscription": {
+    "admin_graphql_api_id": "{{SUBSCRIPTION_ID}}",
+    "name": "AI Growth Analytics - Pro",
+    "status": "ACTIVE",
+    "created_at": "2025-01-21T00:00:00Z",
+    "current_period_end": "2025-02-21T00:00:00Z",
+    "trial_days": 0,
+    "test": true
+  }
+}

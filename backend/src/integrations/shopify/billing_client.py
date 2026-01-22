@@ -9,8 +9,8 @@ Documentation: https://shopify.dev/docs/apps/billing
 
 import os
 import logging
-from typing import Optional, Any
-from dataclasses import dataclass
+from typing import Optional, Any, Dict, List
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
@@ -18,37 +18,59 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# Shopify API version to use
+SHOPIFY_API_VERSION = "2024-01"
 
-@dataclass
-class ShopifySubscriptionResponse:
-    """Response from Shopify subscription API."""
-    subscription_id: str
-    confirmation_url: Optional[str] = None
-    status: Optional[str] = None
-    current_period_end: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    name: Optional[str] = None
-    return_url: Optional[str] = None
-    test: bool = False
+
+class BillingInterval(str, Enum):
+    """Billing interval for recurring subscriptions."""
+    EVERY_30_DAYS = "EVERY_30_DAYS"
+    ANNUAL = "ANNUAL"
 
 
 @dataclass
-class ShopifyPlanConfig:
-    """Configuration for a Shopify billing plan."""
+class ShopifySubscription:
+    """Shopify subscription data from API."""
+    id: str
     name: str
-    price: float  # In dollars
-    interval: str = "EVERY_30_DAYS"  # or "ANNUAL"
+    status: str
+    created_at: Optional[datetime] = None
+    current_period_end: Optional[datetime] = None
     trial_days: int = 0
     test: bool = False
 
 
-class ShopifyBillingError(Exception):
+@dataclass
+class CreateSubscriptionResult:
+    """Result of creating a Shopify subscription."""
+    confirmation_url: str
+    app_subscription: Optional[ShopifySubscription] = None
+    user_errors: List[Dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        """Returns True if no user errors."""
+        return len(self.user_errors) == 0
+
+
+class ShopifyAPIError(Exception):
     """Error from Shopify Billing API."""
 
-    def __init__(self, message: str, code: Optional[str] = None, details: Optional[Dict] = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        code: Optional[str] = None,
+        response: Optional[Dict] = None
+    ):
         super().__init__(message)
+        self.status_code = status_code
         self.code = code
-        self.details = details or {}
+        self.response = response or {}
+
+
+# Alias for backwards compatibility
+ShopifyBillingError = ShopifyAPIError
 
 
 class ShopifyBillingClient:
@@ -273,19 +295,20 @@ class ShopifyBillingClient:
         """
 
         variables = {
-            "name": plan.name,
+            "name": name,
             "returnUrl": return_url,
-            "test": plan.test,
-            "trialDays": plan.trial_days,
+            "test": test,
+            "trialDays": trial_days,
+            "replacementBehavior": replacement_behavior,
             "lineItems": [
                 {
                     "plan": {
                         "appRecurringPricingDetails": {
                             "price": {
-                                "amount": plan.price,
-                                "currencyCode": "USD"
+                                "amount": price_amount,
+                                "currencyCode": currency_code
                             },
-                            "interval": plan.interval,
+                            "interval": interval.value if isinstance(interval, BillingInterval) else interval,
                         }
                     }
                 }

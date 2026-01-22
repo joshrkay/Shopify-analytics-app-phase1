@@ -158,11 +158,90 @@ jobs:
           flags: platform
           name: platform-tests
 
+  # Billing regression tests with ephemeral database
+  billing-regression-tests:
+    name: Billing Regression Tests
+    runs-on: ubuntu-latest
+    needs: quality-gates  # Only run if quality gates pass
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_billing_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-mock pytest-cov
+
+      - name: Run Billing Regression Tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/test_billing_db"
+          SHOPIFY_API_SECRET: "test-webhook-secret-for-hmac"
+          SHOPIFY_BILLING_TEST_MODE: "true"
+          FRONTEGG_CLIENT_ID: "test-client-id"
+          FRONTEGG_CLIENT_SECRET: "test-client-secret"
+          REDIS_URL: "redis://localhost:6379"
+          ENV: "test"
+          PYTHONPATH: "${{ github.workspace }}/backend"
+        run: |
+          echo "=========================================="
+          echo "Running Billing Regression Tests"
+          echo "=========================================="
+          pytest src/tests/regression/test_billing_regression.py \
+            -v \
+            --tb=short \
+            -m "regression" \
+            --timeout=600 \
+            --cov=src/services/billing_service \
+            --cov=src/api/routes/webhooks_shopify \
+            --cov=src/jobs/reconcile_subscriptions \
+            --cov-report=term-missing || exit 1
+
+      - name: Billing Regression Summary
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "Billing Regression Test Results"
+          echo "=========================================="
+          echo "Test Coverage:"
+          echo "  1. Checkout URL Happy Path"
+          echo "  2. Webhook Subscription Activation"
+          echo "  3. Plan Upgrade Flow"
+          echo "  4. Cancellation Flow"
+          echo "  5. Failed Payment Handling"
+          echo "  6. Reconciliation Drift Correction"
+          echo "  7. HMAC Security Verification"
+          echo "  8. Cross-Tenant Isolation"
+
   # Block PR merge if quality gates fail
   pr-check:
     name: PR Merge Gate
     runs-on: ubuntu-latest
-    needs: [quality-gates, platform-tests]
+    needs: [quality-gates, platform-tests, billing-regression-tests]
     if: github.event_name == 'pull_request'
     
     steps:
