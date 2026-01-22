@@ -10,7 +10,7 @@ import enum
 from sqlalchemy import Column, String, Integer, Numeric, DateTime, ForeignKey, Index, func, JSON
 from sqlalchemy.orm import relationship
 
-from src.repositories.base_repo import Base
+from src.db_base import Base
 from src.models.base import TenantScopedMixin
 
 

@@ -14,8 +14,6 @@ from typing import Optional
 from sqlalchemy import Column, String, DateTime, func
 from sqlalchemy.orm import declared_attr
 
-from src.repositories.base_repo import Base
-
 
 def generate_uuid() -> str:
     """Generate a UUID4 string for use as a primary key default."""

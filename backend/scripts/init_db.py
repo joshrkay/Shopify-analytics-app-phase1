@@ -23,7 +23,7 @@ sys.path.insert(0, str(backend_dir))
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.repositories.base_repo import Base
+from src.db_base import Base
 
 # Import all models to register them with Base.metadata
 from src.models.plan import Plan, PlanFeature

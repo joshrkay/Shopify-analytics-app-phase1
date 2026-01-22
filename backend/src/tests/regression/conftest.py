@@ -83,8 +83,8 @@ def db_engine():
             f"Error: {e}"
         )
 
-    # Import Base directly from base_repo to avoid circular import
-    from src.repositories.base_repo import Base
+    # Import Base from db_base
+    from src.db_base import Base
 
     # Import all models to ensure they're registered with Base
     from src.models import subscription, plan, store, billing_event

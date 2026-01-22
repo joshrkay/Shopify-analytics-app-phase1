@@ -8,7 +8,7 @@ PlanFeatures link plans to enabled features with optional limits.
 from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, UniqueConstraint, JSON
 from sqlalchemy.orm import relationship
 
-from src.repositories.base_repo import Base
+from src.db_base import Base
 from src.models.base import TimestampMixin
 
 

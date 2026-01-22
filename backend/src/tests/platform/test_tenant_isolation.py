@@ -17,7 +17,8 @@ from src.platform.tenant_context import (
     get_tenant_context,
     FronteggJWKSClient,
 )
-from src.repositories.base_repo import BaseRepository, TenantIsolationError, Base
+from src.repositories.base_repo import BaseRepository, TenantIsolationError
+from src.db_base import Base
 
 
 # Mock JWT payloads for testing

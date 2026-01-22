@@ -11,7 +11,7 @@ from sqlalchemy import Column, String, Enum, DateTime, Text, UniqueConstraint, I
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
-from src.repositories.base_repo import Base
+from src.db_base import Base
 from src.models.base import TimestampMixin, TenantScopedMixin
 
 

@@ -3,8 +3,8 @@
 from src.repositories.base_repo import (
     BaseRepository,
     TenantIsolationError,
-    Base,
 )
+from src.db_base import Base
 from src.repositories.plans_repo import (
     PlansRepository,
     PlanRepositoryError,

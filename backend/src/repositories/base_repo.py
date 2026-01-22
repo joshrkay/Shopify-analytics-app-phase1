@@ -10,13 +10,12 @@ from typing import TypeVar, Generic, Optional, List, Any
 from abc import ABC, abstractmethod
 
 from sqlalchemy import create_engine, Column, String, text
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
 
-logger = logging.getLogger(__name__)
+from src.db_base import Base
 
-Base = declarative_base()
+logger = logging.getLogger(__name__)
 
 # Type variable for repository models
 T = TypeVar("T", bound=Base)

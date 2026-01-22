@@ -14,8 +14,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
+from src.db_base import Base
 from src.models.base import TimestampMixin, TenantScopedMixin
-from src.repositories.base_repo import Base
 
 
 from enum import Enum as PyEnum

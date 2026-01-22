@@ -13,7 +13,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from src.models.base import Base, TimestampMixin, TenantScopedMixin, generate_uuid
+from src.db_base import Base
+from src.models.base import TimestampMixin, TenantScopedMixin, generate_uuid
 
 
 class UsageRecord(Base, TenantScopedMixin):

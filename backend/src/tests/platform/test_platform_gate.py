@@ -28,6 +28,7 @@ from src.platform.tenant_context import (
     get_tenant_context,
 )
 from src.repositories.base_repo import BaseRepository, TenantIsolationError
+from src.db_base import Base
 
 
 # ============================================================================
