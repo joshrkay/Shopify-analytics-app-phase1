@@ -25,16 +25,13 @@ def create_shopify_token(shop_domain: str, api_key: str, api_secret: str) -> str
     now = datetime.now(timezone.utc)
     exp = now + timedelta(hours=1)
     
-    # Use a slightly earlier time for nbf to avoid timing issues
-    nbf_time = now - timedelta(seconds=5)
-    
     payload = {
         "iss": f"https://{shop_domain}/admin",
         "dest": f"https://{shop_domain}",
         "aud": api_key,
         "sub": "test-user-id",
         "exp": int(exp.timestamp()),
-        "nbf": int(nbf_time.timestamp()),  # Set nbf slightly in the past to avoid timing issues
+        "nbf": int(now.timestamp()),
         "iat": int(now.timestamp()),
         "jti": "test-jti",
         "sid": "test-session-id"
@@ -245,6 +242,7 @@ class TestShopifyTenantIsolation:
         A Shopify shop tenant_id should never match a Frontegg org_id tenant_id.
         """
         # Reset singleton verifier to ensure fresh state
+        from src.platform.shopify_session import _verifier
         import src.platform.shopify_session
         src.platform.shopify_session._verifier = None
         
@@ -260,8 +258,7 @@ class TestShopifyTenantIsolation:
         # Frontegg JWT token (mocked) - use a different token string so it doesn't match Shopify
         frontegg_token = "frontegg-jwt-token-different-from-shopify"
         
-        # Mock Frontegg JWT verification ONLY (not Shopify verification)
-        # Shopify verifier uses jwt.decode directly, so it won't be affected by this patch
+        # Mock Frontegg JWT verification
         with patch('src.platform.tenant_context.jwt.decode') as mock_decode, \
              patch('src.platform.tenant_context.FronteggJWKSClient.get_signing_key') as mock_get_key:
             
@@ -269,10 +266,7 @@ class TestShopifyTenantIsolation:
             mock_signing_key.key = "mock-key"
             
             # Configure mock to only decode Frontegg token, not Shopify token
-            # The Shopify verifier uses jwt.decode directly (not through tenant_context),
-            # so this mock won't affect Shopify token verification
             def decode_side_effect(token, *args, **kwargs):
-                # Only handle Frontegg token
                 if token == frontegg_token:
                     return {
                         "org_id": "frontegg-org-123",
@@ -282,8 +276,8 @@ class TestShopifyTenantIsolation:
                         "iss": "https://api.frontegg.com",
                         "exp": 9999999999,
                     }
-                # For any other token (including Shopify), raise error
-                # This ensures Frontegg verification fails for Shopify tokens
+                # For Shopify token, raise error so Frontegg verification fails
+                # This ensures Shopify token uses Shopify verification, not Frontegg
                 from jwt.exceptions import InvalidTokenError
                 raise InvalidTokenError("Not a Frontegg token")
             
@@ -293,24 +287,17 @@ class TestShopifyTenantIsolation:
             def get_key_side_effect(token):
                 if token == frontegg_token:
                     return mock_signing_key
-                # For any other token, raise error
+                # For Shopify token, raise error so Frontegg verification fails
                 from jwt.exceptions import PyJWKClientError
                 raise PyJWKClientError("Not a Frontegg token")
             
             mock_get_key.side_effect = get_key_side_effect
             
             # Shopify shop request (should use Shopify token verification)
-            # This should succeed because Shopify verifier uses jwt.decode directly
             shop_response = client.get(
                 "/api/shopify/data",
                 headers={"Authorization": f"Bearer {shop_token}"}
             )
-            
-            # Verify Shopify request succeeded
-            if shop_response.status_code != 200:
-                # If it failed, check the error details
-                error_detail = shop_response.json().get("detail", shop_response.text) if shop_response.status_code != 200 else None
-                pytest.fail(f"Shopify request failed with status {shop_response.status_code}: {error_detail}")
             
             # Frontegg request (should use Frontegg JWT verification)
             frontegg_response = client.get(
@@ -318,10 +305,8 @@ class TestShopifyTenantIsolation:
                 headers={"Authorization": f"Bearer {frontegg_token}"}
             )
             
-            # Verify Frontegg request succeeded
-            if frontegg_response.status_code != 200:
-                error_detail = frontegg_response.json().get("detail", frontegg_response.text) if frontegg_response.status_code != 200 else None
-                pytest.fail(f"Frontegg request failed with status {frontegg_response.status_code}: {error_detail}")
+            assert shop_response.status_code == 200, f"Shopify request failed: {shop_response.text}"
+            assert frontegg_response.status_code == 200, f"Frontegg request failed: {frontegg_response.text}"
             
             shop_tenant_id = shop_response.json()["tenant_id"]
             frontegg_tenant_id = frontegg_response.json()["tenant_id"]
