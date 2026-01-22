@@ -421,14 +421,6 @@ class OAuthService:
         # Validate state
         oauth_state = self.validate_state(state, shop, session)
         
-        # Check if store already exists (to determine if this is a reinstall)
-        # Do this BEFORE marking state as used and creating/updating store
-        from src.models.store import ShopifyStore
-        existing_store = session.query(ShopifyStore).filter(
-            ShopifyStore.shop_domain == shop.replace("https://", "").replace("http://", "").rstrip("/").lower()
-        ).first()
-        is_reinstall = existing_store is not None
-        
         # Mark state as used
         oauth_state.used_at = datetime.now(timezone.utc)
         session.commit()
@@ -447,7 +439,7 @@ class OAuthService:
         logger.info("OAuth flow completed", extra={
             "shop_domain": shop,
             "tenant_id": store.tenant_id,
-            "is_reinstall": is_reinstall
+            "is_reinstall": oauth_state.used_at is not None
         })
         
         return store
