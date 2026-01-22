@@ -546,10 +546,22 @@ class BillingService:
         Returns:
             SubscriptionInfo with current status and access permissions
         """
+        # First check for active subscription
         subscription = self._get_active_subscription()
 
+        # If no active subscription, check for recently cancelled/declined/expired
         if not subscription:
-            # No subscription - default to free plan
+            subscription = self.db.query(Subscription).filter(
+                Subscription.tenant_id == self.tenant_id,
+                Subscription.status.in_([
+                    SubscriptionStatus.CANCELLED.value,
+                    SubscriptionStatus.DECLINED.value,
+                    SubscriptionStatus.EXPIRED.value
+                ])
+            ).order_by(Subscription.cancelled_at.desc().nullslast()).first()
+
+        if not subscription:
+            # No subscription at all - default to free plan
             free_plan = self.db.query(Plan).filter(Plan.id == FREE_PLAN_ID).first()
             return SubscriptionInfo(
                 subscription_id=None,
