@@ -30,6 +30,7 @@ from sqlalchemy import Column, String, DateTime, Text, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session
 
 # Use separate Base to avoid circular imports
 # This model will need to be registered with the main Base during app initialization
@@ -62,6 +63,7 @@ class AuditAction(str, Enum):
 
     # Store/connector events
     STORE_CONNECTED = "store.connected"
+    APP_INSTALLED = "app.installed"
     STORE_DISCONNECTED = "store.disconnected"
     STORE_UPDATED = "store.updated"
     STORE_SYNC_STARTED = "store.sync_started"
@@ -332,6 +334,77 @@ async def log_system_audit_event(
     )
 
     return await write_audit_log(db, event)
+
+
+def log_system_audit_event_sync(
+    db: Session,
+    tenant_id: str,
+    action: AuditAction,
+    resource_type: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    metadata: Optional[dict[str, Any]] = None,
+    correlation_id: Optional[str] = None,
+) -> AuditLog:
+    """
+    Log an audit event from a system context using a synchronous database session.
+    
+    Use this when there is no request context available and you have a sync Session
+    (e.g., in OAuth service which uses sync sessions).
+    
+    Args:
+        db: Synchronous database session
+        tenant_id: The tenant ID
+        action: The audit action
+        resource_type: Type of resource being acted upon
+        resource_id: ID of the resource
+        metadata: Additional metadata to include
+        correlation_id: Optional correlation ID for tracing
+    
+    Returns:
+        The created AuditLog record
+    
+    Example:
+        log_system_audit_event_sync(
+            db=session,
+            tenant_id=tenant_id,
+            action=AuditAction.APP_INSTALLED,
+            resource_type="store",
+            resource_id=store_id,
+            metadata={"shop_domain": "example.myshopify.com", "is_reinstall": False}
+        )
+    """
+    event = AuditEvent(
+        tenant_id=tenant_id,
+        user_id="system",
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        metadata=metadata or {},
+        correlation_id=correlation_id,
+    )
+    
+    audit_log = AuditLog(
+        id=str(uuid.uuid4()),
+        **event.to_dict()
+    )
+    db.add(audit_log)
+    db.commit()
+    db.refresh(audit_log)
+    
+    logger.info(
+        "Audit event recorded (sync)",
+        extra={
+            "audit_id": audit_log.id,
+            "tenant_id": event.tenant_id,
+            "user_id": event.user_id,
+            "action": event.action.value if isinstance(event.action, AuditAction) else event.action,
+            "resource_type": event.resource_type,
+            "resource_id": event.resource_id,
+            "correlation_id": event.correlation_id,
+        }
+    )
+    
+    return audit_log
 
 
 def create_audit_decorator(

@@ -6,7 +6,7 @@
  */
 
 import { ReactNode, useEffect } from 'react';
-import { useSessionToken } from '../hooks/useSessionToken';
+import { useShopifySession } from '../hooks/useShopifySession';
 import { setSessionTokenGetter } from '../services/plansApi';
 
 interface ShopifyApiProviderProps {
@@ -14,7 +14,7 @@ interface ShopifyApiProviderProps {
 }
 
 export function ShopifyApiProvider({ children }: ShopifyApiProviderProps) {
-  const { getToken } = useSessionToken();
+  const { getToken } = useShopifySession();
 
   useEffect(() => {
     // Register session token getter with API service

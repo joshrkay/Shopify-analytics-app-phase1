@@ -36,11 +36,14 @@ def db_engine():
     """Create in-memory SQLite database for testing."""
     from src.db_base import Base
     from src.models import oauth_state, store
+    from src.platform.audit import AuditBase
     
     engine = create_engine("sqlite:///:memory:", echo=False)
     Base.metadata.create_all(bind=engine)
+    AuditBase.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
+    AuditBase.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
@@ -194,6 +197,19 @@ class TestOAuthCallbackFlow:
             assert store.status == "active"
             assert store.access_token_encrypted is not None
             assert store.installed_at is not None
+            
+            # Verify audit log was created
+            from src.platform.audit import AuditLog, AuditAction
+            audit_logs = db_session.query(AuditLog).filter(
+                AuditLog.tenant_id == store.tenant_id,
+                AuditLog.action == AuditAction.APP_INSTALLED.value
+            ).all()
+            assert len(audit_logs) == 1
+            assert audit_logs[0].resource_type == "store"
+            assert audit_logs[0].resource_id == store.id
+            assert audit_logs[0].event_metadata["is_reinstall"] is False
+            assert audit_logs[0].event_metadata["shop_domain"] == test_shop_domain
+            assert audit_logs[0].user_id == "system"
     
     @pytest.mark.asyncio
     async def test_callback_success_reinstall(
@@ -258,6 +274,20 @@ class TestOAuthCallbackFlow:
             
             # CRITICAL: tenant_id must be preserved
             assert existing_store.tenant_id == original_tenant_id
+            
+            # Verify audit log was created for reinstall
+            from src.platform.audit import AuditLog, AuditAction
+            audit_logs = db_session.query(AuditLog).filter(
+                AuditLog.tenant_id == original_tenant_id,
+                AuditLog.action == AuditAction.APP_INSTALLED.value
+            ).all()
+            assert len(audit_logs) >= 1  # At least one (may have previous installs)
+            latest = max(audit_logs, key=lambda x: x.timestamp)
+            assert latest.event_metadata["is_reinstall"] is True
+            assert latest.event_metadata["shop_domain"] == test_shop_domain
+            assert latest.resource_type == "store"
+            assert latest.resource_id == existing_store.id
+            assert latest.user_id == "system"
     
     def test_callback_invalid_hmac(self, client, test_shop_domain, db_session):
         """Test callback with invalid HMAC."""

@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from src.models.oauth_state import OAuthState
 from src.models.store import ShopifyStore, StoreStatus
 from src.platform.secrets import encrypt_secret
+from src.platform.audit import AuditAction, log_system_audit_event_sync
 
 logger = logging.getLogger(__name__)
 
@@ -367,6 +368,21 @@ class OAuthService:
             # Do not update tenant_id even if it differs (shouldn't happen)
             
             session.commit()
+            
+            # Log audit event for reinstall
+            log_system_audit_event_sync(
+                db=session,
+                tenant_id=existing_store.tenant_id,
+                action=AuditAction.APP_INSTALLED,
+                resource_type="store",
+                resource_id=existing_store.id,
+                metadata={
+                    "shop_domain": shop_domain,
+                    "is_reinstall": True,
+                    "scopes": scopes
+                }
+            )
+            
             return existing_store
         else:
             # New install: create store
@@ -386,6 +402,21 @@ class OAuthService:
             
             session.add(new_store)
             session.commit()
+            
+            # Log audit event for new install
+            log_system_audit_event_sync(
+                db=session,
+                tenant_id=tenant_id,
+                action=AuditAction.APP_INSTALLED,
+                resource_type="store",
+                resource_id=new_store.id,
+                metadata={
+                    "shop_domain": shop_domain,
+                    "is_reinstall": False,
+                    "scopes": scopes
+                }
+            )
+            
             return new_store
     
     async def complete_oauth(
