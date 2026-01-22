@@ -169,111 +169,120 @@ class TenantContextMiddleware:
                 "method": request.method
             })
             
-        except (HTTPException, ValueError) as shopify_error:
-            # Shopify token verification failed or not configured, try Frontegg JWT
-            error_msg = str(shopify_error.detail) if hasattr(shopify_error, 'detail') else str(shopify_error)
-            logger.debug("Shopify session token verification failed, trying Frontegg JWT", extra={
-                "error": error_msg,
+            # Continue to next middleware/handler
+            response = await call_next(request)
+            
+            # Add tenant_id to response headers for debugging (optional)
+            if hasattr(request.state, "tenant_context"):
+                response.headers["X-Tenant-ID"] = request.state.tenant_context.tenant_id
+            
+            return response
+            
+        except ValueError as shopify_config_error:
+            # Shopify not configured - fall through to Frontegg
+            if "not configured" in str(shopify_config_error):
+                logger.debug("Shopify session token verification not configured, trying Frontegg JWT", extra={
+                    "path": request.url.path
+                })
+            else:
+                # Other ValueError - re-raise
+                raise
+        except HTTPException as shopify_auth_error:
+            # Shopify token verification failed (invalid token) - do NOT fall back to Frontegg
+            # This is a security requirement: invalid tokens should be rejected, not tried with another auth method
+            logger.warning("Shopify session token verification failed", extra={
+                "error": str(shopify_auth_error.detail),
                 "path": request.url.path
             })
+            raise
+        
+        # Fall through to Frontegg JWT verification (only if Shopify not configured)
+        # Check if Frontegg authentication is configured
+        if hasattr(request.app.state, "auth_configured") and not request.app.state.auth_configured:
+            logger.warning(
+                "Authentication not configured - protected endpoint accessed",
+                extra={"path": request.url.path, "method": request.method}
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service not configured. Please set FRONTEGG_CLIENT_ID environment variable."
+            )
+        
+        try:
+            # Get signing key from JWKS (PyJWKClient handles fetching/caching)
+            jwks_client = self._get_jwks_client()
+            signing_key = jwks_client.get_signing_key(token)
             
-            # Check if Frontegg authentication is configured
-            if hasattr(request.app.state, "auth_configured") and not request.app.state.auth_configured:
-                logger.warning(
-                    "Authentication not configured - protected endpoint accessed",
-                    extra={"path": request.url.path, "method": request.method}
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Authentication service not configured. Please set FRONTEGG_CLIENT_ID environment variable."
-                )
+            # Decode and verify token using PyJWT
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],  # Frontegg uses RS256
+                audience=jwks_client.client_id,
+                issuer=self.issuer,
+                options={
+                    "verify_signature": True,
+                    "verify_aud": True,
+                    "verify_iss": True,
+                    "verify_exp": True
+                }
+            )
             
-            try:
-                # Get signing key from JWKS (PyJWKClient handles fetching/caching)
-                jwks_client = self._get_jwks_client()
-                signing_key = jwks_client.get_signing_key(token)
-                
-                # Decode and verify token using PyJWT
-                payload = jwt.decode(
-                    token,
-                    signing_key.key,
-                    algorithms=["RS256"],  # Frontegg uses RS256
-                    audience=jwks_client.client_id,
-                    issuer=self.issuer,
-                    options={
-                        "verify_signature": True,
-                        "verify_aud": True,
-                        "verify_iss": True,
-                        "verify_exp": True
-                    }
-                )
-                
-                # Extract tenant context from payload
-                org_id = payload.get("org_id") or payload.get("organizationId")
-                user_id = payload.get("sub") or payload.get("userId") or payload.get("user_id")
-                roles = payload.get("roles", [])
-                
-                if not org_id:
-                    logger.error("JWT missing org_id", extra={
-                        "payload_keys": list(payload.keys())
-                    })
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Token missing organization identifier"
-                    )
-                
-                if not user_id:
-                    logger.error("JWT missing user_id", extra={
-                        "payload_keys": list(payload.keys())
-                    })
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Token missing user identifier"
-                    )
-                
-                # CRITICAL: tenant_id = org_id (from JWT, never from request)
-                tenant_context = TenantContext(
-                    tenant_id=str(org_id),
-                    user_id=str(user_id),
-                    roles=roles if isinstance(roles, list) else [],
-                    org_id=str(org_id),
-                )
-                
-                # Attach to request state
-                request.state.tenant_context = tenant_context
-                
-                # Log with tenant context (for audit trail)
-                logger.info("Request authenticated via Frontegg JWT", extra={
-                    "tenant_id": tenant_context.tenant_id,
-                    "user_id": tenant_context.user_id,
-                    "path": request.url.path,
-                    "method": request.method
-                })
-                
-            except (InvalidTokenError, DecodeError, PyJWKClientError) as e:
-                logger.warning("JWT verification failed", extra={
-                    "error": str(e),
-                    "path": request.url.path
+            # Extract tenant context from payload
+            org_id = payload.get("org_id") or payload.get("organizationId")
+            user_id = payload.get("sub") or payload.get("userId") or payload.get("user_id")
+            roles = payload.get("roles", [])
+            
+            if not org_id:
+                logger.error("JWT missing org_id", extra={
+                    "payload_keys": list(payload.keys())
                 })
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Invalid or expired token: {str(e)}"
+                    detail="Token missing organization identifier"
                 )
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error("Unexpected error during tenant context extraction", extra={
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "path": request.url.path
+            
+            if not user_id:
+                logger.error("JWT missing user_id", extra={
+                    "payload_keys": list(payload.keys())
                 })
                 raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal error during authentication"
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Token missing user identifier"
                 )
+            
+            # CRITICAL: tenant_id = org_id (from JWT, never from request)
+            tenant_context = TenantContext(
+                tenant_id=str(org_id),
+                user_id=str(user_id),
+                roles=roles if isinstance(roles, list) else [],
+                org_id=str(org_id),
+            )
+            
+            # Attach to request state
+            request.state.tenant_context = tenant_context
+            
+            # Log with tenant context (for audit trail)
+            logger.info("Request authenticated via Frontegg JWT", extra={
+                "tenant_id": tenant_context.tenant_id,
+                "user_id": tenant_context.user_id,
+                "path": request.url.path,
+                "method": request.method
+            })
+            
+        except (InvalidTokenError, DecodeError, PyJWKClientError) as e:
+            logger.warning("JWT verification failed", extra={
+                "error": str(e),
+                "path": request.url.path
+            })
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Invalid or expired token: {str(e)}"
+            )
+        except HTTPException:
+            raise
         except Exception as e:
-            # Unexpected error during Shopify token verification
-            logger.error("Unexpected error during Shopify session token verification", extra={
+            logger.error("Unexpected error during tenant context extraction", extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
                 "path": request.url.path
