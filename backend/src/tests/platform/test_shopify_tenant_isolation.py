@@ -47,6 +47,10 @@ def app_with_shopify_auth(monkeypatch):
     monkeypatch.setenv("SHOPIFY_API_SECRET", "test-api-secret")
     monkeypatch.setenv("FRONTEGG_CLIENT_ID", "test-client-id")
     
+    # Reset singleton verifier to ensure fresh state
+    import src.platform.shopify_session
+    src.platform.shopify_session._verifier = None
+    
     app = FastAPI()
     
     # Add middleware
