@@ -177,11 +177,29 @@ class ShopifySessionTokenVerifier:
 _verifier = None
 
 
-def get_session_token_verifier() -> ShopifySessionTokenVerifier:
-    """Get singleton session token verifier."""
+def get_session_token_verifier() -> Optional[ShopifySessionTokenVerifier]:
+    """
+    Get singleton session token verifier.
+    
+    Returns None if Shopify API credentials are not configured.
+    This allows the middleware to gracefully fall back to Frontegg JWT.
+    """
     global _verifier
     if _verifier is None:
-        _verifier = ShopifySessionTokenVerifier()
+        # Check if credentials are available before initializing
+        api_key = os.getenv("SHOPIFY_API_KEY")
+        api_secret = os.getenv("SHOPIFY_API_SECRET")
+        
+        if not api_key or not api_secret:
+            # Not configured - return None (middleware will fall back to Frontegg JWT)
+            return None
+        
+        try:
+            _verifier = ShopifySessionTokenVerifier()
+        except ValueError:
+            # Initialization failed - return None
+            return None
+    
     return _verifier
 
 
