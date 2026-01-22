@@ -67,6 +67,14 @@ def app_with_middleware(monkeypatch):
     # Set environment variable for middleware initialization
     monkeypatch.setenv("FRONTEGG_CLIENT_ID", "test-client-id")
     
+    # Ensure Shopify is NOT configured (tests only use Frontegg JWT)
+    monkeypatch.delenv("SHOPIFY_API_KEY", raising=False)
+    monkeypatch.delenv("SHOPIFY_API_SECRET", raising=False)
+    
+    # Reset singleton verifier to ensure fresh state
+    import src.platform.shopify_session
+    src.platform.shopify_session._verifier = None
+    
     app = FastAPI()
     
     # Add middleware
@@ -152,10 +160,15 @@ class TestJWTVerification:
     @pytest.mark.asyncio
     @patch('src.platform.tenant_context.FronteggJWKSClient.get_signing_key')
     @patch('src.platform.tenant_context.jwt.decode')
-    async def test_invalid_token_returns_403(self, mock_jwt_decode, mock_get_signing_key, app_with_middleware):
+    async def test_invalid_token_returns_403(self, mock_jwt_decode, mock_get_signing_key, app_with_middleware, monkeypatch):
         """Test that invalid tokens return 403."""
         from fastapi import HTTPException
         from jwt.exceptions import InvalidTokenError, PyJWKClientError
+        
+        # Ensure Shopify is NOT configured (so it falls through to Frontegg)
+        # This test only tests Frontegg JWT verification
+        monkeypatch.delenv("SHOPIFY_API_KEY", raising=False)
+        monkeypatch.delenv("SHOPIFY_API_SECRET", raising=False)
         
         # Mock JWKS client to raise JWT exception for invalid token
         # This should be caught by middleware and converted to 403
@@ -197,7 +210,8 @@ class TestCrossTenantProtection:
         mock_get_signing_key,
         mock_jwt_decode,
         app_with_middleware,
-        mock_jwks
+        mock_jwks,
+        monkeypatch
     ):
         """
         CRITICAL TEST: Tenant A cannot access Tenant B's data.
@@ -205,6 +219,10 @@ class TestCrossTenantProtection:
         This test verifies that even if Tenant A tries to specify
         tenant_id in request body/query, they can only access their own data.
         """
+        # Ensure Shopify is NOT configured (so it uses Frontegg JWT only)
+        monkeypatch.delenv("SHOPIFY_API_KEY", raising=False)
+        monkeypatch.delenv("SHOPIFY_API_SECRET", raising=False)
+        
         # Setup mocks
         from unittest.mock import MagicMock
         mock_signing_key = MagicMock()
@@ -254,8 +272,12 @@ class TestCrossTenantProtection:
         mock_get_signing_key,
         mock_jwt_decode,
         app_with_middleware,
-        mock_jwks
+        mock_jwks,
+        monkeypatch
     ):
+        # Ensure Shopify is NOT configured (so it uses Frontegg JWT only)
+        monkeypatch.delenv("SHOPIFY_API_KEY", raising=False)
+        monkeypatch.delenv("SHOPIFY_API_SECRET", raising=False)
         """
         CRITICAL TEST: Tenant B cannot access Tenant A's data.
         """
@@ -406,7 +428,8 @@ class TestPropertyBasedTenantIsolation:
         tenant_a_id,
         tenant_b_id,
         app_with_middleware,
-        mock_jwks
+        mock_jwks,
+        monkeypatch
     ):
         """
         Property-based test: Any tenant cannot access any other tenant's data.
@@ -414,6 +437,10 @@ class TestPropertyBasedTenantIsolation:
         This test runs with multiple tenant ID formats to ensure
         isolation works regardless of ID format.
         """
+        # Ensure Shopify is NOT configured (so it uses Frontegg JWT only)
+        monkeypatch.delenv("SHOPIFY_API_KEY", raising=False)
+        monkeypatch.delenv("SHOPIFY_API_SECRET", raising=False)
+        
         from unittest.mock import MagicMock
         with patch('src.platform.tenant_context.jwt.decode') as mock_decode, \
              patch('src.platform.tenant_context.FronteggJWKSClient.get_signing_key') as mock_key:
