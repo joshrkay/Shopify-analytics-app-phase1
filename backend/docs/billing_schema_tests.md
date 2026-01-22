@@ -16,10 +16,10 @@ This document contains SQL assertions and test queries to verify the billing and
 -- For testing, we'll insert directly but document this is NOT production pattern
 
 -- Test tenant A
-SET @tenant_a = 'test-tenant-a-org-id';
+\set tenant_a 'test-tenant-a-org-id'
 
 -- Test tenant B  
-SET @tenant_b = 'test-tenant-b-org-id';
+\set tenant_b 'test-tenant-b-org-id'
 ```
 
 ## 1. Schema Constraint Tests
