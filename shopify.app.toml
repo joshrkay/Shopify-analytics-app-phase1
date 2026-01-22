@@ -1,0 +1,65 @@
+# Shopify App Configuration for Signals AI
+# Documentation: https://shopify.dev/docs/apps/tools/cli/configuration
+
+# Shopify CLI identifies this app by client_id (API Key from Partner Dashboard)
+client_id = "659b64a20473522b3602d790278711cc"
+
+name = "Signals AI"
+handle = "signals-ai"
+application_url = "https://shopify-analytics-app-pmsl.onrender.com"
+
+# Embedded app configuration
+embedded = true
+
+# OAuth scopes - adjust based on your app's requirements
+# Common scopes for analytics apps:
+# - read_orders: Access order data for analytics
+# - read_products: Access product catalog
+# - read_customers: Access customer data
+# - read_analytics: Access Shopify's built-in analytics
+scopes = "read_orders,read_products,read_customers,read_analytics"
+
+# Allowed redirect URLs for OAuth flow
+[auth]
+redirect_urls = [
+  "https://shopify-analytics-app-pmsl.onrender.com/api/auth/callback",
+  "https://shopify-analytics-app-pmsl.onrender.com/api/billing/callback"
+]
+
+# Webhooks configuration
+# These match your existing webhook routes in backend/src/api/routes/webhooks_shopify.py
+[webhooks]
+api_version = "2024-01"
+
+  # App lifecycle webhooks
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/api/webhooks/shopify/app-uninstalled"
+
+  # Billing webhooks
+  [[webhooks.subscriptions]]
+  topics = ["app_subscriptions/update"]
+  uri = "/api/webhooks/shopify/subscription-update"
+
+  # GDPR mandatory webhooks
+  [[webhooks.subscriptions]]
+  topics = ["customers/redact"]
+  uri = "/api/webhooks/shopify/customers-redact"
+
+  [[webhooks.subscriptions]]
+  topics = ["shop/redact"]
+  uri = "/api/webhooks/shopify/shop-redact"
+
+  [[webhooks.subscriptions]]
+  topics = ["customers/data_request"]
+  uri = "/api/webhooks/shopify/customers-data-request"
+
+# App distribution settings
+[access_scopes]
+# Use legacy mode for self-hosted apps
+use_legacy_install_flow = true
+
+# Build configuration (not used for self-hosted apps, but required by CLI)
+[build]
+automatically_update_urls_on_dev = false
+include_config_on_deploy = true
