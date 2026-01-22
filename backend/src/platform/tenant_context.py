@@ -143,6 +143,12 @@ class TenantContextMiddleware:
             from src.platform.shopify_session import get_session_token_verifier
             
             verifier = get_session_token_verifier()
+            
+            # If verifier is None, Shopify credentials not configured - skip to Frontegg
+            if verifier is None:
+                # Raise a specific exception that will be caught and fall through to Frontegg
+                raise ValueError("Shopify session token verification not configured")
+            
             shopify_session = verifier.verify_session_token(token)
             
             # Convert Shopify session to TenantContext
@@ -163,10 +169,11 @@ class TenantContextMiddleware:
                 "method": request.method
             })
             
-        except HTTPException as shopify_error:
-            # Shopify token verification failed, try Frontegg JWT
+        except (HTTPException, ValueError) as shopify_error:
+            # Shopify token verification failed or not configured, try Frontegg JWT
+            error_msg = str(shopify_error.detail) if hasattr(shopify_error, 'detail') else str(shopify_error)
             logger.debug("Shopify session token verification failed, trying Frontegg JWT", extra={
-                "error": str(shopify_error.detail),
+                "error": error_msg,
                 "path": request.url.path
             })
             
