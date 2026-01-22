@@ -49,7 +49,7 @@ This application uses Render's Blueprint feature for one-click deployment of the
      - `SHOPIFY_API_KEY` - Your Shopify API key
      - `SHOPIFY_API_SECRET` - Your Shopify API secret
      - `OPENROUTER_API_KEY` - Your OpenRouter API key
-     - `LAUNCHDARKLY_SDK_KEY` - Your LaunchDarkly SDK key
+     - `ENCRYPTION_KEY` - Your encryption key for secrets
    
    **For `shopify-analytics-worker` service:**
    - Add the same environment variables as above

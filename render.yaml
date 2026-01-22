@@ -49,8 +49,8 @@ services:
       # OpenRouter API key for AI features (set via Render dashboard)
       - key: OPENROUTER_API_KEY
         sync: false
-      # LaunchDarkly feature flags (set via Render dashboard)
-      - key: LAUNCHDARKLY_SDK_KEY
+      # Encryption key for secrets (set via Render dashboard)
+      - key: ENCRYPTION_KEY
         sync: false
 
   # ============================================
@@ -90,7 +90,7 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
-      - key: LAUNCHDARKLY_SDK_KEY
+      - key: ENCRYPTION_KEY
         sync: false
 
   # ============================================
@@ -129,7 +129,7 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
-      - key: LAUNCHDARKLY_SDK_KEY
+      - key: ENCRYPTION_KEY
         sync: false
 
   # ============================================

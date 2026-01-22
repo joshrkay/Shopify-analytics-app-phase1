@@ -6,11 +6,11 @@ CRITICAL SECURITY REQUIREMENTS:
 - All encrypt/decrypt operations MUST use this module
 - Any variable name containing token/secret/key MUST be redacted from logs
 - Do not print environment variables or secrets, EVER
-- Use cloud KMS/Secrets Manager for encryption key management
+- Use Render environment variables for encryption key management
 
 This module supports:
-1. AWS KMS for encryption key management (production)
-2. Local encryption key for development (via ENCRYPTION_KEY env var)
+1. Render environment variables for encryption key (ENCRYPTION_KEY)
+2. Fernet symmetric encryption for secure storage
 3. Automatic secret redaction from logs
 
 Usage:
@@ -31,7 +31,6 @@ import hashlib
 import logging
 import os
 import re
-from functools import lru_cache
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -80,14 +79,11 @@ class SecretsManager:
     """
     Manages secret encryption and decryption.
 
-    Supports:
-    - AWS KMS (production)
-    - Local encryption key (development)
+    Uses Render environment variables for encryption key configuration.
+    Encryption is done using Fernet symmetric encryption.
     """
 
     def __init__(self):
-        self._kms_client = None
-        self._kms_key_id = None
         self._local_key = None
         self._initialized = False
 
@@ -96,48 +92,18 @@ class SecretsManager:
         if self._initialized:
             return
 
-        # Check for AWS KMS configuration first (production)
-        kms_key_id = os.getenv("AWS_KMS_KEY_ID")
-        if kms_key_id:
-            self._initialize_kms(kms_key_id)
-        else:
-            # Fall back to local encryption key (development)
-            self._initialize_local()
-
+        # Use ENCRYPTION_KEY from Render environment variables
+        self._initialize_encryption()
         self._initialized = True
 
-    def _initialize_kms(self, key_id: str):
-        """Initialize AWS KMS client."""
-        try:
-            import boto3
-            from botocore.exceptions import ClientError
-
-            self._kms_client = boto3.client("kms")
-            self._kms_key_id = key_id
-
-            # Verify the key exists and we have access
-            try:
-                self._kms_client.describe_key(KeyId=key_id)
-                logger.info("AWS KMS encryption initialized")
-            except ClientError as e:
-                logger.error(
-                    "Failed to access AWS KMS key",
-                    extra={"error_code": e.response["Error"]["Code"]}
-                )
-                raise EncryptionError(f"Cannot access KMS key: {e}")
-
-        except ImportError:
-            logger.warning("boto3 not installed - falling back to local encryption")
-            self._initialize_local()
-
-    def _initialize_local(self):
-        """Initialize local encryption using Fernet."""
+    def _initialize_encryption(self):
+        """Initialize encryption using Fernet with ENCRYPTION_KEY."""
         encryption_key = os.getenv("ENCRYPTION_KEY")
 
         if not encryption_key:
             logger.warning(
                 "No encryption configuration found. "
-                "Set AWS_KMS_KEY_ID for production or ENCRYPTION_KEY for development."
+                "Set ENCRYPTION_KEY environment variable in Render dashboard."
             )
             return
 
@@ -152,16 +118,16 @@ class SecretsManager:
                 dklen=32,  # Fernet requires 32 bytes
             )
             self._local_key = base64.urlsafe_b64encode(derived_key)
-            logger.info("Local encryption initialized (development mode)")
+            logger.info("Encryption initialized using ENCRYPTION_KEY")
 
         except Exception as e:
-            logger.error("Failed to initialize local encryption", extra={"error": str(e)})
-            raise EncryptionError(f"Cannot initialize local encryption: {e}")
+            logger.error("Failed to initialize encryption", extra={"error": str(e)})
+            raise EncryptionError(f"Cannot initialize encryption: {e}")
 
     def _get_fernet(self):
-        """Get Fernet cipher for local encryption."""
+        """Get Fernet cipher for encryption."""
         if not self._local_key:
-            raise EncryptionError("Local encryption not initialized")
+            raise EncryptionError("Encryption not initialized - set ENCRYPTION_KEY in Render")
 
         from cryptography.fernet import Fernet
         return Fernet(self._local_key)
@@ -184,35 +150,13 @@ class SecretsManager:
         if not plaintext:
             raise ValueError("Cannot encrypt empty string")
 
-        # Use KMS if available
-        if self._kms_client:
-            return await self._encrypt_kms(plaintext)
-
-        # Fall back to local encryption
         if self._local_key:
             return self._encrypt_local(plaintext)
 
-        raise EncryptionError("No encryption backend configured")
-
-    async def _encrypt_kms(self, plaintext: str) -> str:
-        """Encrypt using AWS KMS."""
-        import asyncio
-        from concurrent.futures import ThreadPoolExecutor
-
-        def _kms_encrypt():
-            response = self._kms_client.encrypt(
-                KeyId=self._kms_key_id,
-                Plaintext=plaintext.encode("utf-8"),
-            )
-            return base64.b64encode(response["CiphertextBlob"]).decode("utf-8")
-
-        # Run KMS call in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor() as executor:
-            return await loop.run_in_executor(executor, _kms_encrypt)
+        raise EncryptionError("No encryption backend configured - set ENCRYPTION_KEY in Render")
 
     def _encrypt_local(self, plaintext: str) -> str:
-        """Encrypt using local Fernet cipher."""
+        """Encrypt using Fernet cipher."""
         fernet = self._get_fernet()
         encrypted = fernet.encrypt(plaintext.encode("utf-8"))
         return encrypted.decode("utf-8")
@@ -235,34 +179,13 @@ class SecretsManager:
         if not ciphertext:
             raise ValueError("Cannot decrypt empty string")
 
-        # Use KMS if available
-        if self._kms_client:
-            return await self._decrypt_kms(ciphertext)
-
-        # Fall back to local encryption
         if self._local_key:
             return self._decrypt_local(ciphertext)
 
-        raise EncryptionError("No encryption backend configured")
-
-    async def _decrypt_kms(self, ciphertext: str) -> str:
-        """Decrypt using AWS KMS."""
-        import asyncio
-        from concurrent.futures import ThreadPoolExecutor
-
-        def _kms_decrypt():
-            ciphertext_blob = base64.b64decode(ciphertext)
-            response = self._kms_client.decrypt(
-                CiphertextBlob=ciphertext_blob,
-            )
-            return response["Plaintext"].decode("utf-8")
-
-        loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor() as executor:
-            return await loop.run_in_executor(executor, _kms_decrypt)
+        raise EncryptionError("No encryption backend configured - set ENCRYPTION_KEY in Render")
 
     def _decrypt_local(self, ciphertext: str) -> str:
-        """Decrypt using local Fernet cipher."""
+        """Decrypt using Fernet cipher."""
         from cryptography.fernet import InvalidToken
 
         try:
@@ -458,4 +381,4 @@ def validate_encryption_configured() -> bool:
     Returns:
         True if encryption is configured, False otherwise
     """
-    return bool(os.getenv("AWS_KMS_KEY_ID") or os.getenv("ENCRYPTION_KEY"))
+    return bool(os.getenv("ENCRYPTION_KEY"))

@@ -146,7 +146,7 @@ class BillingService:
         TODO: Implement proper encryption using a key management service.
         For now, returns token as-is (assumes token storage handles encryption).
         """
-        # SECURITY: In production, use proper encryption (e.g., AWS KMS, HashiCorp Vault)
+        # SECURITY: Use ENCRYPTION_KEY env var in Render for proper encryption
         # This is a placeholder - the actual implementation should decrypt the token
         return encrypted_token
 

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from src.platform.feature_flags import (
     FeatureFlag,
-    LaunchDarklyClient,
+    FronteggFeatureFlagClient,
     get_feature_flag_client,
     is_feature_enabled,
     is_kill_switch_active,
@@ -28,11 +28,10 @@ from src.platform.tenant_context import TenantContext, TenantContextMiddleware
 # ============================================================================
 
 @pytest.fixture
-def mock_ld_client():
-    """Create a mock LaunchDarkly client."""
-    client = LaunchDarklyClient()
+def mock_frontegg_client():
+    """Create a mock Frontegg feature flag client."""
+    client = FronteggFeatureFlagClient()
     client._initialized = True
-    client._client = Mock()
     return client
 
 
@@ -85,18 +84,18 @@ class TestFeatureFlagEnumeration:
 
 
 # ============================================================================
-# TEST SUITE: LAUNCHDARKLY CLIENT
+# TEST SUITE: FRONTEGG FEATURE FLAG CLIENT
 # ============================================================================
 
-class TestLaunchDarklyClient:
-    """Test LaunchDarkly client wrapper."""
+class TestFronteggFeatureFlagClient:
+    """Test Frontegg feature flag client wrapper."""
 
     def test_client_returns_default_when_not_configured(self, monkeypatch):
-        """Client returns default value when LaunchDarkly not configured."""
-        # Remove any SDK key
-        monkeypatch.delenv("LAUNCHDARKLY_SDK_KEY", raising=False)
+        """Client returns default value when Frontegg not configured."""
+        # Remove client ID
+        monkeypatch.delenv("FRONTEGG_CLIENT_ID", raising=False)
 
-        client = LaunchDarklyClient()
+        client = FronteggFeatureFlagClient()
         result = client.is_enabled(
             FeatureFlag.AI_WRITE_BACK,
             tenant_id="tenant-123",
@@ -106,37 +105,54 @@ class TestLaunchDarklyClient:
         # Without configuration, should return default
         assert result is False
 
-    def test_client_returns_default_on_error(self, mock_ld_client):
-        """Client returns default value on evaluation error."""
-        mock_ld_client._client.variation.side_effect = Exception("LD error")
+    def test_client_uses_environment_override(self, monkeypatch):
+        """Client uses environment variable override."""
+        # Set feature flag via environment
+        monkeypatch.setenv("FEATURE_FLAG_AI_WRITE_BACK", "true")
 
-        result = mock_ld_client.is_enabled(
+        client = FronteggFeatureFlagClient()
+        result = client.is_enabled(
             FeatureFlag.AI_WRITE_BACK,
             tenant_id="tenant-123",
-            default=True
+            default=False
         )
 
-        # On error, should return default
+        # Should use environment override
         assert result is True
 
-    def test_client_builds_user_context_correctly(self, mock_ld_client):
-        """Client builds LaunchDarkly user context with tenant and user info."""
-        mock_ld_client._client.variation.return_value = True
+    def test_client_environment_false_override(self, monkeypatch):
+        """Client respects false environment override."""
+        # Set feature flag to false via environment
+        monkeypatch.setenv("FEATURE_FLAG_AI_WRITE_BACK", "false")
 
-        mock_ld_client.is_enabled(
+        client = FronteggFeatureFlagClient()
+        result = client.is_enabled(
             FeatureFlag.AI_WRITE_BACK,
+            tenant_id="tenant-123",
+            default=True  # Default is true but override is false
+        )
+
+        # Should use environment override
+        assert result is False
+
+    def test_client_builds_context_correctly(self, mock_frontegg_client):
+        """Client builds context with tenant and user info."""
+        context = mock_frontegg_client._build_context(
             tenant_id="tenant-123",
             user_id="user-456",
         )
 
-        # Verify variation was called with correct context
-        call_args = mock_ld_client._client.variation.call_args
-        user_context = call_args[0][1]  # Second positional arg is user context
+        assert context["tenant_id"] == "tenant-123"
+        assert context["user_id"] == "user-456"
 
-        assert user_context["key"] == "tenant-123"
-        assert user_context["secondary"] == "user-456"
-        assert user_context["custom"]["tenant_id"] == "tenant-123"
-        assert user_context["custom"]["user_id"] == "user-456"
+    def test_client_context_without_user(self, mock_frontegg_client):
+        """Client builds context without user when not provided."""
+        context = mock_frontegg_client._build_context(
+            tenant_id="tenant-123",
+        )
+
+        assert context["tenant_id"] == "tenant-123"
+        assert "user_id" not in context
 
 
 # ============================================================================
@@ -149,7 +165,7 @@ class TestFeatureFlagFunctions:
     @pytest.mark.asyncio
     async def test_is_feature_enabled_returns_bool(self, monkeypatch):
         """is_feature_enabled returns boolean."""
-        monkeypatch.delenv("LAUNCHDARKLY_SDK_KEY", raising=False)
+        monkeypatch.delenv("FRONTEGG_CLIENT_ID", raising=False)
 
         result = await is_feature_enabled(
             FeatureFlag.AI_WRITE_BACK,
@@ -163,14 +179,29 @@ class TestFeatureFlagFunctions:
     @pytest.mark.asyncio
     async def test_is_kill_switch_active_global_check(self, monkeypatch):
         """is_kill_switch_active checks global flag status."""
-        monkeypatch.delenv("LAUNCHDARKLY_SDK_KEY", raising=False)
+        monkeypatch.delenv("FRONTEGG_CLIENT_ID", raising=False)
 
-        # Without LD configured, should return False (not active, using default True)
+        # Without configuration, should return False (not active, using default True)
         result = await is_kill_switch_active(FeatureFlag.AI_WRITE_BACK)
 
         # Kill switch active = feature disabled
         # Default is True for kill switch check, so not active
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_kill_switch_active_when_flag_disabled(self, monkeypatch):
+        """Kill switch is active when flag is set to false."""
+        # Set feature flag to false globally
+        monkeypatch.setenv("FEATURE_FLAG_AI_WRITE_BACK", "false")
+
+        # Reset the client to pick up new env var
+        from src.platform import feature_flags
+        feature_flags._client = FronteggFeatureFlagClient()
+
+        result = await is_kill_switch_active(FeatureFlag.AI_WRITE_BACK)
+
+        # Kill switch should be active (feature disabled)
+        assert result is True
 
 
 # ============================================================================
@@ -397,8 +428,14 @@ class TestFeatureFlagDefaults:
 
     @pytest.mark.asyncio
     async def test_default_false_blocks_access(self, monkeypatch):
-        """When default is False and LD unavailable, feature is disabled."""
-        monkeypatch.delenv("LAUNCHDARKLY_SDK_KEY", raising=False)
+        """When default is False and not configured, feature is disabled."""
+        monkeypatch.delenv("FRONTEGG_CLIENT_ID", raising=False)
+        # Make sure no env override exists
+        monkeypatch.delenv("FEATURE_FLAG_AI_WRITE_BACK", raising=False)
+
+        # Reset client to pick up env changes
+        from src.platform import feature_flags
+        feature_flags._client = FronteggFeatureFlagClient()
 
         result = await is_feature_enabled(
             FeatureFlag.AI_WRITE_BACK,
@@ -410,8 +447,14 @@ class TestFeatureFlagDefaults:
 
     @pytest.mark.asyncio
     async def test_default_true_allows_access(self, monkeypatch):
-        """When default is True and LD unavailable, feature is enabled."""
-        monkeypatch.delenv("LAUNCHDARKLY_SDK_KEY", raising=False)
+        """When default is True and not configured, feature is enabled."""
+        monkeypatch.delenv("FRONTEGG_CLIENT_ID", raising=False)
+        # Make sure no env override exists
+        monkeypatch.delenv("FEATURE_FLAG_AI_INSIGHTS", raising=False)
+
+        # Reset client to pick up env changes
+        from src.platform import feature_flags
+        feature_flags._client = FronteggFeatureFlagClient()
 
         result = await is_feature_enabled(
             FeatureFlag.AI_INSIGHTS,
@@ -420,6 +463,46 @@ class TestFeatureFlagDefaults:
         )
 
         assert result is True
+
+
+# ============================================================================
+# TEST SUITE: ENVIRONMENT VARIABLE CONFIGURATION
+# ============================================================================
+
+class TestEnvironmentConfiguration:
+    """Test environment variable based configuration."""
+
+    def test_env_true_variations(self, monkeypatch):
+        """Test various true values for environment variables."""
+        true_values = ["true", "True", "TRUE", "1", "yes", "Yes", "YES"]
+
+        for value in true_values:
+            monkeypatch.setenv("FEATURE_FLAG_AI_WRITE_BACK", value)
+
+            client = FronteggFeatureFlagClient()
+            result = client.is_enabled(
+                FeatureFlag.AI_WRITE_BACK,
+                tenant_id="tenant-123",
+                default=False
+            )
+
+            assert result is True, f"Failed for value: {value}"
+
+    def test_env_false_variations(self, monkeypatch):
+        """Test various false values for environment variables."""
+        false_values = ["false", "False", "FALSE", "0", "no", "No", "NO"]
+
+        for value in false_values:
+            monkeypatch.setenv("FEATURE_FLAG_AI_WRITE_BACK", value)
+
+            client = FronteggFeatureFlagClient()
+            result = client.is_enabled(
+                FeatureFlag.AI_WRITE_BACK,
+                tenant_id="tenant-123",
+                default=True
+            )
+
+            assert result is False, f"Failed for value: {value}"
 
 
 if __name__ == "__main__":

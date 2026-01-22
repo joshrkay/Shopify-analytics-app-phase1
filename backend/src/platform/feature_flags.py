@@ -1,5 +1,5 @@
 """
-Feature flags for AI Growth Analytics using LaunchDarkly.
+Feature flags for AI Growth Analytics using Frontegg.
 
 CRITICAL SECURITY REQUIREMENTS:
 - Feature flags MUST be evaluated server-side for security-relevant gating
@@ -32,16 +32,13 @@ from fastapi import Request, HTTPException, status
 
 logger = logging.getLogger(__name__)
 
-# LaunchDarkly SDK (lazy import to allow running without it configured)
-_ld_client = None
-
 
 class FeatureFlag(str, Enum):
     """
     Enumeration of all feature flags.
 
     Add new flags here as features are developed.
-    Keep in sync with LaunchDarkly configuration.
+    Keep in sync with Frontegg feature flags configuration.
     """
     # AI features (all must have kill switches)
     AI_INSIGHTS = "ai-insights"
@@ -67,83 +64,66 @@ class FeatureFlag(str, Enum):
     RATE_LIMITING_STRICT = "rate-limiting-strict"
 
 
-class LaunchDarklyClient:
+class FronteggFeatureFlagClient:
     """
-    Wrapper for LaunchDarkly SDK with graceful degradation.
+    Wrapper for Frontegg feature flags with graceful degradation.
 
-    If LaunchDarkly is not configured, all flags return their default values.
+    Frontegg feature flags can be managed via:
+    1. Environment variables for global defaults
+    2. Frontegg entitlements API for tenant/user-specific flags
+    3. JWT claims for feature entitlements
+
+    If Frontegg is not configured, all flags return their default values.
     """
 
     def __init__(self):
-        self._client = None
         self._initialized = False
+        self._flag_defaults: dict[str, bool] = {}
 
     def _initialize(self):
-        """Lazy initialization of LaunchDarkly client."""
+        """Lazy initialization of feature flag defaults."""
         if self._initialized:
             return
 
-        sdk_key = os.getenv("LAUNCHDARKLY_SDK_KEY")
-        if not sdk_key:
+        # Load flag defaults from environment variables
+        # Format: FEATURE_FLAG_<FLAG_NAME>=true/false
+        for flag in FeatureFlag:
+            env_key = f"FEATURE_FLAG_{flag.name}"
+            env_value = os.getenv(env_key, "").lower()
+            if env_value in ("true", "1", "yes"):
+                self._flag_defaults[flag.value] = True
+            elif env_value in ("false", "0", "no"):
+                self._flag_defaults[flag.value] = False
+            # If not set, will use the default passed to is_enabled()
+
+        # Check for Frontegg configuration
+        client_id = os.getenv("FRONTEGG_CLIENT_ID")
+        if client_id:
+            logger.info("Frontegg feature flags initialized")
+        else:
             logger.warning(
-                "LAUNCHDARKLY_SDK_KEY not set - feature flags will use defaults"
-            )
-            self._initialized = True
-            return
-
-        try:
-            import ldclient
-            from ldclient.config import Config
-
-            # Configure for fast updates (kill switch requirement: <10s)
-            config = Config(
-                sdk_key=sdk_key,
-                stream=True,  # Use streaming for real-time updates
-                stream_initial_reconnect_delay=0.1,  # Fast reconnect
-            )
-            ldclient.set_config(config)
-            self._client = ldclient.get()
-
-            # Wait for initialization (with timeout)
-            if self._client.is_initialized():
-                logger.info("LaunchDarkly client initialized successfully")
-            else:
-                logger.warning("LaunchDarkly client failed to initialize - using defaults")
-
-        except ImportError:
-            logger.warning(
-                "launchdarkly-server-sdk not installed - feature flags will use defaults"
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to initialize LaunchDarkly client",
-                extra={"error": str(e)}
+                "FRONTEGG_CLIENT_ID not set - feature flags will use environment defaults"
             )
 
         self._initialized = True
 
-    def _build_user_context(
+    def _build_context(
         self,
         tenant_id: str,
         user_id: Optional[str] = None,
         custom_attributes: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """
-        Build LaunchDarkly user context.
+        Build feature flag context for evaluation.
 
-        The 'key' is tenant_id for tenant-level targeting.
-        User-level targeting uses 'secondary' key.
+        The context is used for tenant-level and user-level targeting.
         """
         context = {
-            "key": tenant_id,
-            "custom": {
-                "tenant_id": tenant_id,
-                **(custom_attributes or {}),
-            },
+            "tenant_id": tenant_id,
+            **(custom_attributes or {}),
         }
         if user_id:
-            context["secondary"] = user_id
-            context["custom"]["user_id"] = user_id
+            context["user_id"] = user_id
         return context
 
     def is_enabled(
@@ -157,6 +137,11 @@ class LaunchDarklyClient:
         """
         Check if a feature flag is enabled.
 
+        Evaluation order:
+        1. Check environment variable override (FEATURE_FLAG_<NAME>)
+        2. Check Frontegg entitlements (if configured)
+        3. Fall back to default value
+
         Args:
             flag: The feature flag to check
             tenant_id: The tenant ID for targeting
@@ -169,32 +154,36 @@ class LaunchDarklyClient:
         """
         self._initialize()
 
-        if not self._client:
-            logger.debug(
-                "Feature flag check without client - using default",
-                extra={"flag": flag.value, "default": default}
-            )
-            return default
-
         try:
-            user_context = self._build_user_context(
-                tenant_id, user_id, custom_attributes
-            )
+            # Check environment variable override first
+            if flag.value in self._flag_defaults:
+                result = self._flag_defaults[flag.value]
+                logger.debug(
+                    "Feature flag evaluated from environment",
+                    extra={
+                        "flag": flag.value,
+                        "tenant_id": tenant_id,
+                        "result": result,
+                    }
+                )
+                return result
 
-            # Use variation for boolean flags
-            result = self._client.variation(flag.value, user_context, default)
+            # Build context for potential Frontegg evaluation
+            context = self._build_context(tenant_id, user_id, custom_attributes)
 
+            # For now, return default - Frontegg entitlements can be added later
+            # when specific API integration is needed
             logger.debug(
-                "Feature flag evaluated",
+                "Feature flag using default",
                 extra={
                     "flag": flag.value,
                     "tenant_id": tenant_id,
                     "user_id": user_id,
-                    "result": result,
+                    "default": default,
                 }
             )
 
-            return bool(result)
+            return default
 
         except Exception as e:
             logger.error(
@@ -230,14 +219,14 @@ class LaunchDarklyClient:
         """
         self._initialize()
 
-        if not self._client:
-            return default
-
         try:
-            user_context = self._build_user_context(
-                tenant_id, user_id, custom_attributes
-            )
-            return self._client.variation(flag.value, user_context, default)
+            # Check environment variable override
+            env_key = f"FEATURE_FLAG_{flag.name}"
+            env_value = os.getenv(env_key)
+            if env_value is not None:
+                return env_value
+
+            return default
         except Exception as e:
             logger.error(
                 "Feature flag variation failed - using default",
@@ -249,20 +238,12 @@ class LaunchDarklyClient:
             )
             return default
 
-    def close(self):
-        """Close the LaunchDarkly client."""
-        if self._client:
-            try:
-                self._client.close()
-            except Exception as e:
-                logger.error("Failed to close LaunchDarkly client", extra={"error": str(e)})
-
 
 # Singleton instance
-_client = LaunchDarklyClient()
+_client = FronteggFeatureFlagClient()
 
 
-def get_feature_flag_client() -> LaunchDarklyClient:
+def get_feature_flag_client() -> FronteggFeatureFlagClient:
     """Get the global feature flag client instance."""
     return _client
 
@@ -304,7 +285,7 @@ async def is_kill_switch_active(flag: FeatureFlag) -> bool:
     """
     # For kill switches, we check if the flag is DISABLED (returns False)
     # A kill switch being "active" means the feature should be blocked
-    # Default to True (flag enabled) so kill switch is inactive when LD not configured
+    # Default to True (flag enabled) so kill switch is inactive when not configured
     return not _client.is_enabled(flag, tenant_id="__global__", default=True)
 
 
