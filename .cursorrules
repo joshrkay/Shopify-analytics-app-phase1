@@ -1,0 +1,293 @@
+# .cursorrules — AI Growth Analytics Platform Coding Rules
+# Goal: Maintainability, Security, Simplicity, and Testability.
+# Non-negotiable: Epic 0 platform foundations must remain intact.
+
+==========================================================
+0) PRINCIPLES (READ FIRST)
+==========================================================
+- Security-first. Never sacrifice security for speed.
+- Multi-tenant correctness is mandatory. Cross-tenant data exposure is a critical P0 incident.
+- Prefer third-party tools for commoditized infrastructure (auth, feature flags, billing, observability).
+- Keep it boring: simple, explicit, well-tested code.
+- Write testable code: acceptance criteria must be verifiable by automated tests where possible.
+- Do not implement speculative features ("just in case"). YAGNI.
+
+==========================================================
+1) REPO STRUCTURE RULES (DO NOT VIOLATE)
+==========================================================
+- Backend code lives in /backend/src
+- Frontend code lives in /frontend/src
+- Platform foundation modules live ONLY in /backend/src/platform:
+  - tenant_context.py
+  - rbac.py
+  - audit.py
+  - feature_flags.py
+  - secrets.py
+  - errors.py
+- API routes only in /backend/src/api/routes
+- API dependencies/decorators only in /backend/src/api/deps
+- Business logic only in /backend/src/services
+- DB access only in /backend/src/repositories
+- Third-party integrations only in /backend/src/integrations/<provider>
+- Background jobs only in /backend/src/jobs
+- No "utils.py" dumping ground. Create specific modules.
+
+==========================================================
+2) MULTI-TENANCY (HARD REQUIREMENTS)
+==========================================================
+- Tenant identity comes ONLY from Frontegg JWT (org_id -> tenant_id).
+- tenant_id MUST NEVER be accepted from client input (body/query/path) for data access.
+- Every tenant-owned table MUST include tenant_id and be indexed.
+- Every repository method MUST take tenant_id and apply it in WHERE clause.
+- No "get_by_id(id)" methods are allowed unless they also require tenant_id.
+- Any cross-tenant access attempt MUST result in 403 (Forbidden).
+- Add tests for every new entity proving tenant isolation.
+
+==========================================================
+3) AUTH & RBAC (HARD REQUIREMENTS)
+==========================================================
+- Use Frontegg for authentication and roles. Do not build custom auth.
+- Backend must validate JWT via JWKS.
+- RBAC must be enforced server-side for every protected endpoint.
+- UI permission gating is not security; treat it as UX only.
+- Add a permissions matrix in /backend/src/constants/permissions.py and keep it canonical.
+- All permission checks must be centralized via decorators in /backend/src/platform/rbac.py.
+
+==========================================================
+4) SECRETS & ENCRYPTION (HARD REQUIREMENTS)
+==========================================================
+- Use cloud KMS/Secrets Manager (or equivalent) for encryption and secret storage.
+- NEVER store secrets in plaintext in DB, logs, or frontend.
+- Implement encrypt/decrypt only in /backend/src/platform/secrets.py.
+- Any variable name containing token/secret/key MUST be redacted from logs.
+- Do not print environment variables or secrets, ever.
+- Add tests that verify encryption-at-rest and log redaction.
+
+==========================================================
+5) AUDIT LOGGING (HARD REQUIREMENTS)
+==========================================================
+- All sensitive actions must write an audit event:
+  - auth/session events
+  - billing changes
+  - connector changes
+  - AI key/model changes
+  - data exports
+  - automation approvals/executions
+  - feature flag changes (if applicable)
+- Audit logs must be append-only (no UPDATE/DELETE).
+- Audit events must include: tenant_id, user_id, action, timestamp, IP, user_agent, metadata.
+- Audit logging helpers only in /backend/src/platform/audit.py.
+
+==========================================================
+6) FEATURE FLAGS (HARD REQUIREMENTS)
+==========================================================
+- Use LaunchDarkly (or Flagsmith). Do not build your own feature flag engine.
+- Feature flags must be evaluated server-side for security-relevant gating.
+- Any "AI actions / write-back" feature MUST be behind a kill switch flag.
+- Kill switch must take effect <10 seconds.
+- All flag usage must go through /backend/src/platform/feature_flags.py.
+
+==========================================================
+7) BILLING & ENTITLEMENTS (RULES)
+==========================================================
+- Shopify App Store customers must use Shopify Billing API. No custom checkout.
+- Create ONE entitlement source of truth: can_access(tenant_id, role, feature).
+- Enforce entitlements both:
+  - in API layer (403/402)
+  - in UI (paywall UX)
+- Any premium feature must be gated by entitlements; no exceptions.
+
+==========================================================
+8) DATA PIPELINE (RULES)
+==========================================================
+- Prefer Airbyte for ingestion connectors; do not build custom connectors unless required.
+- dbt is the canonical transformation layer; do not embed transformation logic in API endpoints.
+- Superset is the default reporting layer; avoid custom BI unless required for differentiation.
+
+==========================================================
+9) AI LAYER (RULES)
+==========================================================
+- Use OpenRouter for LLM routing (BYO model).
+- Never send PII to LLMs. Only aggregate metrics and non-identifying data.
+- All AI outputs that drive UX must be schema-validated (JSON schema).
+- Implement prompt templates and validation centrally; do not scatter prompts across endpoints.
+- Track AI usage (tokens) and enforce caps based on plan.
+
+==========================================================
+10) ERROR HANDLING & API STANDARDS
+==========================================================
+- All endpoints must return consistent error shapes:
+  { "error": { "code": "...", "message": "...", "details": {...} } }
+- Use 401 for auth failures, 403 for permission failures, 402 for paywalled features, 429 for rate limits.
+- Never return stack traces to clients.
+- Log correlation_id on every request.
+
+==========================================================
+11) TESTING (REQUIRED)
+==========================================================
+- Every new feature must include tests:
+  - platform tests (tenant isolation, RBAC, secrets redaction) are mandatory for anything touching data.
+  - unit tests for service logic
+  - integration tests for billing/webhooks where feasible
+- Tests must be deterministic.
+- If a story is "done," the acceptance criteria must be testable and tested.
+
+==========================================================
+12) DOCS (REQUIRED)
+==========================================================
+- Any third-party tool setup must have a novice step-by-step guide in /backend/docs.
+- Include: prerequisites, exact click paths, copy/paste commands, verification steps, troubleshooting.
+- Update README if dev setup changes.
+
+==========================================================
+13) ANTI-BLOAT DIRECTIVE
+==========================================================
+- YAGNI: implement only what is in the current story.
+- Delete dead code immediately.
+- Avoid unnecessary abstractions.
+- Prefer simple, explicit functions over clever patterns.
+
+==========================================================
+14) OUTPUT REQUIREMENTS FOR AI CODING
+==========================================================
+When generating code:
+- List files created/modified
+- Include minimal but sufficient comments
+- Include tests for acceptance criteria
+- Include docs updates when third-party setup changes
+- Do not introduce new libraries without justification and lockfile updates
+
+==========================================================
+15) SECURITY RED LINES (ABSOLUTE NOs)
+==========================================================
+- No plaintext secrets anywhere.
+- No tenant_id from client input for data access.
+- No bypass of RBAC/entitlements.
+- No PII sent to LLMs.
+- No production "dev bypass" flags enabled outside local dev.
+
+==========================================================
+16) CI/CD & DEPLOYMENT GATES (NON-NEGOTIABLE)
+==========================================================
+- All changes MUST go through PRs; direct commits to main are forbidden.
+- CI must run automatically on every PR and on every merge to main.
+- Deployments must be automated and gated by tests.
+- A deployment is considered successful ONLY when post-deploy health + regression pass.
+
+----------------------------------------------------------
+16.1 Required CI Pipeline Stages (PR Checks)
+----------------------------------------------------------
+Every PR must run and PASS:
+1) Formatting + Lint
+   - Backend: ruff/black (or ruff format)
+   - Frontend: eslint + prettier
+2) Type checks
+   - Backend: mypy (if enabled)
+   - Frontend: tsc --noEmit
+3) Unit tests
+   - Backend: pytest unit suite
+   - Frontend: unit tests if present (vitest/jest)
+4) Security checks
+   - Secret scan (e.g., gitleaks)
+   - Dependency audit (pip-audit/npm audit or equivalent)
+5) Platform Gate Tests (MANDATORY)
+   - tenant isolation tests
+   - RBAC enforcement tests
+   - secrets redaction tests
+   - feature flag kill switch tests
+   - audit logging tests
+
+If ANY stage fails, PR cannot be merged.
+
+----------------------------------------------------------
+16.2 Merge-to-Main Pipeline (Build & Staging Deploy)
+----------------------------------------------------------
+On merge to main, pipeline must:
+1) Build artifacts
+   - build backend image
+   - build frontend image
+   - produce version tag (commit SHA)
+2) Generate SBOM (software bill of materials)
+3) Run integration tests (docker-compose)
+   - webhook verification tests
+   - DB migrations apply cleanly
+4) Deploy to STAGING automatically
+5) Run staging smoke tests
+6) Run staging regression suite (minimum)
+
+Staging deploy MUST be blocked if tests fail.
+
+----------------------------------------------------------
+16.3 Regression Testing Requirements
+----------------------------------------------------------
+Regression suite must be automated and run:
+- on every merge to main (staging)
+- before every production deployment
+
+Minimum regression scenarios (must be deterministic):
+- Auth: login + tenant context present
+- Tenant isolation: tenant A cannot access tenant B
+- RBAC: read-only cannot access admin endpoint
+- Billing (if enabled in env): subscription status endpoint returns expected
+- Feature flags: kill switch blocks AI actions
+- Audit logs: sensitive action produces audit entry
+- Health checks: /health returns OK
+- Frontend loads embedded app shell in staging
+
+Regression tests may be:
+- API contract tests
+- Playwright/Cypress E2E tests
+- Or a mix
+But must run unattended in CI.
+
+----------------------------------------------------------
+16.4 Production Deployment Policy
+----------------------------------------------------------
+Production deploy requires:
+1) Manual approval step after staging regression passes
+2) Production deploy (blue/green or rolling)
+3) Post-deploy verification:
+   - health check p95 < threshold
+   - error rate < threshold
+   - key endpoints respond correctly
+4) Run production smoke tests (read-only tests only)
+5) Automatic rollback on failure
+
+No production deploys without a passing staging regression run.
+
+----------------------------------------------------------
+16.5 Database Migration Safety Rules
+----------------------------------------------------------
+- Every migration must be backward-compatible OR include a documented deployment plan.
+- Migrations must be idempotent and safe to run multiple times.
+- Migrations must run in CI on a fresh database as part of integration tests.
+- Use expand/contract pattern for breaking changes:
+  - expand schema first
+  - deploy code supporting both
+  - backfill
+  - contract schema later
+- Any migration touching large tables must include a plan to avoid long locks.
+
+----------------------------------------------------------
+16.6 Required Test Organization
+----------------------------------------------------------
+Tests must be clearly organized:
+- backend/src/tests/platform/   (Epic 0 gate tests)
+- backend/src/tests/unit/
+- backend/src/tests/integration/
+- frontend tests under frontend/src/tests/ (or standard tool layout)
+
+All tests must run in CI with a single command per layer:
+- Backend: make test or pytest -m "not e2e"
+- Frontend: npm test
+- E2E/regression: npm run e2e (Playwright/Cypress)
+
+----------------------------------------------------------
+16.7 Definition of Done (CI/CD)
+----------------------------------------------------------
+A story is NOT "done" unless:
+- lint passes
+- tests pass
+- regression tests cover acceptance criteria (or documented reason why not)
+- CI is green
+- staging deploy succeeds (for merged changes)
