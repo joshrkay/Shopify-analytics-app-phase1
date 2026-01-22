@@ -315,7 +315,6 @@ class TestEncryption:
     async def test_encryption_not_configured_raises_error(self, monkeypatch):
         """CRITICAL: Encryption fails gracefully when not configured."""
         monkeypatch.delenv("ENCRYPTION_KEY", raising=False)
-        monkeypatch.delenv("AWS_KMS_KEY_ID", raising=False)
 
         manager = SecretsManager()
 
@@ -385,7 +384,6 @@ class TestEnvironmentSecrets:
     def test_validate_encryption_configured_false(self, monkeypatch):
         """validate_encryption_configured returns False when not configured."""
         monkeypatch.delenv("ENCRYPTION_KEY", raising=False)
-        monkeypatch.delenv("AWS_KMS_KEY_ID", raising=False)
 
         assert validate_encryption_configured() is False
 
