@@ -304,7 +304,8 @@ async def is_kill_switch_active(flag: FeatureFlag) -> bool:
     """
     # For kill switches, we check if the flag is DISABLED (returns False)
     # A kill switch being "active" means the feature should be blocked
-    return not _client.is_enabled(flag, tenant_id="__global__", default=False)
+    # Default to True (flag enabled) so kill switch is inactive when LD not configured
+    return not _client.is_enabled(flag, tenant_id="__global__", default=True)
 
 
 def require_feature_flag(

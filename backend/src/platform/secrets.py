@@ -65,7 +65,7 @@ SECRET_VALUE_PATTERNS = [
     re.compile(r"(ghs_[a-zA-Z0-9]{36,})"),  # GitHub tokens
     re.compile(r"(Bearer\s+[a-zA-Z0-9._-]+)"),  # Bearer tokens
     re.compile(r"(shpat_[a-fA-F0-9]{32,})"),  # Shopify access tokens
-    re.compile(r"(shpss_[a-fA-F0-9]{32,})"),  # Shopify shared secrets
+    re.compile(r"(shpss_[a-zA-Z0-9]{24,})"),  # Shopify shared secrets
 ]
 
 REDACTED_VALUE = "[REDACTED]"
