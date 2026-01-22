@@ -97,10 +97,10 @@ class UsageRecord(Base, TenantScopedMixin):
     store = relationship("ShopifyStore", back_populates="usage_records")
 
     # Indexes for efficient querying and cleanup
+    # Note: recorded_at index is created via index=True on the column
     __table_args__ = (
         Index("ix_usage_records_tenant_store_time", "tenant_id", "store_id", "recorded_at"),
         Index("ix_usage_records_store_time", "store_id", "recorded_at"),
-        Index("ix_usage_records_recorded_at", "recorded_at"),  # For cleanup job
     )
 
     def __repr__(self) -> str:

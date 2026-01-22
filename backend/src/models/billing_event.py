@@ -8,6 +8,7 @@ Used for audit trail and reconciliation with Shopify Billing API.
 import uuid
 import enum
 from sqlalchemy import Column, String, Integer, Numeric, DateTime, ForeignKey, Index, func, JSON
+from sqlalchemy.orm import relationship
 
 from src.repositories.base_repo import Base
 from src.models.base import TenantScopedMixin
@@ -52,10 +53,14 @@ class BillingEvent(Base, TenantScopedMixin):
     
     store_id = Column(
         String(255),
+        ForeignKey("shopify_stores.id"),
         nullable=True,
         index=True,
         comment="Foreign key to shopify_stores.id (optional)"
     )
+
+    # Relationship to ShopifyStore
+    store = relationship("ShopifyStore", back_populates="billing_events")
     
     subscription_id = Column(
         String(255),

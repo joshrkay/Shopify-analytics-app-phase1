@@ -127,14 +127,14 @@ class Subscription(Base, TimestampMixin, TenantScopedMixin):
     store = relationship("ShopifyStore", back_populates="subscription")
     
     # Constraints and indexes
+    # Note: deferrable/initially options removed for SQLite compatibility in tests.
+    # For PostgreSQL-specific constraints, use database migrations.
     __table_args__ = (
         UniqueConstraint(
             "tenant_id",
             "plan_id",
             "status",
             name="uk_tenant_subscriptions_tenant_plan",
-            deferrable=True,
-            initially="DEFERRED"
         ),
         Index(
             "idx_tenant_subscriptions_tenant_status",
