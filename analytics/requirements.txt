@@ -1,0 +1,8 @@
+# dbt Analytics Platform Dependencies
+# 
+# Story 4.1 - dbt Project Initialization
+# 
+# Pinned versions for reproducibility and security
+
+dbt-core>=1.7.0,<2.0.0
+dbt-postgres>=1.7.0,<2.0.0

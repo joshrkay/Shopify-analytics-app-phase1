@@ -45,3 +45,10 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# dbt Analytics
+analytics/profiles.yml
+analytics/target/
+analytics/dbt_packages/
+analytics/logs/
+analytics/*.log
