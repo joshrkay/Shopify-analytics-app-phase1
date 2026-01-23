@@ -22,8 +22,8 @@ import asyncio
 import os
 import sys
 
-# Add backend/src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+# Add backend to path for imports (so src.integrations... imports work)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from dotenv import load_dotenv
 
@@ -94,8 +94,8 @@ async def validate_airbyte_setup() -> bool:
         return False
 
     # Import here after we know environment is set up
-    from integrations.airbyte.client import AirbyteClient
-    from integrations.airbyte.exceptions import (
+    from src.integrations.airbyte.client import AirbyteClient
+    from src.integrations.airbyte.exceptions import (
         AirbyteError,
         AirbyteAuthenticationError,
     )
