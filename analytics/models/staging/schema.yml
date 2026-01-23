@@ -17,7 +17,8 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['shopify']
+              arguments:
+                values: ['shopify']
 
   - name: stg_shopify_orders
     description: Staging model for Shopify orders with normalized fields and tenant isolation
@@ -58,7 +59,8 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
+              arguments:
+                values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
               config:
                 where: "currency is not null"
       - name: financial_status
@@ -74,8 +76,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('_tenant_airbyte_connections')
-              field: tenant_id
+              arguments:
+                to: ref('_tenant_airbyte_connections')
+                field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: airbyte_record_id
@@ -140,8 +143,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('_tenant_airbyte_connections')
-              field: tenant_id
+              arguments:
+                to: ref('_tenant_airbyte_connections')
+                field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: airbyte_record_id
@@ -191,7 +195,8 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
+              arguments:
+                values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
               config:
                 where: "currency is not null"
       - name: campaign_name
@@ -217,14 +222,16 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['meta_ads']
+              arguments:
+                values: ['meta_ads']
       - name: tenant_id
         description: Tenant identifier for data isolation
         tests:
           - not_null
           - relationships:
-              to: ref('_tenant_airbyte_connections')
-              field: tenant_id
+              arguments:
+                to: ref('_tenant_airbyte_connections')
+                field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: airbyte_record_id
@@ -274,7 +281,8 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
+              arguments:
+                values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
               config:
                 where: "currency is not null"
       - name: campaign_name
@@ -298,14 +306,16 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['google_ads']
+              arguments:
+                values: ['google_ads']
       - name: tenant_id
         description: Tenant identifier for data isolation
         tests:
           - not_null
           - relationships:
-              to: ref('_tenant_airbyte_connections')
-              field: tenant_id
+              arguments:
+                to: ref('_tenant_airbyte_connections')
+                field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: airbyte_record_id

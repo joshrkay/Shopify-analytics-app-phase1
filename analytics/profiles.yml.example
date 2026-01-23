@@ -16,6 +16,8 @@
 #     - DB_PASSWORD (required)
 #     - DB_PORT (default: 5432)
 #     - DB_NAME (default: shopify_analytics)
+#     - DB_SSLMODE (default: require) - SSL mode: require, disable, prefer, etc.
+#       Use 'disable' for local/test databases without SSL support.
 #
 #   Option B: Parse DATABASE_URL (postgresql://user:pass@host:port/dbname)
 #     Set DATABASE_URL and the profile will parse it automatically.
@@ -34,6 +36,7 @@ shopify_analytics:
       dbname: "{{ env_var('DB_NAME', 'shopify_analytics') }}"
       schema: analytics
       threads: 4
+      sslmode: "{{ env_var('DB_SSLMODE', 'require') }}"
     
     staging:
       type: postgres
@@ -44,6 +47,7 @@ shopify_analytics:
       dbname: "{{ env_var('DB_NAME', 'shopify_analytics') }}"
       schema: analytics
       threads: 4
+      sslmode: "{{ env_var('DB_SSLMODE', 'require') }}"
     
     production:
       type: postgres
@@ -54,3 +58,4 @@ shopify_analytics:
       dbname: "{{ env_var('DB_NAME', 'shopify_analytics') }}"
       schema: analytics
       threads: 4
+      sslmode: "{{ env_var('DB_SSLMODE', 'require') }}"

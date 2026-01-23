@@ -11,14 +11,16 @@ models:
       SECURITY: All rows are tenant-isolated via tenant_id.
     tests:
       - test_freshness:
-          column_name: dbt_updated_at
-          error_after_hours: 48
+          arguments:
+            column_name: dbt_updated_at
+            error_after_hours: 48
           config:
             severity: error
       - test_volume_anomaly:
-          date_column: order_created_at
-          min_daily_records: 1
-          lookback_days: 7
+          arguments:
+            date_column: order_created_at
+            min_daily_records: 1
+            lookback_days: 7
           config:
             severity: warn
     columns:
@@ -79,8 +81,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('_tenant_airbyte_connections')
-              field: tenant_id
+              arguments:
+                to: ref('_tenant_airbyte_connections')
+                field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: airbyte_record_id
@@ -105,14 +108,16 @@ models:
       SECURITY: All rows are tenant-isolated via tenant_id.
     tests:
       - test_freshness:
-          column_name: dbt_updated_at
-          error_after_hours: 48
+          arguments:
+            column_name: dbt_updated_at
+            error_after_hours: 48
           config:
             severity: error
       - test_volume_anomaly:
-          date_column: spend_date
-          min_daily_records: 1
-          lookback_days: 7
+          arguments:
+            date_column: spend_date
+            min_daily_records: 1
+            lookback_days: 7
           config:
             severity: warn
     columns:
@@ -164,8 +169,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('_tenant_airbyte_connections')
-              field: tenant_id
+              arguments:
+                to: ref('_tenant_airbyte_connections')
+                field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: airbyte_record_id
@@ -190,8 +196,9 @@ models:
       SECURITY: All rows are tenant-isolated via tenant_id.
     tests:
       - test_freshness:
-          column_name: dbt_updated_at
-          error_after_hours: 48
+          arguments:
+            column_name: dbt_updated_at
+            error_after_hours: 48
           config:
             severity: error
       - test_volume_anomaly:
@@ -265,8 +272,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('_tenant_airbyte_connections')
-              field: tenant_id
+              arguments:
+                to: ref('_tenant_airbyte_connections')
+                field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: airbyte_record_id

@@ -27,8 +27,9 @@ models:
       SECURITY: All rows are tenant-isolated via tenant_id.
     tests:
       - test_freshness:
-          column_name: dbt_updated_at
-          error_after_hours: 48
+          arguments:
+            column_name: dbt_updated_at
+            error_after_hours: 48
           config:
             severity: error
     columns:
@@ -98,14 +99,16 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['attributed', 'unattributed_utm_present', 'unattributed_no_utm']
+              arguments:
+                values: ['attributed', 'unattributed_utm_present', 'unattributed_no_utm']
       - name: tenant_id
         description: Tenant identifier for data isolation
         tests:
           - not_null
           - relationships:
-              to: ref('_tenant_airbyte_connections')
-              field: tenant_id
+              arguments:
+                to: ref('_tenant_airbyte_connections')
+                field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: dbt_updated_at
