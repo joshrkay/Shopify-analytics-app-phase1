@@ -92,6 +92,18 @@ services:
         sync: false
       - key: ENCRYPTION_KEY
         sync: false
+      # Airbyte Cloud configuration (set via Render dashboard)
+      - key: AIRBYTE_WORKSPACE_ID
+        sync: false
+      - key: AIRBYTE_API_TOKEN
+        sync: false
+      # Worker sync configuration
+      - key: WORKER_AIRBYTE_SYNC_TIMEOUT_SECONDS
+        value: "3600"
+      - key: WORKER_SYNC_CHECK_INTERVAL_SECONDS
+        value: "30"
+      - key: WORKER_MAX_CONCURRENT_SYNCS
+        value: "5"
 
   # ============================================
   # CRON JOB: RECONCILE SUBSCRIPTIONS
