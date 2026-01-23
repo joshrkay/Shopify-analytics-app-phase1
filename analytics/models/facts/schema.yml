@@ -9,6 +9,18 @@ models:
       and processes new/updated orders based on airbyte_emitted_at.
       
       SECURITY: All rows are tenant-isolated via tenant_id.
+    tests:
+      - test_freshness:
+          column_name: dbt_updated_at
+          error_after_hours: 48
+          config:
+            severity: error
+      - test_volume_anomaly:
+          date_column: order_created_at
+          min_daily_records: 1
+          lookback_days: 7
+          config:
+            severity: warn
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + order_id)
@@ -91,6 +103,18 @@ models:
       on airbyte_emitted_at.
       
       SECURITY: All rows are tenant-isolated via tenant_id.
+    tests:
+      - test_freshness:
+          column_name: dbt_updated_at
+          error_after_hours: 48
+          config:
+            severity: error
+      - test_volume_anomaly:
+          date_column: spend_date
+          min_daily_records: 1
+          lookback_days: 7
+          config:
+            severity: warn
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + platform + ad_account_id + campaign_id + ad_id + spend_date)
@@ -164,6 +188,18 @@ models:
       based on airbyte_emitted_at.
       
       SECURITY: All rows are tenant-isolated via tenant_id.
+    tests:
+      - test_freshness:
+          column_name: dbt_updated_at
+          error_after_hours: 48
+          config:
+            severity: error
+      - test_volume_anomaly:
+          date_column: performance_date
+          min_daily_records: 1
+          lookback_days: 7
+          config:
+            severity: warn
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + platform + ad_account_id + campaign_id + performance_date)
