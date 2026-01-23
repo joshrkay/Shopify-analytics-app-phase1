@@ -42,8 +42,16 @@ with staging_orders as (
         and order_id is not null
         and trim(order_id) != ''
     
-    {% if is_incremental() %}
-        -- Only process new or updated records
+    {% if var('backfill_start_date', none) and var('backfill_end_date', none) %}
+        -- Backfill mode: filter by date range
+        -- SECURITY: Tenant isolation still enforced via tenant_id filter above
+        and {{ backfill_date_filter('airbyte_emitted_at', var('backfill_start_date'), var('backfill_end_date')) }}
+        {% if var('backfill_tenant_id', none) %}
+            -- Additional tenant filter for backfill (defense in depth)
+            and tenant_id = '{{ var("backfill_tenant_id") }}'
+        {% endif %}
+    {% elif is_incremental() %}
+        -- Incremental mode: only process new or updated records
         -- This assumes airbyte_emitted_at increases for updates
         and airbyte_emitted_at > (
             select coalesce(max(ingested_at), '1970-01-01'::timestamp with time zone)

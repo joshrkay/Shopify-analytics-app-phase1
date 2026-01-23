@@ -111,6 +111,11 @@ class AuditAction(str, Enum):
     ADMIN_PLAN_DELETED = "admin.plan_deleted"
     ADMIN_CONFIG_CHANGED = "admin.config_changed"
 
+    # Backfill events
+    BACKFILL_STARTED = "backfill.started"
+    BACKFILL_COMPLETED = "backfill.completed"
+    BACKFILL_FAILED = "backfill.failed"
+
 
 class AuditLog(AuditBase):
     """
