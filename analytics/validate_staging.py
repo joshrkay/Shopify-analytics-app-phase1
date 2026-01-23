@@ -95,7 +95,10 @@ def main():
         "models/staging/_tenant_airbyte_connections.sql",
         "models/staging/shopify/stg_shopify_orders.sql",
         "models/staging/shopify/stg_shopify_customers.sql",
-        "tests/tenant_isolation.sql"
+        "models/staging/ads/stg_meta_ads.sql",
+        "models/staging/ads/stg_google_ads.sql",
+        "tests/tenant_isolation.sql",
+        "tests/test_tenant_mapping.sql"
     ]
     
     for sql_file in sql_files:
@@ -140,6 +143,8 @@ def main():
         "models/staging/_tenant_airbyte_connections.sql",
         "models/staging/shopify/stg_shopify_orders.sql",
         "models/staging/shopify/stg_shopify_customers.sql",
+        "models/staging/ads/stg_meta_ads.sql",
+        "models/staging/ads/stg_google_ads.sql",
         "models/staging/schema.yml",
         "tests/tenant_isolation.sql",
         "tests/test_tenant_mapping.sql",

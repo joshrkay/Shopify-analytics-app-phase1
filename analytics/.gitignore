@@ -3,6 +3,11 @@
 # Profiles (contains credentials - NEVER commit)
 profiles.yml
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
 # dbt build artifacts
 target/
 dbt_packages/

@@ -34,7 +34,41 @@ pip install -r requirements.txt
 
 ### 2. Configure Database Connection
 
-**Option A: Using Individual Environment Variables (Recommended)**
+#### For Render Database (Recommended)
+
+If you're using the Render database:
+
+1. **Get connection string from Render dashboard:**
+   - Go to [Render Dashboard](https://dashboard.render.com)
+   - Navigate to `shopify-analytics-db`
+   - Copy the **External Database URL** (for local) or **Internal Database URL** (for Render services)
+
+2. **Run automatic setup:**
+   ```bash
+   cd analytics
+   export DATABASE_URL="postgresql://user:password@host:port/database"
+   ./setup_render_db.sh
+   ```
+
+   This will parse `DATABASE_URL` and configure `.env` automatically.
+
+3. **Or use manual setup:**
+   ```bash
+   # Set DATABASE_URL
+   export DATABASE_URL="postgresql://user:password@host:port/database"
+   
+   # Parse into components
+   eval $(python3 parse_database_url.py)
+   
+   # Load variables
+   source load_env.sh
+   ```
+
+   See [RENDER_DB_SETUP.md](RENDER_DB_SETUP.md) for detailed instructions.
+
+#### For Local PostgreSQL
+
+**Option A: Using Individual Environment Variables**
 
 Set connection parameters as environment variables:
 
@@ -46,22 +80,7 @@ export DB_PORT="5432"
 export DB_NAME="shopify_analytics"
 ```
 
-**Option B: Parsing DATABASE_URL**
-
-If you have `DATABASE_URL` set (e.g., from Render), parse it into components:
-
-```bash
-# Parse DATABASE_URL into components
-export DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\):.*/\1/p')
-export DB_USER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-export DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-export DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-export DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
-```
-
-Or use a Python helper script (create `scripts/parse_db_url.py` if needed).
-
-**Option C: Direct profiles.yml Configuration**
+**Option B: Direct profiles.yml Configuration**
 
 1. Copy the example profile:
    ```bash

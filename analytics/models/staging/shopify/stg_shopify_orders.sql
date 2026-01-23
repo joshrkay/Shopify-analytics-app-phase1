@@ -18,7 +18,7 @@ tenant_mapping as (
         airbyte_connection_id,
         tenant_id,
         source_type
-    from {{ ref('tenant_airbyte_connections') }}
+    from {{ ref('_tenant_airbyte_connections') }}
     where source_type = 'shopify'
         and status = 'active'
         and is_enabled = true
