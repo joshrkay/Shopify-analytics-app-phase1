@@ -316,9 +316,13 @@ models:
 sources:
   - name: airbyte_raw
     description: Raw Airbyte data tables
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
     tables:
       - name: _airbyte_raw_shopify_orders
         description: Raw Shopify orders data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
@@ -335,6 +339,7 @@ sources:
       
       - name: _airbyte_raw_shopify_customers
         description: Raw Shopify customers data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
@@ -351,6 +356,7 @@ sources:
       
       - name: _airbyte_raw_meta_ads
         description: Raw Meta Ads data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
@@ -367,6 +373,7 @@ sources:
       
       - name: _airbyte_raw_google_ads
         description: Raw Google Ads data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID

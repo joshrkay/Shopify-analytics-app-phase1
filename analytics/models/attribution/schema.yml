@@ -25,6 +25,12 @@ models:
       - Results are reproducible: running the model multiple times with same data produces identical results
       
       SECURITY: All rows are tenant-isolated via tenant_id.
+    tests:
+      - test_freshness:
+          column_name: dbt_updated_at
+          error_after_hours: 48
+          config:
+            severity: error
     columns:
       - name: id
         description: Surrogate key (MD5 hash of order_id + tenant_id + 'last_click' for deterministic attribution)

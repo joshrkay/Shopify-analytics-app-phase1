@@ -35,5 +35,23 @@ models:
       +materialized: view
       +schema: analytics
 
+tests:
+  shopify_analytics:
+    # Critical data quality tests should fail the build
+    +severity: error
+    # Freshness tests are critical - fail build if data is stale
+    test_freshness:
+      +severity: error
+    # Volume anomaly tests are warnings - alert but don't fail build
+    test_volume_anomaly:
+      +severity: warn
+    # Primary key and not_null tests are critical
+    not_null:
+      +severity: error
+    unique:
+      +severity: error
+    relationships:
+      +severity: error
+
 vars:
   tenant_isolation_enforced: true
