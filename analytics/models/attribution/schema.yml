@@ -1,0 +1,108 @@
+version: 2
+
+models:
+  - name: last_click
+    description: |
+      Last-click attribution model that joins orders to campaigns via UTM parameters.
+      
+      This model implements baseline last-click attribution by:
+      1. Extracting UTM parameters from order note_attributes
+      2. Matching utm_campaign to campaign_name or campaign_id in fact_campaign_performance
+      3. Attributing revenue to the most recent matching campaign (last-click)
+      
+      ASSUMPTIONS & LIMITATIONS:
+      - UTM parameters are captured at order creation time (stored in Shopify order note_attributes)
+      - Last-click means the UTM parameters on the order represent the last marketing touchpoint
+      - Campaign matching is done via utm_campaign matching campaign_name or campaign_id (case-insensitive)
+      - Orders without UTM parameters are not attributed (attribution fields will be null)
+      - This is a simplified model that does not track multi-touch customer journeys
+      - Attribution is deterministic: same order + same UTM = same attribution result
+      - Campaign performance date must be on or before order date (campaign must exist before order)
+      
+      DETERMINISTIC BEHAVIOR:
+      - Primary key is MD5 hash of (order_id + tenant_id + 'last_click') ensuring same order always gets same ID
+      - When multiple campaigns match, the most recent one (by performance_date) is selected
+      - Results are reproducible: running the model multiple times with same data produces identical results
+      
+      SECURITY: All rows are tenant-isolated via tenant_id.
+    columns:
+      - name: id
+        description: Surrogate key (MD5 hash of order_id + tenant_id + 'last_click' for deterministic attribution)
+        tests:
+          - not_null
+          - unique
+      - name: order_id
+        description: Shopify order ID (normalized, without gid:// prefix)
+        tests:
+          - not_null
+      - name: order_name
+        description: Order name/number from Shopify (e.g., #1001)
+      - name: order_number
+        description: Order number as integer
+      - name: customer_email
+        description: Customer email address
+      - name: order_created_at
+        description: Order creation timestamp (UTC)
+        tests:
+          - not_null
+      - name: revenue
+        description: Total order revenue (numeric)
+        tests:
+          - not_null
+      - name: currency
+        description: Currency code (uppercase, 3-letter)
+        tests:
+          - not_null
+      - name: utm_source
+        description: UTM source parameter (e.g., 'google', 'facebook')
+      - name: utm_medium
+        description: UTM medium parameter (e.g., 'cpc', 'email', 'social')
+      - name: utm_campaign
+        description: UTM campaign parameter (matched to campaign_name or campaign_id, null if order has no UTM parameters)
+      - name: utm_term
+        description: UTM term parameter (optional, for keyword targeting)
+      - name: utm_content
+        description: UTM content parameter (optional, for A/B testing)
+      - name: campaign_fact_id
+        description: Foreign key to fact_campaign_performance.id (null if no campaign match found)
+      - name: ad_account_id
+        description: Ad account ID from attributed campaign (null if not attributed)
+      - name: campaign_id
+        description: Campaign ID from attributed campaign (null if not attributed)
+      - name: campaign_name
+        description: Campaign name from attributed campaign (null if not attributed)
+      - name: platform
+        description: Platform identifier (meta_ads or google_ads) from attributed campaign (null if not attributed)
+      - name: campaign_performance_date
+        description: Performance date of the attributed campaign (null if not attributed)
+      - name: campaign_spend
+        description: Campaign spend on the performance date (null if not attributed)
+      - name: campaign_clicks
+        description: Campaign clicks on the performance date (null if not attributed)
+      - name: campaign_impressions
+        description: Campaign impressions on the performance date (null if not attributed)
+      - name: campaign_conversions
+        description: Campaign conversions on the performance date (null if not attributed)
+      - name: attribution_status
+        description: |
+          Attribution status indicating whether the order was successfully attributed:
+          - 'attributed': Order matched to a campaign
+          - 'unattributed_utm_present': Order has UTM parameters but no campaign match found
+          - 'unattributed_no_utm': Order has no UTM parameters
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['attributed', 'unattributed_utm_present', 'unattributed_no_utm']
+      - name: tenant_id
+        description: Tenant identifier for data isolation
+        tests:
+          - not_null
+          - relationships:
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
+              config:
+                where: "tenant_id is not null"
+      - name: dbt_updated_at
+        description: Timestamp when record was last updated by dbt
+        tests:
+          - not_null
