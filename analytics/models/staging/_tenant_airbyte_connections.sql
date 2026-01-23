@@ -19,6 +19,6 @@ select
     status,
     is_enabled
 from {{ source('platform', 'tenant_airbyte_connections') }}
-where source_type = 'shopify'
+where source_type in ('shopify', 'source-facebook-marketing', 'source-google-ads')
     and status = 'active'
     and is_enabled = true

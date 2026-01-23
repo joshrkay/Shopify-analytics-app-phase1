@@ -32,3 +32,25 @@ select
 from {{ ref('stg_shopify_orders') }}
 group by order_id
 having count(distinct tenant_id) > 1
+
+-- Test 5: Verify no duplicate ad records across different tenants (Meta Ads)
+-- Composite key: ad_account_id, campaign_id, date
+select 
+    ad_account_id,
+    campaign_id,
+    date,
+    count(distinct tenant_id) as tenant_count
+from {{ ref('stg_meta_ads') }}
+group by ad_account_id, campaign_id, date
+having count(distinct tenant_id) > 1
+
+-- Test 6: Verify no duplicate ad records across different tenants (Google Ads)
+-- Composite key: ad_account_id, campaign_id, date
+select 
+    ad_account_id,
+    campaign_id,
+    date,
+    count(distinct tenant_id) as tenant_count
+from {{ ref('stg_google_ads') }}
+group by ad_account_id, campaign_id, date
+having count(distinct tenant_id) > 1
