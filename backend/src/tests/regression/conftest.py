@@ -87,7 +87,7 @@ def db_engine():
     from src.db_base import Base
 
     # Import all models to ensure they're registered with Base
-    from src.models import subscription, plan, store, billing_event
+    from src.models import subscription, plan, store, billing_event, airbyte_connection
 
     # Create all tables
     Base.metadata.create_all(bind=engine)
@@ -486,3 +486,57 @@ def get_billing_events(db_session):
         return query.order_by(BillingEvent.created_at.desc()).all()
 
     return _get_events
+
+
+# =============================================================================
+# Airbyte Connection Fixtures
+# =============================================================================
+
+@pytest.fixture
+def test_airbyte_connection(db_session, test_tenant_id):
+    """Create a test Airbyte connection for tenant A."""
+    from src.models.airbyte_connection import (
+        TenantAirbyteConnection,
+        ConnectionStatus,
+        ConnectionType,
+    )
+
+    connection = TenantAirbyteConnection(
+        id=str(uuid.uuid4()),
+        tenant_id=test_tenant_id,
+        airbyte_connection_id=f"airbyte-{uuid.uuid4().hex[:12]}",
+        connection_name="Test Shopify Connection",
+        connection_type=ConnectionType.SOURCE,
+        source_type="shopify",
+        status=ConnectionStatus.ACTIVE,
+        is_enabled=True,
+        configuration={"shop": "test-store.myshopify.com"}
+    )
+    db_session.add(connection)
+    db_session.flush()
+    return connection
+
+
+@pytest.fixture
+def test_airbyte_connection_b(db_session, test_tenant_id_b):
+    """Create a test Airbyte connection for tenant B (isolation tests)."""
+    from src.models.airbyte_connection import (
+        TenantAirbyteConnection,
+        ConnectionStatus,
+        ConnectionType,
+    )
+
+    connection = TenantAirbyteConnection(
+        id=str(uuid.uuid4()),
+        tenant_id=test_tenant_id_b,
+        airbyte_connection_id=f"airbyte-b-{uuid.uuid4().hex[:12]}",
+        connection_name="Test Postgres Connection",
+        connection_type=ConnectionType.SOURCE,
+        source_type="postgres",
+        status=ConnectionStatus.ACTIVE,
+        is_enabled=True,
+        configuration={"host": "db.example.com"}
+    )
+    db_session.add(connection)
+    db_session.flush()
+    return connection
