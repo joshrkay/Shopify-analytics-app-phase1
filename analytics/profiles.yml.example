@@ -1,0 +1,56 @@
+# dbt Profiles Configuration Template
+# 
+# SECURITY: This file contains connection templates only.
+# Never commit actual credentials. Copy this to profiles.yml and fill in values.
+# profiles.yml is gitignored and should never be committed.
+#
+# Usage:
+#   1. Copy this file to profiles.yml: cp profiles.yml.example profiles.yml
+#   2. Set environment variables (see below for options)
+#   3. Run: dbt debug (to verify connection)
+#
+# Environment Variable Options:
+#   Option A: Set individual connection parameters:
+#     - DB_HOST (default: localhost)
+#     - DB_USER (default: postgres)
+#     - DB_PASSWORD (required)
+#     - DB_PORT (default: 5432)
+#     - DB_NAME (default: shopify_analytics)
+#
+#   Option B: Parse DATABASE_URL (postgresql://user:pass@host:port/dbname)
+#     Set DATABASE_URL and the profile will parse it automatically.
+#     Note: dbt-postgres requires individual parameters, so DATABASE_URL
+#     must be parsed into components (see README.md for helper script).
+
+shopify_analytics:
+  target: local
+  outputs:
+    local:
+      type: postgres
+      host: "{{ env_var('DB_HOST', 'localhost') }}"
+      user: "{{ env_var('DB_USER', 'postgres') }}"
+      password: "{{ env_var('DB_PASSWORD', '') }}"
+      port: "{{ env_var('DB_PORT', '5432') | as_number }}"
+      dbname: "{{ env_var('DB_NAME', 'shopify_analytics') }}"
+      schema: analytics
+      threads: 4
+    
+    staging:
+      type: postgres
+      host: "{{ env_var('DB_HOST', 'localhost') }}"
+      user: "{{ env_var('DB_USER', 'postgres') }}"
+      password: "{{ env_var('DB_PASSWORD', '') }}"
+      port: "{{ env_var('DB_PORT', '5432') | as_number }}"
+      dbname: "{{ env_var('DB_NAME', 'shopify_analytics') }}"
+      schema: analytics
+      threads: 4
+    
+    production:
+      type: postgres
+      host: "{{ env_var('DB_HOST', 'localhost') }}"
+      user: "{{ env_var('DB_USER', 'postgres') }}"
+      password: "{{ env_var('DB_PASSWORD', '') }}"
+      port: "{{ env_var('DB_PORT', '5432') | as_number }}"
+      dbname: "{{ env_var('DB_NAME', 'shopify_analytics') }}"
+      schema: analytics
+      threads: 4
