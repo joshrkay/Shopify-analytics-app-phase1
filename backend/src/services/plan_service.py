@@ -159,13 +159,13 @@ class PlanService:
         plans = self.repo.get_all(
             include_inactive=include_inactive,
             limit=limit,
-            offset=offset
+            offset=offset,
+            include_features=True
         )
         total = self.repo.count(include_inactive=include_inactive)
 
         plan_infos = []
         for plan in plans:
-            features = self.repo.get_features(plan.id)
             plan_infos.append(PlanInfo(
                 id=plan.id,
                 name=plan.name,
@@ -182,7 +182,7 @@ class PlanService:
                         "limit_value": f.limit_value,
                         "limits": f.limits
                     }
-                    for f in features
+                    for f in plan.features
                 ],
                 created_at=plan.created_at,
                 updated_at=plan.updated_at

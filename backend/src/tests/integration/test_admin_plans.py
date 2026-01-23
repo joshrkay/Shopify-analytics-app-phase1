@@ -370,6 +370,7 @@ class TestPlanService:
 
         # Mock query for plans
         mock_query = MagicMock()
+        mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.offset.return_value = mock_query

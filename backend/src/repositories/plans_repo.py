@@ -10,7 +10,7 @@ import logging
 from typing import Optional, List
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 
 from src.models.plan import Plan, PlanFeature
@@ -78,7 +78,8 @@ class PlansRepository:
         self,
         include_inactive: bool = False,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
+        include_features: bool = False
     ) -> List[Plan]:
         """
         Get all plans with pagination.
@@ -87,11 +88,15 @@ class PlansRepository:
             include_inactive: Whether to include inactive plans
             limit: Maximum number of plans to return
             offset: Number of plans to skip
+            include_features: Whether to eager load plan features (avoids N+1 queries)
 
         Returns:
             List of Plan objects
         """
         query = self.db.query(Plan)
+
+        if include_features:
+            query = query.options(selectinload(Plan.features))
 
         if not include_inactive:
             query = query.filter(Plan.is_active == True)
