@@ -200,7 +200,7 @@ customers_and_spend as (
         and c.platform = s.platform
         and c.acquisition_date = s.spend_date
         and c.currency = s.currency
-        and c.campaign_id = s.campaign_id
+        and coalesce(c.campaign_id, '') = coalesce(s.campaign_id, '')
     where coalesce(c.tenant_id, s.tenant_id) is not null
 ),
 
