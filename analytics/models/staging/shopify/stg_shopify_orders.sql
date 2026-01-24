@@ -47,7 +47,8 @@ orders_extracted as (
         raw.order_data->>'shipping_address' as shipping_address_json,
         raw.order_data->>'tags' as tags_raw,
         raw.order_data->>'note' as note,
-        raw.order_data->>'order_number' as order_number_raw
+        raw.order_data->>'order_number' as order_number_raw,
+        raw.order_data->'refunds' as refunds_json
     from raw_orders raw
 ),
 
@@ -153,6 +154,7 @@ orders_normalized as (
         -- Additional fields
         tags_raw as tags,
         note,
+        refunds_json,
         
         -- Metadata
         airbyte_record_id,
@@ -233,6 +235,7 @@ select
     fulfillment_status,
     tags,
     note,
+    refunds_json,
     airbyte_record_id,
     airbyte_emitted_at,
     tenant_id

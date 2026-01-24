@@ -34,6 +34,7 @@ with staging_orders as (
         fulfillment_status,
         tags,
         note,
+        refunds_json,
         airbyte_record_id,
         airbyte_emitted_at,
         tenant_id
@@ -93,6 +94,7 @@ select
     -- Metadata
     tags,
     note,
+    refunds_json,
     
     -- Tenant isolation (CRITICAL)
     tenant_id,
