@@ -177,7 +177,8 @@ models:
           Includes: product subtotal + shipping + taxes
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0"
+              arguments:
+                expression: ">= 0"
               config:
                 where: "revenue_type = 'gross_revenue'"
 
@@ -195,7 +196,8 @@ models:
           Refund amount (negative for refund events, 0 otherwise)
         tests:
           - dbt_utils.expression_is_true:
-              expression: "<= 0"
+              arguments:
+                expression: "<= 0"
               config:
                 where: "revenue_type = 'refund'"
 
@@ -204,7 +206,8 @@ models:
           Cancellation amount (negative for cancellation events, 0 otherwise)
         tests:
           - dbt_utils.expression_is_true:
-              expression: "<= 0"
+              arguments:
+                expression: "<= 0"
               config:
                 where: "revenue_type = 'cancellation'"
 
@@ -215,7 +218,8 @@ models:
           Gross Revenue - Refunds - Cancellations
         tests:
           - dbt_utils.expression_is_true:
-              expression: "= (gross_revenue + refund_amount + cancellation_amount)"
+              arguments:
+                expression: "= (gross_revenue + refund_amount + cancellation_amount)"
               config:
                 error_if: ">= 1"  # Allow for small floating point errors
 
@@ -233,10 +237,11 @@ models:
 
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - tenant_id
-            - order_id
-            - revenue_type
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - order_id
+              - revenue_type
 
   - name: fct_aov
     description: |
@@ -342,7 +347,8 @@ models:
         tests:
           - not_null
           - dbt_utils.expression_is_true:
-              expression: "> 0"
+              arguments:
+                expression: "> 0"
 
       - name: total_net_revenue
         description: Total net revenue for period (after outlier exclusion)
@@ -374,11 +380,12 @@ models:
 
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - tenant_id
-            - currency
-            - period_type
-            - period_start
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - currency
+              - period_type
+              - period_start
 
   - name: fct_roas
     description: |
@@ -434,13 +441,15 @@ models:
         description: Gross Revenue / Ad Spend (before refunds)
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0"
+              arguments:
+                expression: ">= 0"
 
       - name: net_roas
         description: Net Revenue / Ad Spend (after refunds/cancellations)
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0"
+              arguments:
+                expression: ">= 0"
 
   - name: fct_cac
     description: |
@@ -521,15 +530,18 @@ models:
         description: Total new customers acquired (includes cancelled/refunded)
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0"
+              arguments:
+                expression: ">= 0"
 
       - name: net_new_customers
         description: New customers whose first order wasn't cancelled/fully refunded
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0"
+              arguments:
+                expression: ">= 0"
           - dbt_utils.expression_is_true:
-              expression: "<= new_customers"
+              arguments:
+                expression: "<= new_customers"
               config:
                 error_if: ">= 1"
 
@@ -537,19 +549,22 @@ models:
         description: Customer Acquisition Cost (spend / all new customers)
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0"
+              arguments:
+                expression: ">= 0"
 
       - name: ncac
         description: Net Customer Acquisition Cost (spend / net new customers)
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0"
+              arguments:
+                expression: ">= 0"
 
       - name: customer_retention_rate_pct
         description: Percentage of acquired customers who didn't immediately cancel/refund
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0 and <= 100"
+              arguments:
+                expression: ">= 0 and <= 100"
 
       - name: first_order_roas
         description: First order revenue / spend (all customers)
