@@ -53,6 +53,7 @@ with orders_base as (
         fulfillment_status,
         tags,
         note,
+        refunds_json,
         ingested_at
     from {{ ref('fact_orders') }}
 
@@ -64,46 +65,93 @@ with orders_base as (
     {% endif %}
 ),
 
+-- Parse refunds array to calculate actual refund amounts
+-- Shopify stores refunds as a JSON array in the order data
+-- Each refund has transactions that contain the refund amounts
+refunds_parsed as (
+    select
+        id,
+        -- Sum all refund transaction amounts for this order
+        -- The refunds array contains objects with a 'transactions' array
+        -- Each transaction has an 'amount' field
+        coalesce(
+            (
+                select sum(
+                    case
+                        when (refund_elem->>'transactions') is not null
+                        then (
+                            select sum(
+                                case
+                                    when (txn->>'amount') ~ '^-?[0-9]+\.?[0-9]*$'
+                                    then (txn->>'amount')::numeric
+                                    else 0.0
+                                end
+                            )
+                            from jsonb_array_elements(
+                                case
+                                    when jsonb_typeof(refund_elem->'transactions') = 'array'
+                                    then refund_elem->'transactions'
+                                    else '[]'::jsonb
+                                end
+                            ) as txn
+                            where (txn->>'kind') = 'refund'
+                        )
+                        else 0.0
+                    end
+                )
+                from jsonb_array_elements(
+                    case
+                        when refunds_json is not null and jsonb_typeof(refunds_json::jsonb) = 'array'
+                        then refunds_json::jsonb
+                        else '[]'::jsonb
+                    end
+                ) as refund_elem
+            ),
+            0.0
+        ) as calculated_refund_amount
+    from orders_base
+),
+
 -- Extract refund information from Shopify data
--- NOTE: Shopify stores refunds in a separate 'refunds' array within order data
--- For now, we'll identify refunds by financial_status and cancelled_at
--- TODO: Parse refunds array for granular refund amounts and dates
+-- NOTE: Now using parsed refunds array for accurate refund amounts
 orders_with_refund_detection as (
     select
-        *,
+        ob.*,
+        rp.calculated_refund_amount,
         -- Detect if this is a refund/cancellation scenario
         case
-            when order_cancelled_at is not null and financial_status in ('refunded', 'partially_refunded', 'voided')
+            when ob.order_cancelled_at is not null and ob.financial_status in ('refunded', 'partially_refunded', 'voided')
                 then true
             else false
         end as is_refunded_or_cancelled,
 
-        -- Determine refund amount
+        -- Determine refund amount using parsed refunds data
         -- Edge case: partial refunds vs full refunds
         case
-            when financial_status = 'refunded' and order_cancelled_at is not null
-                then total_price  -- Full refund
-            when financial_status = 'partially_refunded' and order_cancelled_at is not null
-                then total_price * 0.5  -- PLACEHOLDER: Need actual refund amount from refunds array
-            when financial_status = 'voided' and order_cancelled_at is not null
-                then total_price  -- Voided = full cancellation
+            when ob.financial_status = 'refunded' and ob.order_cancelled_at is not null
+                then coalesce(rp.calculated_refund_amount, ob.total_price)  -- Use parsed amount, fallback to total
+            when ob.financial_status = 'partially_refunded' and ob.order_cancelled_at is not null
+                then coalesce(rp.calculated_refund_amount, 0.0)  -- Use actual refund amount from refunds array
+            when ob.financial_status = 'voided' and ob.order_cancelled_at is not null
+                then ob.total_price  -- Voided = full cancellation
             else 0.0
         end as refund_amount,
 
         -- Categorize the revenue type
         case
-            when financial_status in ('paid', 'authorized', 'partially_paid') and order_cancelled_at is null
+            when ob.financial_status in ('paid', 'authorized', 'partially_paid') and ob.order_cancelled_at is null
                 then 'gross_revenue'
-            when financial_status = 'pending' and order_cancelled_at is null
+            when ob.financial_status = 'pending' and ob.order_cancelled_at is null
                 then 'gross_revenue'  -- Include pending per requirements
-            when financial_status in ('refunded', 'partially_refunded') and order_cancelled_at is not null
+            when ob.financial_status in ('refunded', 'partially_refunded') and ob.order_cancelled_at is not null
                 then 'refund'
-            when financial_status in ('voided', 'cancelled') and order_cancelled_at is not null
+            when ob.financial_status in ('voided', 'cancelled') and ob.order_cancelled_at is not null
                 then 'cancellation'
             else 'other'  -- Edge case: capture unknown statuses
         end as revenue_type
 
-    from orders_base
+    from orders_base ob
+    left join refunds_parsed rp on ob.id = rp.id
 ),
 
 -- Create separate records for gross revenue and refund/cancellation events
@@ -261,9 +309,9 @@ where revenue_date is not null  -- Edge case: exclude events with null dates
 -- Edge cases handled:
 -- 1. Orders with $0 total (excluded from gross revenue)
 -- 2. Orders with null cancelled_at (only gross revenue recorded)
--- 3. Partial refunds (placeholder logic - needs refunds array parsing)
+-- 3. Partial refunds (calculated from parsed refunds array transactions)
 -- 4. Same-day order and refund (creates 2 separate events)
--- 5. Multiple refunds on same order (currently limited to 1, needs enhancement)
+-- 5. Multiple refunds on same order (all transactions summed from refunds array)
 -- 6. Orders in unknown financial_status (treated as "other", included in gross)
 -- 7. Missing shipping amount (defaulted to 0, needs shipping_lines parsing)
 -- 8. Cross-timezone date handling (all timestamps in UTC)
