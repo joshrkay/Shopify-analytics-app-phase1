@@ -304,6 +304,21 @@ jobs:
           echo "=========================================="
           dbt debug --profiles-dir . --project-dir . || exit 1
 
+      - name: Install dbt packages
+        working-directory: ./analytics
+        env:
+          DB_HOST: localhost
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_PORT: 5432
+          DB_NAME: test_dbt_db
+          DB_SSLMODE: disable
+        run: |
+          echo "=========================================="
+          echo "Installing dbt packages"
+          echo "=========================================="
+          dbt deps --profiles-dir . --project-dir . || exit 1
+
       - name: Run dbt compile
         working-directory: ./analytics
         env:
