@@ -188,7 +188,7 @@ models:
         description: Total tax amount
 
       - name: shipping_amount
-        description: Shipping charges (TODO: currently defaults to 0)
+        description: "Shipping charges (TODO: currently defaults to 0)"
 
       - name: refund_amount
         description: |
