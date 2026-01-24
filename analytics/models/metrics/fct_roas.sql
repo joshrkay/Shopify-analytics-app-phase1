@@ -246,7 +246,7 @@ all_time_roas as (
         end as net_roas
 
     from daily_roas
-    group by 1, 2, 4, 5, 6
+    group by 1, 2, 3, 4, 5, 6
 ),
 
 -- Union all time periods
