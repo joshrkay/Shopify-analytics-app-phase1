@@ -388,7 +388,7 @@ jobs:
           echo "=========================================="
           dbt compile --profiles-dir . --project-dir . || exit 1
 
-      - name: Run dbt run (staging models)
+      - name: Run dbt run (all models)
         working-directory: ./analytics
         env:
           DB_HOST: localhost
@@ -399,9 +399,9 @@ jobs:
           DB_SSLMODE: disable
         run: |
           echo "=========================================="
-          echo "Running dbt models (+staging+)"
+          echo "Running all dbt models"
           echo "=========================================="
-          dbt run --select +staging+ --profiles-dir . --project-dir . || exit 1
+          dbt run --profiles-dir . --project-dir . || exit 1
 
       - name: Run dbt test
         working-directory: ./analytics
@@ -426,7 +426,7 @@ jobs:
           echo "=========================================="
           echo "✓ dbt connection verified"
           echo "✓ Models compiled successfully"
-          echo "✓ Staging models built"
+          echo "✓ All models built"
           echo "✓ Data quality tests passed"
           echo ""
           echo "Schema/logic changes validated before merge."
