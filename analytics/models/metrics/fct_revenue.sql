@@ -74,6 +74,8 @@ refunds_parsed as (
         -- Sum all refund transaction amounts for this order
         -- The refunds array contains objects with a 'transactions' array
         -- Each transaction has an 'amount' field
+        -- Amount regex validates format: optional minus sign, digits, optional decimal point and decimal digits
+        -- Examples: '123.45', '-50.00', '100'
         coalesce(
             (
                 select sum(
@@ -119,11 +121,13 @@ orders_with_refund_detection as (
 
         -- Determine refund amount using parsed refunds data
         -- Edge case: partial refunds vs full refunds
+        -- Note: For partially_refunded orders, fallback to 0.0 if refunds array is missing
+        --       This is safer than using an estimated value and indicates missing refund data
         case
             when ob.financial_status = 'refunded' and ob.order_cancelled_at is not null
                 then coalesce(rp.calculated_refund_amount, ob.total_price)  -- Use parsed amount, fallback to total
             when ob.financial_status = 'partially_refunded' and ob.order_cancelled_at is not null
-                then coalesce(rp.calculated_refund_amount, 0.0)  -- Use actual refund amount from refunds array
+                then coalesce(rp.calculated_refund_amount, 0.0)  -- Use actual refund amount; 0.0 if data missing
             when ob.financial_status = 'voided' and ob.order_cancelled_at is not null
                 then ob.total_price  -- Voided = full cancellation
             else 0.0
