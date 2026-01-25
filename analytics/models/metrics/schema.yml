@@ -154,6 +154,7 @@ models:
           - accepted_values:
               arguments:
                 values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY', 'INR', 'BRL', 'MXN']
+                quote: true
               severity: warn  # Warn instead of fail for new currencies
 
       - name: financial_status
@@ -563,7 +564,7 @@ models:
         tests:
           - dbt_utils.expression_is_true:
               arguments:
-                expression: "customer_retention_rate_pct >= 0 and customer_retention_rate_pct <= 100"
+                expression: ">= 0 and customer_retention_rate_pct <= 100"
 
       - name: first_order_roas
         description: First order revenue / spend (all customers)
