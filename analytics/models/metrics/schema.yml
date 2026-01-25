@@ -563,7 +563,7 @@ models:
         tests:
           - dbt_utils.expression_is_true:
               arguments:
-                expression: ">= 0 and <= 100"
+                expression: "customer_retention_rate_pct >= 0 and customer_retention_rate_pct <= 100"
 
       - name: first_order_roas
         description: First order revenue / spend (all customers)
