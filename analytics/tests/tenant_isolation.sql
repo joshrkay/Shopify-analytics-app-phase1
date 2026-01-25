@@ -63,17 +63,20 @@ with violations as (
     -- Composite key: ad_account_id, campaign_id, date
     select 
         'duplicate_meta_ads_across_tenants' as violation_type,
-        string_agg(distinct (ad_account_id || '|' || campaign_id || '|' || date::text), ', ' 
+        string_agg((ad_account_id || '|' || campaign_id || '|' || date::text), ', ' 
                    order by ad_account_id, campaign_id, date) as violation_count
     from (
-        select 
+        select distinct
             ad_account_id,
             campaign_id,
-            date,
-            count(distinct tenant_id) as tenant_count
+            date
         from {{ ref('stg_meta_ads') }}
-        group by ad_account_id, campaign_id, date
-        having count(distinct tenant_id) > 1
+        where (ad_account_id, campaign_id, date) in (
+            select ad_account_id, campaign_id, date
+            from {{ ref('stg_meta_ads') }}
+            group by ad_account_id, campaign_id, date
+            having count(distinct tenant_id) > 1
+        )
     ) duplicates
     group by 1
     
@@ -83,17 +86,20 @@ with violations as (
     -- Composite key: ad_account_id, campaign_id, date
     select 
         'duplicate_google_ads_across_tenants' as violation_type,
-        string_agg(distinct (ad_account_id || '|' || campaign_id || '|' || date::text), ', ' 
+        string_agg((ad_account_id || '|' || campaign_id || '|' || date::text), ', ' 
                    order by ad_account_id, campaign_id, date) as violation_count
     from (
-        select 
+        select distinct
             ad_account_id,
             campaign_id,
-            date,
-            count(distinct tenant_id) as tenant_count
+            date
         from {{ ref('stg_google_ads') }}
-        group by ad_account_id, campaign_id, date
-        having count(distinct tenant_id) > 1
+        where (ad_account_id, campaign_id, date) in (
+            select ad_account_id, campaign_id, date
+            from {{ ref('stg_google_ads') }}
+            group by ad_account_id, campaign_id, date
+            having count(distinct tenant_id) > 1
+        )
     ) duplicates
     group by 1
 )

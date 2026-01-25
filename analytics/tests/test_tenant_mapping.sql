@@ -6,15 +6,20 @@
 -- If this test fails, you MUST configure proper tenant mapping in staging models.
 -- Returns rows only when tenant count is NOT exactly 1 (test fails if any rows returned)
 
+with tenant_count as (
+    select 
+        count(distinct tenant_id) as active_shopify_tenant_count
+    from {{ ref('_tenant_airbyte_connections') }}
+    where source_type = 'shopify'
+        and status = 'active'
+        and is_enabled = true
+)
 select 
-    count(distinct tenant_id) as active_shopify_tenant_count,
+    active_shopify_tenant_count,
     case 
-        when count(distinct tenant_id) = 0 then 'No active Shopify connections configured'
-        when count(distinct tenant_id) > 1 then 'Multiple tenants detected - must configure connection-specific tenant mapping'
-        else null
+        when active_shopify_tenant_count = 0 then 'No active Shopify connections configured'
+        when active_shopify_tenant_count > 1 then 'Multiple tenants detected - must configure connection-specific tenant mapping'
+        else 'Unexpected tenant count'
     end as issue_description
-from {{ ref('_tenant_airbyte_connections') }}
-where source_type = 'shopify'
-    and status = 'active'
-    and is_enabled = true
-having count(distinct tenant_id) != 1  -- Fail if count is not exactly 1
+from tenant_count
+where active_shopify_tenant_count != 1  -- Fail if count is not exactly 1
