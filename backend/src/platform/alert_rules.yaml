@@ -1,0 +1,715 @@
+# =============================================================================
+# Alert Rules Configuration for AI Growth Analytics
+# =============================================================================
+#
+# This file defines machine-readable alerting rules for security and performance
+# monitoring. It is environment-agnostic and vendor-neutral.
+#
+# STRUCTURE:
+# - Each rule has a unique identifier
+# - Rules are grouped by category (security, performance, operations)
+# - Each rule defines: severity, threshold, escalation, context, suppression
+#
+# SEVERITY LEVELS:
+# - critical: Immediate response required (potential security breach)
+# - high: Response within 15 minutes (security concern or major issue)
+# - medium: Response within 1 hour (performance degradation)
+# - low: Review within 24 hours (informational)
+#
+# USAGE:
+# This file should be parsed by the alerting system to configure rules.
+# No inline secrets - all sensitive values should be injected at runtime.
+# =============================================================================
+
+version: "1.0"
+schema: "alert_rules_v1"
+
+# =============================================================================
+# GLOBAL SETTINGS
+# =============================================================================
+global:
+  default_time_window: "1m"
+  default_evaluation_interval: "30s"
+
+  # Escalation channel placeholders - resolved at runtime
+  channels:
+    security_slack: "${SECURITY_SLACK_CHANNEL}"
+    analytics_slack: "${ANALYTICS_SLACK_CHANNEL}"
+    ops_slack: "${OPS_SLACK_CHANNEL}"
+    pagerduty: "${PAGERDUTY_SERVICE_KEY}"
+    email_security: "${SECURITY_EMAIL_GROUP}"
+
+  # Business hours for suppression rules (UTC)
+  business_hours:
+    start: "09:00"
+    end: "18:00"
+    timezone: "UTC"
+    days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+# =============================================================================
+# AUTHENTICATION FAILURE ALERTS
+# =============================================================================
+alert_rules:
+  # ---------------------------------------------------------------------------
+  # AUTH.001 - Multiple Authentication Failures
+  # ---------------------------------------------------------------------------
+  auth_failures_single_user:
+    name: "Multiple Auth Failures - Single User"
+    description: "Detect potential account compromise or brute force against single user"
+    event_types:
+      - "auth.login_failed"
+
+    severity: "high"
+
+    threshold:
+      value: 5
+      time_window: "5m"
+      aggregation: "count"
+      group_by: ["attempted_user_id"]
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["security_slack"]
+        message_template: |
+          🔐 Auth Alert: ${threshold.value} failed login attempts for user ${group.attempted_user_id}
+          Time window: ${threshold.time_window}
+          IPs involved: ${context.unique_ips}
+
+      - trigger: "5m_unresolved"
+        channels: ["pagerduty"]
+        message_template: |
+          CRITICAL: Ongoing auth failures for user ${group.attempted_user_id}
+          Total failures: ${total_count}
+          Action required: Review and potentially lock account
+
+    context_needed:
+      - field: "client_ip"
+        purpose: "Identify attack source"
+      - field: "failure_reason"
+        purpose: "Distinguish credential stuffing vs typos"
+      - field: "user_agent_hash"
+        purpose: "Identify automated tools"
+      - field: "attempt_count"
+        purpose: "Track cumulative attempts"
+
+    auto_actions:
+      - condition: "count >= 10"
+        action: "lock_account"
+        duration: "30m"
+        notify: true
+
+    suppression:
+      - condition: "environment == 'test'"
+      - condition: "attempted_user_id IN test_users"
+
+  # ---------------------------------------------------------------------------
+  # AUTH.002 - Distributed Authentication Attack
+  # ---------------------------------------------------------------------------
+  auth_failures_distributed:
+    name: "Distributed Auth Attack"
+    description: "Detect credential stuffing or distributed brute force"
+    event_types:
+      - "auth.login_failed"
+
+    severity: "critical"
+
+    threshold:
+      value: 50
+      time_window: "5m"
+      aggregation: "count"
+      group_by: []  # No grouping - global count
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["security_slack", "pagerduty"]
+        message_template: |
+          🚨 CRITICAL: Distributed auth attack detected
+          ${threshold.value}+ failures in ${threshold.time_window}
+          Unique users targeted: ${context.unique_users}
+          Unique IPs: ${context.unique_ips}
+
+    context_needed:
+      - field: "client_ip"
+        aggregation: "unique_count"
+      - field: "attempted_user_id"
+        aggregation: "unique_count"
+      - field: "failure_reason"
+        aggregation: "distribution"
+
+    suppression: []  # Never suppress this alert
+
+  # ---------------------------------------------------------------------------
+  # AUTH.003 - JWT Validation Failures
+  # ---------------------------------------------------------------------------
+  jwt_validation_failures:
+    name: "JWT Validation Failures Spike"
+    description: "Detect potential token tampering or replay attacks"
+    event_types:
+      - "auth.jwt_validation_failed"
+
+    severity: "high"
+
+    threshold:
+      value: 10
+      time_window: "1m"
+      aggregation: "count"
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["security_slack"]
+      - trigger: "2m_unresolved"
+        channels: ["pagerduty"]
+
+    context_needed:
+      - field: "failure_reason"
+        purpose: "Distinguish expired vs tampered tokens"
+      - field: "client_ip"
+        purpose: "Identify attack source"
+      - field: "token_fingerprint"
+        purpose: "Track reused invalid tokens"
+
+    suppression:
+      - condition: "failure_reason == 'expired'"
+        if_count_below: 50
+        reason: "Normal token expiration, only alert on spike"
+
+# =============================================================================
+# RLS DENIAL ALERTS
+# =============================================================================
+  # ---------------------------------------------------------------------------
+  # RLS.001 - RLS Access Denials
+  # ---------------------------------------------------------------------------
+  rls_denials:
+    name: "RLS Access Denials"
+    description: "Detect permission issues or potential security probing"
+    event_types:
+      - "rls.denied"
+
+    severity: "high"
+
+    threshold:
+      value: 5
+      time_window: "1m"
+      aggregation: "count"
+      group_by: ["user_id"]
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["analytics_slack"]
+        message_template: |
+          🛡️ RLS Denial Alert: User ${group.user_id} denied ${threshold.value} times
+          Datasets: ${context.datasets_accessed}
+          Reason: ${context.denial_reasons}
+
+      - trigger: "10m_unresolved"
+        channels: ["pagerduty"]
+        priority: "high"
+
+    context_needed:
+      - field: "dataset_name"
+        aggregation: "list"
+        purpose: "Identify targeted datasets"
+      - field: "attempted_tenant_ids"
+        aggregation: "list"
+        purpose: "Identify cross-tenant attempts"
+      - field: "denial_reason"
+        aggregation: "distribution"
+        purpose: "Distinguish permission vs policy issues"
+      - field: "query_fingerprint"
+        purpose: "Enable query analysis"
+
+    auto_actions:
+      - condition: "attempted_tenant_ids != user_tenant_id"
+        action: "flag_for_security_review"
+        severity_override: "critical"
+
+    suppression:
+      - condition: "tag == 'testing_environment'"
+      - condition: "user_id IN ['test_user_001', 'test_user_002']"
+      - condition: "denial_reason == 'rate_limit'"
+        if_count_below: 20
+        reason: "Rate limiting is expected behavior"
+
+  # ---------------------------------------------------------------------------
+  # RLS.002 - RLS Bypass Attempts
+  # ---------------------------------------------------------------------------
+  rls_bypass_attempts:
+    name: "RLS Bypass Attempt Detected"
+    description: "Critical security event - potential data breach attempt"
+    event_types:
+      - "rls.bypass_attempted"
+
+    severity: "critical"
+
+    threshold:
+      value: 1  # Alert on ANY attempt
+      time_window: "immediate"
+      aggregation: "count"
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["security_slack", "pagerduty", "email_security"]
+        message_template: |
+          🚨 CRITICAL SECURITY ALERT: RLS Bypass Attempt
+          User: ${event.user_id}
+          Tenant: ${event.tenant_id}
+          Dataset: ${event.dataset_id}
+          Method: ${event.bypass_method}
+          Blocked: ${event.blocked}
+          IP: ${event.client_ip}
+
+          IMMEDIATE ACTION REQUIRED
+
+    context_needed:
+      - field: "bypass_method"
+        purpose: "Understand attack vector"
+      - field: "blocked"
+        purpose: "Confirm defense effectiveness"
+      - field: "client_ip"
+        purpose: "Block at network level if needed"
+      - field: "user_id"
+        purpose: "Investigate user's recent activity"
+
+    auto_actions:
+      - condition: "always"
+        action: "capture_full_request_context"
+      - condition: "blocked == false"
+        action: "emergency_session_revocation"
+        notify: true
+
+    suppression: []  # NEVER suppress this alert
+
+# =============================================================================
+# QUERY TIMEOUT & PERFORMANCE ALERTS
+# =============================================================================
+  # ---------------------------------------------------------------------------
+  # PERF.001 - Query Timeout
+  # ---------------------------------------------------------------------------
+  query_timeout:
+    name: "Query Timeout"
+    description: "Detect slow queries impacting user experience"
+    event_types:
+      - "explore.query_timeout"
+
+    severity: "medium"
+
+    threshold:
+      value: 20
+      time_window: "per_query"
+      unit: "seconds"
+
+    # Aggregate threshold for escalation
+    aggregate_threshold:
+      value: 10
+      time_window: "5m"
+      aggregation: "count"
+      severity_override: "high"
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["ops_slack"]
+        message_template: |
+          ⏱️ Query Timeout: ${event.dataset_name}
+          Duration: ${event.timeout_seconds}s
+          User: ${event.user_id}
+          Complexity: ${event.query_complexity_score}/10
+
+      - trigger: "aggregate_threshold_exceeded"
+        channels: ["pagerduty"]
+        message_template: |
+          🔥 Query Timeout Storm: ${aggregate_count} timeouts in 5 minutes
+          Affected datasets: ${context.datasets}
+          Affected users: ${context.user_count}
+
+    context_needed:
+      - field: "dataset_name"
+        purpose: "Identify problematic datasets"
+      - field: "query_complexity_score"
+        purpose: "Assess if query is optimizable"
+      - field: "suggested_optimization"
+        purpose: "Provide actionable guidance"
+      - field: "estimated_row_count"
+        purpose: "Determine if data volume issue"
+
+    suggested_actions:
+      - "Review query complexity and suggest narrower date range"
+      - "Check if dataset needs index optimization"
+      - "Consider query result caching"
+
+    suppression:
+      - condition: "query_complexity_score <= 3"
+        reason: "Simple queries shouldn't timeout - likely data issue"
+        severity_override: "high"
+
+  # ---------------------------------------------------------------------------
+  # PERF.002 - Slow Query Pattern
+  # ---------------------------------------------------------------------------
+  slow_query_pattern:
+    name: "Slow Query Pattern Detected"
+    description: "Multiple slow queries from same user or dataset"
+    event_types:
+      - "anomaly.slow_query"
+
+    severity: "medium"
+
+    threshold:
+      value: 5
+      time_window: "15m"
+      aggregation: "count"
+      group_by: ["dataset_id"]
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["ops_slack"]
+      - trigger: "30m_unresolved"
+        channels: ["analytics_slack"]
+
+    context_needed:
+      - field: "query_fingerprint"
+        aggregation: "unique_count"
+        purpose: "Identify if same query pattern"
+      - field: "optimization_suggestions"
+        aggregation: "list"
+
+    suppression:
+      - condition: "is_backfill_running == true"
+        reason: "Expected during data backfills"
+
+# =============================================================================
+# CROSS-TENANT ACCESS ALERTS
+# =============================================================================
+  # ---------------------------------------------------------------------------
+  # TENANT.001 - Cross-Tenant Access Attempt
+  # ---------------------------------------------------------------------------
+  cross_tenant_access_attempt:
+    name: "Cross-Tenant Access Attempt"
+    description: "Critical - user attempted to access another tenant's data"
+    event_types:
+      - "cross_tenant.access_attempted"
+
+    severity: "critical"
+
+    threshold:
+      value: 1
+      time_window: "immediate"
+
+    # Differentiate successful vs failed attempts
+    conditions:
+      - name: "failed_attempt"
+        filter: "success == false"
+        severity: "critical"
+      - name: "successful_access"
+        filter: "success == true"
+        severity: "high"  # May be legitimate agency access
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["security_slack", "pagerduty"]
+        message_template: |
+          🚨 CROSS-TENANT ACCESS ${event.success ? 'GRANTED' : 'BLOCKED'}
+          User: ${event.user_id}
+          From Tenant: ${event.from_tenant_id}
+          To Tenant: ${event.to_tenant_id}
+          Resource: ${event.resource_type}/${event.resource_id}
+          Method: ${event.access_method}
+          IP: ${event.client_ip}
+
+    context_needed:
+      - field: "access_method"
+        purpose: "Understand how access was attempted"
+      - field: "from_tenant_id"
+        purpose: "User's legitimate tenant"
+      - field: "to_tenant_id"
+        purpose: "Target tenant"
+      - field: "client_ip"
+        purpose: "Network forensics"
+
+    auto_actions:
+      - condition: "success == true AND grant_reason NOT IN ['agency_role', 'explicit_share']"
+        action: "revoke_access_immediately"
+        notify: true
+        escalation_override: "critical"
+
+    suppression:
+      - condition: "grant_reason == 'agency_role'"
+        suppress_for: "24h"
+        reason: "Agency users have legitimate cross-tenant access"
+        still_log: true
+
+  # ---------------------------------------------------------------------------
+  # TENANT.002 - Data Leak Detection
+  # ---------------------------------------------------------------------------
+  cross_tenant_data_leak:
+    name: "Cross-Tenant Data Leak Detected"
+    description: "Data from one tenant exposed to another - potential breach"
+    event_types:
+      - "cross_tenant.data_leak_detected"
+
+    severity: "critical"
+
+    threshold:
+      value: 1
+      time_window: "immediate"
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["security_slack", "pagerduty", "email_security"]
+        priority: "critical"
+        message_template: |
+          🚨🚨 DATA LEAK DETECTED 🚨🚨
+
+          User: ${event.user_id}
+          Source Tenant: ${event.from_tenant_id}
+          Exposed Tenant: ${event.to_tenant_id}
+          Leak Type: ${event.leak_type}
+          Data Volume: ${event.data_volume}
+          Detection: ${event.detection_method}
+
+          IMMEDIATE INCIDENT RESPONSE REQUIRED
+
+          Remediation: ${event.remediation_action}
+
+    context_needed:
+      - field: "leak_type"
+        purpose: "Understand breach vector"
+      - field: "data_volume"
+        purpose: "Assess breach severity"
+      - field: "detection_method"
+        purpose: "Improve detection"
+
+    auto_actions:
+      - condition: "always"
+        action: "freeze_user_access"
+      - condition: "always"
+        action: "capture_full_audit_trail"
+      - condition: "always"
+        action: "notify_compliance_team"
+
+    suppression: []  # ABSOLUTELY NEVER suppress this
+
+# =============================================================================
+# PERMISSION ESCALATION ALERTS
+# =============================================================================
+  # ---------------------------------------------------------------------------
+  # PERM.001 - Permission Escalation
+  # ---------------------------------------------------------------------------
+  permission_escalation:
+    name: "Permission Escalation Detected"
+    description: "User gained elevated permissions - verify authorization"
+    event_types:
+      - "permission.escalation_detected"
+
+    severity: "critical"
+
+    threshold:
+      value: 1
+      time_window: "immediate"
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["security_slack"]
+        message_template: |
+          ⚠️ Permission Escalation: ${event.user_id}
+          Type: ${event.escalation_type}
+          Previous: ${event.previous_level}
+          New: ${event.new_level}
+          Triggered by: ${event.triggered_by}
+
+      - trigger: "5m_unacknowledged"
+        channels: ["pagerduty"]
+
+    context_needed:
+      - field: "escalation_type"
+        purpose: "Distinguish legitimate vs suspicious"
+      - field: "triggered_by"
+        purpose: "Verify authorization chain"
+
+    suppression:
+      - condition: "triggered_by IN known_admin_users"
+        suppress_for: "1h"
+        still_log: true
+
+  # ---------------------------------------------------------------------------
+  # PERM.002 - Bulk Export Alert
+  # ---------------------------------------------------------------------------
+  bulk_export_detected:
+    name: "Bulk Data Export Detected"
+    description: "Large data export - verify business justification"
+    event_types:
+      - "dashboard.exported"
+      - "explore.bulk_query_detected"
+
+    severity: "high"
+
+    threshold:
+      value: 100000  # rows
+      time_window: "per_event"
+      field: "row_count"
+
+    # Alternative: frequency-based
+    frequency_threshold:
+      value: 5
+      time_window: "1h"
+      group_by: ["user_id"]
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["analytics_slack"]
+      - trigger: "threshold_exceeded_3x"
+        channels: ["security_slack"]
+
+    context_needed:
+      - field: "user_id"
+        purpose: "Identify who is exporting"
+      - field: "row_count"
+        purpose: "Assess data volume"
+      - field: "export_format"
+        purpose: "Understand intended use"
+
+    suppression:
+      - condition: "user_role == 'data_admin'"
+        if_count_below: 10
+        reason: "Data admins may legitimately export large volumes"
+
+# =============================================================================
+# OPERATIONS ALERTS
+# =============================================================================
+  # ---------------------------------------------------------------------------
+  # OPS.001 - Dataset Sync Failures
+  # ---------------------------------------------------------------------------
+  dataset_sync_failure:
+    name: "Dataset Sync Failure"
+    description: "Data pipeline failure - may cause stale dashboards"
+    event_types:
+      - "dataset.sync_failed"
+
+    severity: "high"
+
+    threshold:
+      value: 1
+      time_window: "per_event"
+
+    # Escalate if repeated failures
+    repeat_threshold:
+      value: 3
+      time_window: "1h"
+      group_by: ["dataset_id"]
+      severity_override: "critical"
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["ops_slack"]
+      - trigger: "repeat_threshold_exceeded"
+        channels: ["pagerduty"]
+
+    context_needed:
+      - field: "failure_reason"
+        purpose: "Diagnose root cause"
+      - field: "retry_count"
+        purpose: "Assess persistence"
+      - field: "will_retry"
+        purpose: "Know if auto-remediation active"
+
+    suppression:
+      - condition: "is_maintenance_window == true"
+
+  # ---------------------------------------------------------------------------
+  # OPS.002 - Resource Exhaustion
+  # ---------------------------------------------------------------------------
+  resource_exhaustion:
+    name: "Resource Exhaustion Warning"
+    description: "System resources approaching limits"
+    event_types:
+      - "anomaly.resource_exhaustion"
+
+    severity: "critical"
+
+    threshold:
+      value: 1
+      time_window: "immediate"
+
+    escalation:
+      - trigger: "immediate"
+        channels: ["ops_slack", "pagerduty"]
+        message_template: |
+          🔥 Resource Exhaustion: ${event.resource_type}
+          Usage: ${event.current_usage}/${event.limit}
+          Affected Users: ${event.affected_users}
+
+    context_needed:
+      - field: "resource_type"
+        purpose: "Identify bottleneck"
+      - field: "current_usage"
+        purpose: "Assess severity"
+      - field: "affected_users"
+        purpose: "Impact assessment"
+
+    auto_actions:
+      - condition: "resource_type == 'connections'"
+        action: "terminate_idle_connections"
+      - condition: "resource_type == 'memory'"
+        action: "trigger_cache_eviction"
+
+    suppression: []
+
+# =============================================================================
+# SUPPRESSION RULES (GLOBAL)
+# =============================================================================
+global_suppression:
+  # Test environment suppression
+  test_environment:
+    conditions:
+      - "environment IN ['test', 'staging', 'development']"
+      - "NOT severity == 'critical'"
+    action: "suppress"
+    exceptions:
+      - "cross_tenant.data_leak_detected"
+      - "rls.bypass_attempted"
+
+  # Known test users
+  test_users:
+    user_ids:
+      - "test_user_001"
+      - "test_user_002"
+      - "load_test_user"
+    action: "suppress"
+    exceptions:
+      - "cross_tenant.data_leak_detected"
+
+  # Maintenance windows
+  maintenance_window:
+    schedule:
+      - day: "sunday"
+        start: "02:00"
+        end: "06:00"
+        timezone: "UTC"
+    affected_rules:
+      - "dataset_sync_failure"
+      - "slow_query_pattern"
+    action: "suppress"
+
+# =============================================================================
+# INCIDENT RESPONSE INTEGRATION
+# =============================================================================
+incident_response:
+  # Auto-create incidents for critical alerts
+  auto_incident_creation:
+    severity_threshold: "critical"
+    enabled: true
+
+  # Runbook links (resolved at runtime)
+  runbooks:
+    auth_failures: "${RUNBOOK_BASE_URL}/auth-failures.md"
+    rls_bypass: "${RUNBOOK_BASE_URL}/rls-bypass.md"
+    cross_tenant: "${RUNBOOK_BASE_URL}/cross-tenant-access.md"
+    data_leak: "${RUNBOOK_BASE_URL}/data-leak-response.md"
+    query_timeout: "${RUNBOOK_BASE_URL}/query-timeout.md"
+
+  # Required context for incident creation
+  incident_fields:
+    - "correlation_id"
+    - "tenant_id"
+    - "user_id"
+    - "timestamp"
+    - "event_type"
+    - "severity"
