@@ -1,0 +1,202 @@
+{
+  "$schema": "./plans.schema.json",
+  "version": "1.0.0",
+  "last_updated": "2024-01-15",
+  "plans": [
+    {
+      "id": "plan_free",
+      "name": "free",
+      "display_name": "Free",
+      "description": "Basic analytics for small stores",
+      "tier": 0,
+      "pricing": {
+        "monthly_cents": 0,
+        "yearly_cents": 0,
+        "currency": "USD"
+      },
+      "trial": {
+        "enabled": false,
+        "days": 0
+      },
+      "features": {
+        "dashboard_basic": true,
+        "dashboard_advanced": false,
+        "dashboard_custom": false,
+        "data_export_csv": "limited",
+        "data_export_api": false,
+        "ai_insights": false,
+        "ai_actions": false,
+        "custom_reports": false,
+        "scheduled_reports": false,
+        "multi_store": false,
+        "agency_features": false,
+        "api_access": false,
+        "priority_support": false,
+        "dedicated_support": false
+      },
+      "limits": {
+        "max_dashboards": 2,
+        "max_users": 1,
+        "api_calls_per_month": 0,
+        "ai_insights_per_month": 0,
+        "data_retention_days": 30,
+        "export_rows_per_request": 100
+      },
+      "is_active": true,
+      "is_default": true
+    },
+    {
+      "id": "plan_growth",
+      "name": "growth",
+      "display_name": "Growth",
+      "description": "For growing businesses with advanced analytics needs",
+      "tier": 1,
+      "pricing": {
+        "monthly_cents": 2900,
+        "yearly_cents": 29000,
+        "currency": "USD"
+      },
+      "trial": {
+        "enabled": true,
+        "days": 14
+      },
+      "features": {
+        "dashboard_basic": true,
+        "dashboard_advanced": true,
+        "dashboard_custom": false,
+        "data_export_csv": true,
+        "data_export_api": false,
+        "ai_insights": "limited",
+        "ai_actions": false,
+        "custom_reports": false,
+        "scheduled_reports": true,
+        "multi_store": false,
+        "agency_features": false,
+        "api_access": "limited",
+        "priority_support": false,
+        "dedicated_support": false
+      },
+      "limits": {
+        "max_dashboards": 10,
+        "max_users": 5,
+        "api_calls_per_month": 10000,
+        "ai_insights_per_month": 50,
+        "data_retention_days": 90,
+        "export_rows_per_request": 10000
+      },
+      "shopify_plan_id": null,
+      "is_active": true
+    },
+    {
+      "id": "plan_pro",
+      "name": "pro",
+      "display_name": "Pro",
+      "description": "Professional tier with all features for established stores",
+      "tier": 2,
+      "pricing": {
+        "monthly_cents": 7900,
+        "yearly_cents": 79000,
+        "currency": "USD"
+      },
+      "trial": {
+        "enabled": true,
+        "days": 14
+      },
+      "features": {
+        "dashboard_basic": true,
+        "dashboard_advanced": true,
+        "dashboard_custom": true,
+        "data_export_csv": true,
+        "data_export_api": true,
+        "ai_insights": true,
+        "ai_actions": true,
+        "custom_reports": true,
+        "scheduled_reports": true,
+        "multi_store": true,
+        "agency_features": false,
+        "api_access": true,
+        "priority_support": true,
+        "dedicated_support": false
+      },
+      "limits": {
+        "max_dashboards": 50,
+        "max_users": 20,
+        "api_calls_per_month": 100000,
+        "ai_insights_per_month": 500,
+        "data_retention_days": 365,
+        "export_rows_per_request": 100000
+      },
+      "shopify_plan_id": null,
+      "is_active": true
+    },
+    {
+      "id": "plan_enterprise",
+      "name": "enterprise",
+      "display_name": "Enterprise",
+      "description": "Custom solutions with dedicated support and unlimited resources",
+      "tier": 3,
+      "pricing": {
+        "monthly_cents": null,
+        "yearly_cents": null,
+        "currency": "USD",
+        "custom": true
+      },
+      "trial": {
+        "enabled": false,
+        "days": 0
+      },
+      "features": {
+        "dashboard_basic": true,
+        "dashboard_advanced": true,
+        "dashboard_custom": true,
+        "data_export_csv": true,
+        "data_export_api": true,
+        "ai_insights": true,
+        "ai_actions": true,
+        "custom_reports": true,
+        "scheduled_reports": true,
+        "multi_store": true,
+        "agency_features": true,
+        "api_access": true,
+        "priority_support": true,
+        "dedicated_support": true
+      },
+      "limits": {
+        "max_dashboards": -1,
+        "max_users": -1,
+        "api_calls_per_month": -1,
+        "ai_insights_per_month": -1,
+        "data_retention_days": -1,
+        "export_rows_per_request": -1
+      },
+      "shopify_plan_id": null,
+      "is_active": true,
+      "requires_contact": true
+    }
+  ],
+  "billing_config": {
+    "grace_period_days": 7,
+    "warning_notification_days_before": 3,
+    "access_during_grace": "full",
+    "auto_cancel_after_suspension_days": 30,
+    "upgrade_timing": "immediate",
+    "downgrade_timing": "end_of_period",
+    "proration_enabled": true
+  },
+  "feature_descriptions": {
+    "dashboard_basic": "Basic analytics dashboards",
+    "dashboard_advanced": "Advanced analytics with cohorts and funnels",
+    "dashboard_custom": "Build custom dashboards",
+    "data_export_csv": "Export data to CSV",
+    "data_export_api": "Programmatic data export via API",
+    "ai_insights": "AI-powered business insights",
+    "ai_actions": "AI-recommended actions",
+    "custom_reports": "Custom report builder",
+    "scheduled_reports": "Automated report delivery",
+    "multi_store": "Manage multiple Shopify stores",
+    "agency_features": "Agency dashboard and client management",
+    "api_access": "REST API access",
+    "priority_support": "Priority customer support",
+    "dedicated_support": "Dedicated account manager"
+  }
+}

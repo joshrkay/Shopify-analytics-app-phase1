@@ -4,15 +4,23 @@ Shopify Billing API client for subscription management.
 Uses Shopify GraphQL Admin API for recurring app charges.
 All public Shopify apps MUST use Shopify Billing API for payments.
 
+Features:
+- Exponential backoff retry for transient failures
+- Rate limit handling with Retry-After header support
+- Configurable timeouts
+- Comprehensive error handling
+
 Documentation: https://shopify.dev/docs/apps/billing
 """
 
 import os
 import logging
-from typing import Optional, Any, Dict, List
+import asyncio
+from typing import Optional, Any, Dict, List, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from functools import wraps
 
 import httpx
 
@@ -20,6 +28,27 @@ logger = logging.getLogger(__name__)
 
 # Shopify API version to use
 SHOPIFY_API_VERSION = "2024-01"
+
+# Retry configuration
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_INITIAL_DELAY_SECONDS = 1.0
+DEFAULT_MAX_DELAY_SECONDS = 30.0
+DEFAULT_BACKOFF_MULTIPLIER = 2.0
+
+# Timeout configuration
+DEFAULT_CONNECT_TIMEOUT = 10.0
+DEFAULT_READ_TIMEOUT = 30.0
+DEFAULT_TOTAL_TIMEOUT = 60.0
+
+
+@dataclass
+class RetryConfig:
+    """Configuration for retry behavior."""
+    max_retries: int = DEFAULT_MAX_RETRIES
+    initial_delay: float = DEFAULT_INITIAL_DELAY_SECONDS
+    max_delay: float = DEFAULT_MAX_DELAY_SECONDS
+    backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER
+    retryable_status_codes: tuple = (429, 500, 502, 503, 504)
 
 
 class BillingInterval(str, Enum):
@@ -61,12 +90,86 @@ class ShopifyAPIError(Exception):
         message: str,
         status_code: Optional[int] = None,
         code: Optional[str] = None,
-        response: Optional[Dict] = None
+        response: Optional[Dict] = None,
+        retry_after: Optional[float] = None
     ):
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.response = response or {}
+        self.retry_after = retry_after  # Seconds to wait before retry (from Retry-After header)
+
+
+def with_retry(retry_config: Optional[RetryConfig] = None):
+    """
+    Decorator for adding retry logic to async methods.
+
+    Implements exponential backoff with jitter for transient failures.
+    Respects Retry-After header for rate limiting.
+    """
+    config = retry_config or RetryConfig()
+
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            delay = config.initial_delay
+
+            for attempt in range(config.max_retries + 1):
+                try:
+                    return await func(*args, **kwargs)
+                except ShopifyAPIError as e:
+                    last_exception = e
+
+                    # Check if retryable
+                    if e.status_code not in config.retryable_status_codes:
+                        raise
+
+                    if attempt == config.max_retries:
+                        logger.error("Max retries exceeded", extra={
+                            "attempt": attempt + 1,
+                            "max_retries": config.max_retries,
+                            "error": str(e)
+                        })
+                        raise
+
+                    # Handle rate limiting with Retry-After header
+                    if e.status_code == 429 and e.retry_after:
+                        delay = min(e.retry_after, config.max_delay)
+                    else:
+                        # Exponential backoff with jitter
+                        import random
+                        jitter = random.uniform(0, delay * 0.1)
+                        delay = min(delay * config.backoff_multiplier + jitter, config.max_delay)
+
+                    logger.warning("Retrying after error", extra={
+                        "attempt": attempt + 1,
+                        "delay_seconds": delay,
+                        "status_code": e.status_code,
+                        "error": str(e)
+                    })
+
+                    await asyncio.sleep(delay)
+
+                except (httpx.TimeoutException, httpx.RequestError) as e:
+                    last_exception = ShopifyAPIError(f"Request error: {e}")
+
+                    if attempt == config.max_retries:
+                        raise last_exception
+
+                    logger.warning("Retrying after network error", extra={
+                        "attempt": attempt + 1,
+                        "delay_seconds": delay,
+                        "error": str(e)
+                    })
+
+                    await asyncio.sleep(delay)
+                    delay = min(delay * config.backoff_multiplier, config.max_delay)
+
+            raise last_exception
+
+        return wrapper
+    return decorator
 
 
 # Alias for backwards compatibility
@@ -83,16 +186,31 @@ class ShopifyBillingClient:
     - Cancelling subscriptions
     - Usage-based billing (if needed)
 
+    Features:
+    - Automatic retry with exponential backoff
+    - Rate limit handling
+    - Configurable timeouts
+
     SECURITY: Access token must be encrypted at rest and decrypted only when needed.
     """
 
-    def __init__(self, shop_domain: str, access_token: str):
+    def __init__(
+        self,
+        shop_domain: str,
+        access_token: str,
+        retry_config: Optional[RetryConfig] = None,
+        connect_timeout: float = DEFAULT_CONNECT_TIMEOUT,
+        read_timeout: float = DEFAULT_READ_TIMEOUT
+    ):
         """
         Initialize billing client for a specific shop.
 
         Args:
             shop_domain: Shopify store domain (e.g., 'mystore.myshopify.com')
             access_token: Decrypted Shopify access token
+            retry_config: Optional retry configuration
+            connect_timeout: Connection timeout in seconds
+            read_timeout: Read timeout in seconds
         """
         if not shop_domain:
             raise ValueError("shop_domain is required")
@@ -103,10 +221,16 @@ class ShopifyBillingClient:
         self.access_token = access_token
         self.api_version = SHOPIFY_API_VERSION
         self.graphql_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/graphql.json"
+        self.retry_config = retry_config or RetryConfig()
 
         # HTTP client with appropriate timeouts
         self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0, connect=10.0),
+            timeout=httpx.Timeout(
+                connect=connect_timeout,
+                read=read_timeout,
+                write=read_timeout,
+                pool=connect_timeout
+            ),
             headers={
                 "Content-Type": "application/json",
                 "X-Shopify-Access-Token": self.access_token
@@ -123,9 +247,81 @@ class ShopifyBillingClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def _execute_graphql(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
+    async def _execute_graphql_with_retry(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
         """
-        Execute a GraphQL query against Shopify Admin API.
+        Execute a GraphQL query with automatic retry for transient failures.
+
+        This method wraps _execute_graphql_raw with retry logic.
+        """
+        return await self._execute_with_retry(query, variables)
+
+    async def _execute_with_retry(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
+        """Execute GraphQL with retry logic."""
+        last_exception = None
+        delay = self.retry_config.initial_delay
+
+        for attempt in range(self.retry_config.max_retries + 1):
+            try:
+                return await self._execute_graphql_raw(query, variables)
+            except ShopifyAPIError as e:
+                last_exception = e
+
+                # Check if retryable
+                if e.status_code not in self.retry_config.retryable_status_codes:
+                    raise
+
+                if attempt == self.retry_config.max_retries:
+                    logger.error("Max retries exceeded for Shopify API", extra={
+                        "shop_domain": self.shop_domain,
+                        "attempt": attempt + 1,
+                        "error": str(e)
+                    })
+                    raise
+
+                # Handle rate limiting with Retry-After header
+                if e.status_code == 429 and e.retry_after:
+                    delay = min(e.retry_after, self.retry_config.max_delay)
+                else:
+                    # Exponential backoff with jitter
+                    import random
+                    jitter = random.uniform(0, delay * 0.1)
+                    delay = min(delay * self.retry_config.backoff_multiplier + jitter, self.retry_config.max_delay)
+
+                logger.warning("Retrying Shopify API call", extra={
+                    "shop_domain": self.shop_domain,
+                    "attempt": attempt + 1,
+                    "delay_seconds": delay,
+                    "status_code": e.status_code
+                })
+
+                await asyncio.sleep(delay)
+
+            except (httpx.TimeoutException, httpx.RequestError) as e:
+                last_exception = ShopifyAPIError(f"Request error: {e}")
+
+                if attempt == self.retry_config.max_retries:
+                    raise last_exception
+
+                logger.warning("Retrying after network error", extra={
+                    "shop_domain": self.shop_domain,
+                    "attempt": attempt + 1,
+                    "delay_seconds": delay,
+                    "error": str(e)
+                })
+
+                await asyncio.sleep(delay)
+                delay = min(delay * self.retry_config.backoff_multiplier, self.retry_config.max_delay)
+
+        raise last_exception
+
+    # Alias for backward compatibility
+    async def _execute_graphql(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
+        """Execute GraphQL query with retry support."""
+        return await self._execute_with_retry(query, variables)
+
+    async def _execute_graphql_raw(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        Execute a GraphQL query against Shopify Admin API (raw, no retry).
 
         Args:
             query: GraphQL query or mutation
@@ -164,12 +360,23 @@ class ShopifyBillingClient:
                 )
 
             if response.status_code == 429:
+                # Extract Retry-After header if present
+                retry_after = None
+                retry_after_header = response.headers.get("Retry-After")
+                if retry_after_header:
+                    try:
+                        retry_after = float(retry_after_header)
+                    except ValueError:
+                        retry_after = 2.0  # Default fallback
+
                 logger.warning("Shopify API rate limited", extra={
-                    "shop_domain": self.shop_domain
+                    "shop_domain": self.shop_domain,
+                    "retry_after": retry_after
                 })
                 raise ShopifyAPIError(
                     "Rate limited - please retry after a delay",
-                    status_code=429
+                    status_code=429,
+                    retry_after=retry_after
                 )
 
             if response.status_code >= 400:

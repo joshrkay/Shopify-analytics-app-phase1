@@ -675,3 +675,230 @@ class BillingService:
             })
 
         return subscription
+
+    async def upgrade_subscription(
+        self,
+        new_plan_id: str,
+        timing: str = "immediate",
+        return_url: Optional[str] = None,
+        test_mode: bool = False
+    ) -> CheckoutResult:
+        """
+        Upgrade to a higher-tier plan.
+
+        Creates a new Shopify subscription that replaces the current one.
+        For immediate upgrades, proration is handled by Shopify.
+
+        Args:
+            new_plan_id: Target plan ID (must be higher tier)
+            timing: 'immediate' or 'next_cycle'
+            return_url: URL to redirect after checkout
+            test_mode: If True, creates test charge
+
+        Returns:
+            CheckoutResult with checkout URL
+
+        Raises:
+            PlanNotFoundError: If plan doesn't exist
+            SubscriptionError: If not a valid upgrade
+        """
+        current_sub = self._get_active_subscription()
+        if not current_sub:
+            raise SubscriptionError("No active subscription to upgrade")
+
+        current_plan = self._get_plan(current_sub.plan_id)
+        new_plan = self._get_plan(new_plan_id)
+
+        # Validate upgrade (new plan must have higher price)
+        current_price = current_plan.price_monthly_cents or 0
+        new_price = new_plan.price_monthly_cents or 0
+
+        if new_price <= current_price:
+            raise SubscriptionError(
+                f"Cannot upgrade: {new_plan.display_name} (${new_price/100}) is not higher than "
+                f"{current_plan.display_name} (${current_price/100})"
+            )
+
+        # Log the upgrade intent
+        self._log_billing_event(
+            event_type=BillingEventType.PLAN_CHANGED.value,
+            store_id=current_sub.store_id,
+            subscription_id=current_sub.id,
+            from_plan_id=current_plan.id,
+            to_plan_id=new_plan.id,
+            metadata={
+                "action": "upgrade_initiated",
+                "timing": timing,
+                "from_price_cents": current_price,
+                "to_price_cents": new_price
+            }
+        )
+
+        # Create new subscription (replaces existing)
+        return await self.create_checkout_url(
+            plan_id=new_plan_id,
+            return_url=return_url,
+            test_mode=test_mode
+        )
+
+    async def downgrade_subscription(
+        self,
+        new_plan_id: str,
+        return_url: Optional[str] = None,
+        test_mode: bool = False
+    ) -> CheckoutResult:
+        """
+        Downgrade to a lower-tier plan.
+
+        Downgrades always take effect at the end of the current billing period.
+        No proration or refund is provided by default.
+
+        Args:
+            new_plan_id: Target plan ID (must be lower tier)
+            return_url: URL to redirect after checkout
+            test_mode: If True, creates test charge
+
+        Returns:
+            CheckoutResult with checkout URL
+
+        Raises:
+            PlanNotFoundError: If plan doesn't exist
+            SubscriptionError: If not a valid downgrade
+        """
+        current_sub = self._get_active_subscription()
+        if not current_sub:
+            raise SubscriptionError("No active subscription to downgrade")
+
+        current_plan = self._get_plan(current_sub.plan_id)
+        new_plan = self._get_plan(new_plan_id)
+
+        # Validate downgrade (new plan must have lower or equal price)
+        current_price = current_plan.price_monthly_cents or 0
+        new_price = new_plan.price_monthly_cents or 0
+
+        if new_price >= current_price:
+            raise SubscriptionError(
+                f"Cannot downgrade: {new_plan.display_name} (${new_price/100}) is not lower than "
+                f"{current_plan.display_name} (${current_price/100})"
+            )
+
+        # Log the downgrade intent
+        self._log_billing_event(
+            event_type=BillingEventType.PLAN_CHANGED.value,
+            store_id=current_sub.store_id,
+            subscription_id=current_sub.id,
+            from_plan_id=current_plan.id,
+            to_plan_id=new_plan.id,
+            metadata={
+                "action": "downgrade_initiated",
+                "timing": "end_of_period",
+                "from_price_cents": current_price,
+                "to_price_cents": new_price,
+                "effective_at": current_sub.current_period_end.isoformat() if current_sub.current_period_end else None
+            }
+        )
+
+        self.db.commit()
+
+        logger.info("Downgrade initiated", extra={
+            "tenant_id": self.tenant_id,
+            "from_plan": current_plan.id,
+            "to_plan": new_plan.id,
+            "effective_at": current_sub.current_period_end
+        })
+
+        # For free plan, we can handle without Shopify checkout
+        if new_price == 0:
+            store = self._get_store()
+            return await self._schedule_downgrade_to_free(current_sub, new_plan, store)
+
+        # For paid downgrades, create new subscription
+        return await self.create_checkout_url(
+            plan_id=new_plan_id,
+            return_url=return_url,
+            test_mode=test_mode
+        )
+
+    async def _schedule_downgrade_to_free(
+        self,
+        current_sub,
+        free_plan: Plan,
+        store
+    ) -> CheckoutResult:
+        """
+        Schedule downgrade to free plan at end of billing period.
+
+        For free plan downgrades, we don't need Shopify checkout.
+        The subscription will be updated at period end by reconciliation job.
+        """
+        # Store the scheduled downgrade in metadata
+        current_sub.extra_metadata = current_sub.extra_metadata or {}
+        current_sub.extra_metadata["scheduled_downgrade"] = {
+            "to_plan_id": free_plan.id,
+            "effective_at": current_sub.current_period_end.isoformat() if current_sub.current_period_end else None,
+            "scheduled_at": datetime.now(timezone.utc).isoformat()
+        }
+
+        self.db.commit()
+
+        return CheckoutResult(
+            checkout_url="",
+            subscription_id=current_sub.id,
+            success=True
+        )
+
+    def get_plan_tier(self, plan_id: str) -> int:
+        """
+        Get the tier level of a plan for comparison.
+
+        Higher tier = higher number = more features/higher price.
+        """
+        plan = self._get_plan(plan_id)
+        price = plan.price_monthly_cents or 0
+
+        if price == 0:
+            return 0
+        elif price <= 3000:
+            return 1
+        elif price <= 10000:
+            return 2
+        else:
+            return 3
+
+    def can_upgrade_to(self, plan_id: str) -> bool:
+        """
+        Check if current subscription can upgrade to the given plan.
+
+        Args:
+            plan_id: Target plan ID
+
+        Returns:
+            True if upgrade is valid, False otherwise
+        """
+        current_sub = self._get_active_subscription()
+        if not current_sub:
+            return True
+
+        current_tier = self.get_plan_tier(current_sub.plan_id)
+        target_tier = self.get_plan_tier(plan_id)
+
+        return target_tier > current_tier
+
+    def can_downgrade_to(self, plan_id: str) -> bool:
+        """
+        Check if current subscription can downgrade to the given plan.
+
+        Args:
+            plan_id: Target plan ID
+
+        Returns:
+            True if downgrade is valid, False otherwise
+        """
+        current_sub = self._get_active_subscription()
+        if not current_sub:
+            return False
+
+        current_tier = self.get_plan_tier(current_sub.plan_id)
+        target_tier = self.get_plan_tier(plan_id)
+
+        return target_tier < current_tier
