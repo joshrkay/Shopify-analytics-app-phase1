@@ -225,9 +225,18 @@ class TestRBACEndpointContracts:
     def rbac_app(self):
         """Create app with RBAC-protected endpoints."""
         from src.platform.rbac import require_permission, require_role
+        from src.platform.tenant_context import TenantContextMiddleware
         from src.constants.permissions import Permission, Role
 
         app = FastAPI()
+
+        # Add tenant context middleware to parse JWT and populate request.state
+        # Note: Custom middleware uses app.middleware("http") pattern
+        try:
+            middleware = TenantContextMiddleware()
+            app.middleware("http")(middleware)
+        except Exception:
+            pass  # Middleware may fail if env vars not set, tests will mock
 
         @app.get("/api/admin")
         @require_permission(Permission.ADMIN_PLANS_VIEW)
