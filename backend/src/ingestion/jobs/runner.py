@@ -291,7 +291,7 @@ class JobRunner:
             return
 
         if wait_result.status == AirbyteJobStatus.SUCCEEDED:
-            job.mark_success(metadata={
+            job.mark_success(job_metadata={
                 "records_synced": wait_result.records_synced,
                 "bytes_synced": wait_result.bytes_synced,
                 "duration_seconds": wait_result.duration_seconds,

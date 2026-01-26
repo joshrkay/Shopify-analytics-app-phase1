@@ -63,7 +63,7 @@ class IngestionJob(Base, TimestampMixin, TenantScopedMixin):
         error_code: Error classification (auth_error|rate_limit|server_error|etc)
         started_at: When the job started running
         completed_at: When the job finished (success or final failure)
-        metadata: Additional job metadata (sync type, etc)
+        job_metadata: Additional job metadata (sync type, etc)
     """
 
     __tablename__ = "ingestion_jobs"
@@ -152,8 +152,8 @@ class IngestionJob(Base, TimestampMixin, TenantScopedMixin):
         comment="Scheduled time for next retry attempt"
     )
 
-    # Additional metadata
-    metadata = Column(
+    # Additional job metadata
+    job_metadata = Column(
         JSONType,
         nullable=True,
         default=dict,
@@ -221,12 +221,12 @@ class IngestionJob(Base, TimestampMixin, TenantScopedMixin):
         self.run_id = run_id
         self.started_at = datetime.now(timezone.utc)
 
-    def mark_success(self, metadata: dict | None = None) -> None:
+    def mark_success(self, job_metadata: dict | None = None) -> None:
         """Mark job as successful."""
         self.status = JobStatus.SUCCESS
         self.completed_at = datetime.now(timezone.utc)
-        if metadata:
-            self.metadata = {**(self.metadata or {}), **metadata}
+        if job_metadata:
+            self.job_metadata = {**(self.job_metadata or {}), **job_metadata}
 
     def mark_failed(
         self,

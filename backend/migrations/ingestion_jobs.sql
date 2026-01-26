@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS ingestion_jobs (
     completed_at TIMESTAMP WITH TIME ZONE,
     next_retry_at TIMESTAMP WITH TIME ZONE,
 
-    -- Additional metadata
-    metadata JSONB DEFAULT '{}'::JSONB,
+    -- Additional job metadata
+    job_metadata JSONB DEFAULT '{}'::JSONB,
 
     -- Standard timestamps (from TimestampMixin)
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -182,7 +182,7 @@ COMMENT ON COLUMN ingestion_jobs.error_code IS
 COMMENT ON COLUMN ingestion_jobs.next_retry_at IS
     'Scheduled time for next retry attempt (only for failed status)';
 
-COMMENT ON COLUMN ingestion_jobs.metadata IS
+COMMENT ON COLUMN ingestion_jobs.job_metadata IS
     'Additional job metadata: sync type, records_synced, bytes_synced, duration_seconds, requeued_from, etc.';
 
 COMMENT ON INDEX ix_ingestion_jobs_active_unique IS

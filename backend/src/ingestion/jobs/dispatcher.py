@@ -110,7 +110,7 @@ class JobDispatcher:
         connector_id: str,
         external_account_id: str,
         correlation_id: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        job_metadata: Optional[dict] = None,
     ) -> IngestionJob:
         """
         Dispatch a new ingestion job.
@@ -122,7 +122,7 @@ class JobDispatcher:
             connector_id: Internal connector/connection ID
             external_account_id: External platform account ID
             correlation_id: Request correlation ID for tracing
-            metadata: Additional job metadata
+            job_metadata: Additional job metadata
 
         Returns:
             Created IngestionJob in QUEUED status
@@ -156,7 +156,7 @@ class JobDispatcher:
             status=JobStatus.QUEUED,
             retry_count=0,
             correlation_id=correlation_id,
-            metadata=metadata or {},
+            job_metadata=job_metadata or {},
         )
 
         try:
@@ -349,8 +349,8 @@ class JobDispatcher:
             connector_id=original_job.connector_id,
             external_account_id=original_job.external_account_id,
             correlation_id=correlation_id or original_job.correlation_id,
-            metadata={
-                **(original_job.metadata or {}),
+            job_metadata={
+                **(original_job.job_metadata or {}),
                 "requeued_from": job_id,
                 "original_error": original_job.error_message,
             },

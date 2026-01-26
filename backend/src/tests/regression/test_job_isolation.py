@@ -378,7 +378,7 @@ class TestJobRequeue:
         assert requeued.job_id != original.job_id
         assert requeued.status == JobStatus.QUEUED
         assert requeued.retry_count == 0
-        assert requeued.metadata.get("requeued_from") == original.job_id
+        assert requeued.job_metadata.get("requeued_from") == original.job_id
 
     def test_requeue_fails_if_not_in_dlq(
         self,

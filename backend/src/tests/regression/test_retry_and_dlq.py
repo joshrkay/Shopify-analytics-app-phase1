@@ -270,11 +270,11 @@ class TestJobModelLifecycle:
         db_session.add(job)
         db_session.flush()
 
-        job.mark_success(metadata={"records_synced": 1000})
+        job.mark_success(job_metadata={"records_synced": 1000})
 
         assert job.status == JobStatus.SUCCESS
         assert job.completed_at is not None
-        assert job.metadata.get("records_synced") == 1000
+        assert job.job_metadata.get("records_synced") == 1000
 
     def test_mark_failed_increments_retry_count(self, db_session, test_tenant_id):
         """mark_failed increments retry count."""
