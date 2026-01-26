@@ -55,15 +55,15 @@ class BackfillExecution(Base, TimestampMixin, TenantScopedMixin):
     )
 
     start_date = Column(
-        String(50),
+        DateTime(timezone=True),
         nullable=False,
-        comment="Backfill start date (YYYY-MM-DD or YYYY-MM-DD HH:MI:SS)"
+        comment="Backfill start date"
     )
 
     end_date = Column(
-        String(50),
+        DateTime(timezone=True),
         nullable=False,
-        comment="Backfill end date (YYYY-MM-DD or YYYY-MM-DD HH:MI:SS)"
+        comment="Backfill end date"
     )
 
     status = Column(
