@@ -112,6 +112,8 @@ class TenantContext:
             - Single tenant: "tenant_id = 'tenant_123'"
             - Multi-tenant: "tenant_id IN ('tenant_123', 'tenant_456')"
         """
+        if not self.allowed_tenants:
+            return "1=0"  # Guarantees no rows are returned
         if len(self.allowed_tenants) == 1:
             return f"tenant_id = '{self.allowed_tenants[0]}'"
         else:
