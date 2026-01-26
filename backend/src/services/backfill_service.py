@@ -26,6 +26,10 @@ from src.platform.audit import (
     AuditAction,
     log_system_audit_event,
 )
+from src.jobs.job_entitlements import (
+    JobEntitlementChecker,
+    JobType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +111,7 @@ class BackfillService:
         start_date: str,
         end_date: str,
         backfill_id: Optional[str] = None,
-    ) -> BackfillResult:
+    ) -> Optional[BackfillResult]:
         """
         Execute a dbt backfill for the specified date range.
 
@@ -118,7 +122,7 @@ class BackfillService:
             backfill_id: Optional backfill ID for tracking (generated if not provided)
 
         Returns:
-            BackfillResult with execution details
+            BackfillResult with execution details, or None if skipped due to entitlements
 
         Raises:
             InvalidDateRangeError: If date range is invalid

@@ -9,12 +9,32 @@ enforcement:
   audit_retention_days: 365
   failure_behavior: "BLOCK_DEPLOYMENT"
 
+# Escalation and Disagreement Handling
+# If primary approver rejects or there's disagreement:
+# 1. Secondary approver can override (with documented reason)
+# 2. If both disagree, escalate to CTO for final decision
+# 3. All escalations must be logged in audit trail
+escalation:
+  disagreement_path:
+    - step: "secondary_override"
+      requires: "documented_reason"
+      audit_required: true
+    - step: "cto_escalation"
+      trigger: "both_approvers_disagree"
+      sla_hours: 24
+      final_authority: true
+
 change_approvals:
   dbt_model_change:
     approval_required: true
+    # WHO APPROVES:
+    # - Primary: Data Engineer (must approve)
+    # - Secondary: Analytics Tech Lead (can override primary if needed)
     approvers:
       primary: "Data Engineer"
       secondary: "Analytics Tech Lead"
+    # SLA: 24 hours from request to approval decision
+    # If SLA exceeded, auto-escalate to secondary approver
     sla_hours: 24
     pre_approval_checklist:
       - "dbt test passes locally"
@@ -22,12 +42,20 @@ change_approvals:
       - "query impact analysis complete"
       - "RLS impact assessment complete"
     requires_deployment_window: false
+    # Disagreement: If primary rejects, secondary can approve with reason
+    # If both reject, escalate to CTO (see escalation section above)
 
   metric_definition_change:
     approval_required: true
+    # WHO APPROVES:
+    # - Primary: Product Manager (business impact owner)
+    # - Secondary: Analytics Tech Lead (technical validation)
+    # More complex - affects merchant reports and dashboards
     approvers:
       primary: "Product Manager"
       secondary: "Analytics Tech Lead"
+    # SLA: 48 hours (longer due to business impact assessment)
+    # Requires merchant communication plan before approval
     sla_hours: 48
     pre_approval_checklist:
       - "metric definition document"
@@ -35,50 +63,92 @@ change_approvals:
       - "merchant communication plan"
       - "impact on existing dashboards"
       - "backfill strategy (if needed)"
+    # BREAKING CHANGE ASSESSMENT: Required
+    # Must explicitly state: "This is breaking" or "This is non-breaking"
+    # Breaking changes require additional merchant notification window
     breaking_change_assessment: "required"
+    # Disagreement: Product Manager owns business decision
+    # If PM rejects, Analytics Tech Lead cannot override
+    # Escalate to CTO only if technical feasibility is questioned
 
   rls_rule_change:
     approval_required: true
+    # WHO APPROVES:
+    # - Primary: Security Engineer (security authority)
+    # - Secondary: Data Engineer (implementation validation)
+    # URGENT - security issues require fast approval
     approvers:
       primary: "Security Engineer"
       secondary: "Data Engineer"
+    # SLA: 4 hours (URGENT - security issue)
+    # If SLA exceeded, auto-trigger emergency approval path
     sla_hours: 4
     pre_approval_checklist:
       - "RLS test cases pass"
       - "cross-tenant access test passes"
       - "no silent data leaks (manual test)"
+    # EMERGENCY APPROVAL: For critical security fixes
+    # Allows: CTO + 1 approver (Security Engineer or Data Engineer)
+    # Requires: incident ticket + post-mortem commitment
     emergency_approval:
       allows: ["CTO", "Security Engineer"]
       min_approvers: 2
       requires: ["incident ticket", "post-mortem"]
+    # Disagreement: Security Engineer decision is final for security
+    # If Security Engineer rejects, no override possible
+    # Escalate to CTO only for resource/timeline conflicts
 
   dashboard_default_change:
     approval_required: false
     change_type: "cosmetic"
+    # No approval needed - cosmetic changes only
+    # Notification sent to #analytics Slack channel for visibility
     notification: "slack #analytics"
 
   visualization_layout_change:
     approval_required: false
     change_type: "cosmetic"
+    # No approval needed - cosmetic changes only
+    # Notification sent to #analytics Slack channel for visibility
     notification: "slack #analytics"
 
   superset_dataset_change:
     approval_required: true
+    # WHO APPROVES:
+    # - Primary: Data Engineer (dataset owner)
+    # - Secondary: Analytics Tech Lead (technical validation)
     approvers:
       primary: "Data Engineer"
       secondary: "Analytics Tech Lead"
+    # SLA: 24 hours from request to approval decision
     sla_hours: 24
     pre_approval_checklist:
       - "dataset schema validated"
       - "RLS policies verified"
       - "performance benchmarked"
+    # Disagreement: Same as dbt_model_change (secondary can override)
 
-# Rollback bypasses normal approval - requires only authority verification
+# ROLLBACK APPROVAL
+# Rollback bypasses normal approval workflow for speed
+# Rollback is FASTER than forward fix (no checklist, no SLA wait)
+# Rationale: If something is broken, we need to revert immediately
+# Post-rollback review is required to understand root cause
 rollback_approval:
   bypass_normal_approval: true
+  # WHO CAN TRIGGER ROLLBACK:
+  # - Analytics Oncall (operational authority)
+  # - Security Oncall (security incidents)
+  # - CTO (executive override)
+  # Single approver sufficient (no secondary needed for speed)
   trigger_authority:
     - "Analytics Oncall"
     - "Security Oncall"
     - "CTO"
+  # Rollback speed: Immediate (no SLA, no checklist)
+  # vs Forward fix: 4-48 hours depending on change type
+  sla_hours: 0
   audit_required: true
+  # Post-rollback review required within 48 hours
+  # Must document: why rollback was needed, root cause, prevention plan
   post_rollback_review: "required"
+  post_rollback_review_sla_hours: 48

@@ -11,6 +11,7 @@ import '@shopify/polaris/build/esm/styles.css';
 
 import AdminPlans from './pages/AdminPlans';
 import Analytics from './pages/Analytics';
+import Paywall from './pages/Paywall';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
         <Routes>
           <Route path="/admin/plans" element={<AdminPlans />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/paywall" element={<Paywall />} />
           <Route path="/" element={<Navigate to="/analytics" replace />} />
         </Routes>
       </BrowserRouter>

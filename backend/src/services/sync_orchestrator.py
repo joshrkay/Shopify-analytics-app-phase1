@@ -31,6 +31,11 @@ from src.services.airbyte_service import (
     AirbyteService,
     ConnectionNotFoundServiceError,
 )
+from src.jobs.job_entitlements import (
+    JobEntitlementChecker,
+    JobType,
+    JobEntitlementError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +158,7 @@ class SyncOrchestrator:
         self,
         connection_id: str,
         timeout_seconds: float = DEFAULT_SYNC_TIMEOUT_SECONDS,
-    ) -> SyncResult:
+    ) -> Optional[SyncResult]:
         """
         Trigger a sync with automatic retry on failure.
 
@@ -165,12 +170,48 @@ class SyncOrchestrator:
             timeout_seconds: Maximum wait time per sync attempt
 
         Returns:
-            SyncResult with final status and retry information
+            SyncResult with final status and retry information, or None if skipped due to entitlements
 
         Raises:
             ConnectionNotFoundError: If connection not found
             SyncFailedError: If sync fails after all retries
+            JobEntitlementError: If job is denied and skip_on_deny is False
         """
+        # Check job entitlements before starting sync
+        checker = JobEntitlementChecker(self.db)
+        entitlement_result = checker.check_job_entitlement(self.tenant_id, JobType.SYNC)
+        
+        if not entitlement_result.is_allowed:
+            # Log skipped job
+            await checker.log_job_skipped(
+                tenant_id=self.tenant_id,
+                job_type=JobType.SYNC.value,
+                reason=entitlement_result.reason or "Sync job denied",
+                billing_state=entitlement_result.billing_state,
+                plan_id=entitlement_result.plan_id,
+            )
+            
+            logger.info(
+                "Sync job skipped due to entitlement",
+                extra={
+                    "tenant_id": self.tenant_id,
+                    "connection_id": connection_id,
+                    "reason": entitlement_result.reason,
+                    "billing_state": entitlement_result.billing_state.value,
+                }
+            )
+            
+            # Return None to indicate job was skipped
+            return None
+        
+        # Log allowed job
+        await checker.log_job_allowed(
+            tenant_id=self.tenant_id,
+            job_type=JobType.SYNC.value,
+            billing_state=entitlement_result.billing_state,
+            plan_id=entitlement_result.plan_id,
+        )
+        
         connection = self._airbyte_service.get_connection(connection_id)
         if not connection:
             raise ConnectionNotFoundError(f"Connection {connection_id} not found")
