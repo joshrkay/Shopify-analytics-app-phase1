@@ -28,17 +28,26 @@ def _get_postgres_url():
     database_url = os.getenv("DATABASE_URL")
 
     if database_url:
+        # Skip if SQLite is configured (RLS not supported)
+        if database_url.startswith("sqlite"):
+            return None
         # Handle Render's postgres:// URL format
         if database_url.startswith("postgres://"):
             database_url = database_url.replace("postgres://", "postgresql://", 1)
-        return database_url
+        # Only return if it's a PostgreSQL URL
+        if database_url.startswith("postgresql://"):
+            return database_url
+        return None
 
     # Try default local PostgreSQL
     return "postgresql://test:test@localhost:5432/test_billing_db"
 
 
-def _is_postgres_available(url: str) -> bool:
-    """Check if PostgreSQL is available."""
+def _is_postgres_available() -> bool:
+    """Check if PostgreSQL is available and connectable."""
+    url = _get_postgres_url()
+    if not url:
+        return False
     try:
         engine = create_engine(url, pool_pre_ping=True)
         with engine.connect() as conn:
@@ -50,8 +59,8 @@ def _is_postgres_available(url: str) -> bool:
 
 # Skip all tests if PostgreSQL is not available
 pytestmark = pytest.mark.skipif(
-    not _is_postgres_available(_get_postgres_url()),
-    reason="PostgreSQL required for RLS tests. Set DATABASE_URL or run local postgres."
+    not _is_postgres_available(),
+    reason="PostgreSQL required for RLS tests. Set DATABASE_URL to PostgreSQL or run local postgres."
 )
 
 
@@ -59,6 +68,8 @@ pytestmark = pytest.mark.skipif(
 def pg_engine():
     """Create PostgreSQL engine for RLS tests."""
     url = _get_postgres_url()
+    if not url:
+        pytest.skip("PostgreSQL URL not available")
     engine = create_engine(url, pool_pre_ping=True)
     yield engine
 
