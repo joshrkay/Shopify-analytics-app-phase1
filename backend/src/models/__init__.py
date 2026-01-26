@@ -12,6 +12,7 @@ from src.models.subscription import Subscription
 from src.models.usage import UsageRecord, UsageAggregate
 from src.models.billing_event import BillingEvent
 from src.models.airbyte_connection import TenantAirbyteConnection, ConnectionStatus, ConnectionType
+from src.models.backfill import BackfillExecution, BackfillStatus
 
 __all__ = [
     "TimestampMixin",
@@ -26,4 +27,6 @@ __all__ = [
     "TenantAirbyteConnection",
     "ConnectionStatus",
     "ConnectionType",
+    "BackfillExecution",
+    "BackfillStatus",
 ]
