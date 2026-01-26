@@ -175,13 +175,54 @@
     }
   ],
   "billing_config": {
-    "grace_period_days": 7,
+    "grace_period_days": 3,
     "warning_notification_days_before": 3,
     "access_during_grace": "full",
     "auto_cancel_after_suspension_days": 30,
     "upgrade_timing": "immediate",
     "downgrade_timing": "end_of_period",
     "proration_enabled": true
+  },
+  "billing_rules": {
+    "grace_period_days": 3,
+    "retry_strategy": "exponential_backoff",
+    "max_retries": 5,
+    "retry_intervals_hours": [24, 48, 72, 96, 120]
+  },
+  "access_rules": {
+    "active": {
+      "access_level": "full",
+      "restrictions": [],
+      "warnings": []
+    },
+    "past_due": {
+      "access_level": "read_only",
+      "restrictions": ["data_export", "ai_actions", "api_write"],
+      "warnings": ["payment_past_due"]
+    },
+    "grace_period": {
+      "access_level": "full",
+      "restrictions": [],
+      "warnings": ["payment_grace_period"],
+      "duration_days": 3
+    },
+    "canceled": {
+      "access_level": "full_until_period_end",
+      "restrictions": [],
+      "warnings": ["subscription_canceled"],
+      "access_expires_at": "period_end"
+    },
+    "expired": {
+      "access_level": "read_only_analytics",
+      "restrictions": ["data_export", "ai_actions", "ai_insights", "api_access", "custom_reports", "scheduled_reports"],
+      "warnings": ["subscription_expired"],
+      "allow_read_analytics": true
+    },
+    "frozen": {
+      "access_level": "limited",
+      "restrictions": ["data_export", "ai_actions", "api_write"],
+      "warnings": ["payment_failed_frozen"]
+    }
   },
   "feature_descriptions": {
     "dashboard_basic": "Basic analytics dashboards",
