@@ -1,7 +1,7 @@
 # AI Growth Analytics - Backend Makefile
 # Provides common commands for development and testing
 
-.PHONY: help install test test-unit test-regression test-billing test-platform lint format clean
+.PHONY: help install test test-unit test-regression test-billing test-platform test-raw-rls lint format clean
 
 # Default target
 help:
@@ -16,6 +16,7 @@ help:
 	@echo "  make test-regression  Run billing regression tests"
 	@echo "  make test-billing  Run all billing-related tests"
 	@echo "  make test-platform Run platform tests"
+	@echo "  make test-raw-rls  Run raw warehouse RLS tests (requires PostgreSQL)"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make lint          Run linter (ruff)"
@@ -70,6 +71,16 @@ test-platform:
 		--cov=src/platform \
 		--cov=src/repositories \
 		--cov-report=term-missing
+
+test-raw-rls:
+	@echo "Running Raw Warehouse RLS Isolation Tests..."
+	@echo "Requires PostgreSQL. Set DATABASE_URL or run:"
+	@echo "  docker run -d --name test-pg -e POSTGRES_PASSWORD=test -p 5432:5432 postgres:15"
+	@echo ""
+	PYTHONPATH=. pytest src/tests/platform/test_raw_rls.py \
+		-v \
+		--tb=short \
+		--timeout=300
 
 # =============================================================================
 # Code Quality

@@ -221,6 +221,23 @@ jobs:
             --cov=src/jobs/reconcile_subscriptions \
             --cov-report=term-missing || exit 1
 
+      - name: Run Raw Warehouse RLS Tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/test_billing_db"
+          FRONTEGG_CLIENT_ID: "test-client-id"
+          FRONTEGG_CLIENT_SECRET: "test-client-secret"
+          ENV: "test"
+          PYTHONPATH: "${{ github.workspace }}/backend"
+        run: |
+          echo "=========================================="
+          echo "Running Raw Warehouse RLS Isolation Tests"
+          echo "=========================================="
+          pytest src/tests/platform/test_raw_rls.py \
+            -v \
+            --tb=short \
+            --timeout=300 || exit 1
+
       - name: Billing Regression Summary
         if: always()
         run: |
@@ -236,6 +253,13 @@ jobs:
           echo "  6. Reconciliation Drift Correction"
           echo "  7. HMAC Security Verification"
           echo "  8. Cross-Tenant Isolation"
+          echo ""
+          echo "Raw Warehouse RLS Test Coverage:"
+          echo "  1. Tenant sees only own data"
+          echo "  2. Cross-tenant access blocked"
+          echo "  3. Empty context returns no data"
+          echo "  4. SQL injection blocked"
+          echo "  5. Context switching isolation"
 
   # dbt validation: validates dbt models, schema, and data quality
   dbt-validation:
