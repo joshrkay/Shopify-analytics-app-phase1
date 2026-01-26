@@ -1,0 +1,66 @@
+version: 2
+
+# Dashboard Metric Validation Tests
+# These tests ensure dbt models produce identical output to dashboard queries
+#
+# Test Categories:
+#   1. Revenue validation - Exact match with dashboard SUM(revenue)
+#   2. ROAS validation - Exact match with dashboard ROAS calculation
+#   3. Empty state - Graceful handling of no data scenarios
+#   4. Edge cases - Zero spend, null values, division by zero
+#
+# Acceptance Criteria:
+#   - QA: Verify mobile layout works correctly
+#   - Dev: dbt metrics must exactly match dashboard metrics
+#   - Product: Dashboard answers 5 merchant questions without confusion
+
+tests:
+  - name: test_metric_validation
+    description: >
+      Validates that dbt revenue metrics exactly match dashboard queries.
+      Uses SUM(revenue) from fact_orders for last 30 days.
+    config:
+      severity: error
+      tags:
+        - dashboard
+        - regression
+        - metrics
+
+  - name: test_roas_validation
+    description: >
+      Validates that dbt ROAS calculations exactly match dashboard ROAS.
+      Uses revenue/spend ratio from fact_campaign_performance.
+      Handles zero-spend edge case (returns NULL -> displayed as N/A).
+    config:
+      severity: error
+      tags:
+        - dashboard
+        - regression
+        - metrics
+        - roas
+
+  - name: test_empty_state_handling
+    description: >
+      Validates graceful handling of empty state scenarios.
+      - New tenant with no data returns 0
+      - Filtered queries with no results return empty set
+      - Dashboard displays appropriate empty state message
+    config:
+      severity: error
+      tags:
+        - dashboard
+        - edge-case
+        - empty-state
+
+  - name: test_zero_spend_edge_case
+    description: >
+      Validates zero spend edge case handling.
+      - Zero spend campaigns display ROAS as 'N/A'
+      - Division by zero does not cause errors
+      - ROAS is NULL for zero-spend (not 0 or infinity)
+    config:
+      severity: error
+      tags:
+        - dashboard
+        - edge-case
+        - roas
