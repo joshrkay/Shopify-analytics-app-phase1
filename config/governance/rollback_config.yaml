@@ -1,0 +1,88 @@
+# Rollback Configuration
+# Defines rollback triggers, scopes, actions, and verification requirements
+# AI MUST NOT trigger rollbacks - only orchestrate when authorized
+
+rollback_control:
+  trigger_authority:
+    - "Analytics Oncall"
+    - "Security Oncall"
+    - "CTO"
+  verification_required:
+    - "error rate normalized"
+    - "latency stabilized"
+  post_rollback_review: "required"
+
+rollback_strategy:
+  triggers:
+    - "Metric mismatch vs dbt output"
+    - "SLA violation (>5% of queries timeout)"
+    - "Merchant escalation (>3 tickets in 1 hour)"
+    - "Data quality check fails"
+    - "Security incident detected"
+
+  rollback_scope:
+    global:
+      description: "Revert all merchants"
+      use_when: "Critical security issue or data corruption"
+    tenant_subset:
+      description: "Revert only affected tenants"
+      use_when: "Issue isolated to specific merchants"
+    gradual:
+      description: "Revert 10% of tenants per 5 min (canary rollback)"
+      use_when: "Uncertain blast radius, need controlled rollback"
+
+  rollback_actions:
+    - action: "revert_superset_dataset"
+      target: "superset_dataset_${dataset_name}"
+      version: "previous_stable"
+      time_to_complete_minutes: 2
+      order: 1
+
+    - action: "clear_redis_cache"
+      scope: "all_keys"
+      time_to_complete_minutes: 1
+      order: 2
+
+    - action: "restore_dashboard_json"
+      source: "s3://analytics-backups/dashboards/${dashboard_id}.${timestamp}.json"
+      time_to_complete_minutes: 1
+      order: 3
+
+    - action: "notify_slack"
+      channel: "#analytics-alerts"
+      message_template: |
+        ROLLBACK EXECUTED
+        Dataset: ${dataset_name}
+        Reason: ${trigger_reason}
+        Affected Merchants: ${merchant_count}
+        Estimated Impact: ${impact_minutes} min downtime
+      order: 4
+
+    - action: "auto_create_incident"
+      system: "pagerduty"
+      severity: "high"
+      assign_to: "analytics_oncall"
+      order: 5
+
+  gradual_rollback:
+    enabled: true
+    canary_percentage: 10
+    rollout_interval_minutes: 5
+    success_criteria:
+      - "no new error alerts in 10 min"
+      - "query latency stable"
+    success_action: "continue_rollout"
+    failure_action: "pause_and_alert"
+
+  verification:
+    checks:
+      - name: "error_rate_check"
+        query: "SELECT error_rate FROM metrics WHERE time > NOW() - INTERVAL '5 minutes'"
+        threshold: 0.01
+        comparison: "less_than"
+      - name: "latency_check"
+        query: "SELECT p95_latency FROM metrics WHERE time > NOW() - INTERVAL '5 minutes'"
+        threshold: 5000
+        comparison: "less_than"
+    timeout_seconds: 300
+    retry_interval_seconds: 30

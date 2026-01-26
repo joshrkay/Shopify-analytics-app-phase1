@@ -1,0 +1,123 @@
+# AI Restrictions and Guardrails Configuration
+# Defines what AI agents MUST NOT do and how they should refuse
+
+ai_restrictions:
+  prohibited_actions:
+    - id: "classify_breaking_changes"
+      description: "Classify breaking vs non-breaking changes"
+      reason: "Requires business domain knowledge and merchant impact assessment"
+      redirect_to: "Product Manager or Analytics Tech Lead"
+
+    - id: "approve_metric_changes"
+      description: "Approve metric definition changes"
+      reason: "Metric changes affect merchant reports and require human accountability"
+      redirect_to: "Product Manager"
+
+    - id: "decide_merchant_communication"
+      description: "Decide merchant communication content or timing"
+      reason: "Customer communication requires human judgment on tone and impact"
+      redirect_to: "Customer Success or Product Manager"
+
+    - id: "sign_off_production"
+      description: "Sign off on production deployments"
+      reason: "Production sign-off requires human accountability"
+      redirect_to: "Analytics Tech Lead"
+
+    - id: "interpret_discrepancies"
+      description: "Interpret merchant-reported data discrepancies"
+      reason: "Discrepancy root cause requires domain knowledge and investigation"
+      redirect_to: "Data Engineer or Support"
+
+    - id: "trigger_rollback"
+      description: "Autonomously trigger production rollbacks"
+      reason: "Rollback decisions require incident assessment by authorized personnel"
+      redirect_to: "Analytics Oncall or Security Oncall"
+
+    - id: "modify_rls_rules"
+      description: "Modify RLS (Row Level Security) rules without approval"
+      reason: "RLS changes are security-critical and require Security Engineer review"
+      redirect_to: "Security Engineer"
+
+    - id: "auto_migrate_metrics"
+      description: "Auto-migrate merchants to new metric versions"
+      reason: "Metric migrations require merchant notification and explicit approval"
+      redirect_to: "Product Manager"
+
+  required_behaviors:
+    - id: "log_all_decisions"
+      description: "Log all decision points with reasoning"
+      enforcement: "mandatory"
+
+    - id: "require_human_approval"
+      description: "Require explicit human approval for any production change"
+      enforcement: "mandatory"
+
+    - id: "preserve_audit_trail"
+      description: "Never delete or modify audit logs"
+      enforcement: "mandatory"
+
+    - id: "fail_safe"
+      description: "When uncertain, block and escalate rather than proceed"
+      enforcement: "mandatory"
+
+  refusal_response:
+    template: |
+      REFUSED: {action_description}
+
+      Reason: {reason}
+
+      This action requires human decision-making.
+      Please contact: {redirect_to}
+
+      Request ID: {request_id}
+      Timestamp: {timestamp}
+
+    log_fields:
+      - request_id
+      - timestamp
+      - action_attempted
+      - reason
+      - user_context
+      - redirect_target
+
+human_responsibility_examples:
+  metric_definition_change:
+    scenario:
+      change: "Revenue metric now includes shipping fees"
+      old_definition: "SUM(order_subtotal)"
+      new_definition: "SUM(order_subtotal + shipping_fee)"
+      breaking: true
+    required_decisions:
+      - "Is shipping fee always accurate in the database?"
+      - "How do we communicate to merchants?"
+      - "Do we backfill historical data?"
+      - "What if a merchant wants old definition?"
+    ai_cannot_decide: "Only domain expert knows if change is safe"
+
+  breaking_vs_nonbreaking:
+    scenario_breaking:
+      change: "ROAS calculation: swap numerator/denominator"
+      merchant_impact: "Charts invert (950% ROAS becomes 105%)"
+      why_human_needed: "Merchant will think analytics is broken. Needs proactive comms."
+    scenario_nonbreaking:
+      change: "Remove unused 'Abandoned Cart Rate' card from dashboard"
+      merchant_impact: "Dashboard layout shifts"
+      why_human_needed: "Usage analytics show no one clicks it. But confirm with customer?"
+
+  data_discrepancy:
+    scenario:
+      merchant_says: "Revenue dashboard shows $50K but Shopify shows $48K"
+      possible_causes:
+        - "RLS excluding some stores (merchant has 3 stores)"
+        - "Data freshness (sync ran 2 hours ago)"
+        - "Metric definition (excludes refunds or tax)"
+        - "Rounding errors (display vs calculation)"
+        - "Cache showing stale data"
+    investigation_needed: "AI cannot determine which cause without human interpretation"
+
+  production_signoff:
+    scenario:
+      metric_change: "Refund policy updated. Refunds now counted in 'Net Revenue'."
+      staging_tests: "All passed"
+      merchant_impact: "500+ merchants see different numbers"
+    why_human_needed: "Sign-off = accountability. AI cannot take responsibility."

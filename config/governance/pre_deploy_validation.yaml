@@ -1,0 +1,147 @@
+# Pre-Deploy Validation Configuration
+# Defines all checks that must pass before deployment
+# Output is deterministic JSON - no retries without human intervention
+
+validation_output:
+  format: "json"
+  required_fields:
+    - "check_name"
+    - "status"
+    - "measured_value"
+    - "threshold"
+    - "blocking"
+
+pre_deploy_validation:
+  dbt_models:
+    checks:
+      - name: "models_compile"
+        description: "All models compile without error"
+        command: "dbt compile"
+        blocking: true
+      - name: "tests_pass"
+        description: "All tests pass (>95% coverage)"
+        command: "dbt test"
+        threshold: 0.95
+        blocking: true
+      - name: "no_deprecation_warnings"
+        description: "No deprecation warnings in output"
+        blocking: true
+      - name: "docs_generated"
+        description: "dbt docs generated successfully"
+        command: "dbt docs generate"
+        blocking: true
+      - name: "lineage_acyclic"
+        description: "dbt lineage acyclic (no circular deps)"
+        blocking: true
+    failure_behavior: "BLOCK_DEPLOYMENT"
+
+  superset_dataset_sync:
+    checks:
+      - name: "sync_time"
+        description: "Sync completes in <5 minutes"
+        threshold_seconds: 300
+        blocking: true
+      - name: "row_count_match"
+        description: "Row count matches dbt source"
+        tolerance_percent: 1
+        blocking: true
+      - name: "schema_match"
+        description: "Schema matches dbt output"
+        blocking: true
+      - name: "cache_freshness"
+        description: "No stale cache entries (age < 1 min)"
+        max_age_seconds: 60
+        blocking: true
+    validation_query: |
+      SELECT COUNT(*) FROM superset_dataset
+      WHERE sync_timestamp > NOW() - INTERVAL '1 minute'
+    failure_behavior: "BLOCK_DEPLOYMENT"
+
+  rls_verification:
+    checks:
+      - name: "cross_tenant_isolation"
+        description: "Cross-tenant isolation test passes"
+        blocking: true
+      - name: "multi_tenant_access"
+        description: "Multi-tenant access test passes"
+        blocking: true
+      - name: "merchant_data_isolation"
+        description: "Merchant sees only own data"
+        blocking: true
+      - name: "agency_client_isolation"
+        description: "Agency sees assigned clients only"
+        blocking: true
+      - name: "super_admin_access"
+        description: "Super admin sees all data"
+        blocking: true
+    test_coverage:
+      min_test_tenants: 3
+      require_edge_cases: true
+      simulate_agency_clients: 5
+    failure_behavior: "BLOCK_DEPLOYMENT"
+
+  dashboard_performance:
+    checks:
+      - name: "load_time"
+        description: "All dashboards load in <5s"
+        threshold_seconds: 5
+        blocking: false
+      - name: "network_conditions"
+        description: "Measured on GCP VM (us-central1) with 4G throttling"
+        blocking: false
+      - name: "empty_cache_test"
+        description: "Measured with empty Redis cache"
+        blocking: false
+      - name: "no_console_errors"
+        description: "No browser console errors"
+        blocking: true
+    sample_size:
+      modified_dashboards: "all"
+      most_used_dashboards: 5
+    failure_behavior: "WARN_REQUIRE_APPROVAL"
+
+  metrics_validation:
+    checks:
+      - name: "calculation_match"
+        description: "Metric calculation matches dbt"
+        blocking: true
+      - name: "historical_comparison"
+        description: "Compare against previous day's data"
+        blocking: true
+      - name: "row_count_match"
+        description: "Row counts match (within tolerance)"
+        tolerance_percent: 1
+        blocking: true
+    failure_behavior: "BLOCK_DEPLOYMENT"
+
+  smoke_tests:
+    - name: "merchant_dashboard_report"
+      description: "Generate sample merchant dashboard report"
+      blocking: true
+    - name: "agency_multi_client_report"
+      description: "Generate sample agency multi-client report"
+      blocking: true
+    - name: "explore_mode_queries"
+      description: "Execute 10 Explore mode queries successfully"
+      count: 10
+      blocking: true
+    - name: "cache_verification"
+      description: "Verify cache hits in logs"
+      blocking: false
+
+sign_off:
+  required_approvers:
+    default:
+      - "Analytics Tech Lead"
+    metric_change:
+      - "Analytics Tech Lead"
+      - "Product Manager"
+    rls_change:
+      - "Analytics Tech Lead"
+      - "Security Engineer"
+  template: |
+    [ ] All pre-deploy checks passed
+    [ ] I tested this in staging
+    [ ] I understand the blast radius
+    [ ] Rollback plan is clear
+    [ ] Communication sent to affected merchants (if needed)

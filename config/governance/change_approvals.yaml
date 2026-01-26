@@ -1,0 +1,84 @@
+# Change Approval Configuration
+# This file defines WHO can approve changes and WHAT conditions must be met
+# AI MUST NOT modify approval logic - read only
+
+enforcement:
+  blocking_mode: true
+  approval_source_of_truth: "change_requests.yaml"
+  audit_log_required: true
+  audit_retention_days: 365
+  failure_behavior: "BLOCK_DEPLOYMENT"
+
+change_approvals:
+  dbt_model_change:
+    approval_required: true
+    approvers:
+      primary: "Data Engineer"
+      secondary: "Analytics Tech Lead"
+    sla_hours: 24
+    pre_approval_checklist:
+      - "dbt test passes locally"
+      - "dbt docs generated"
+      - "query impact analysis complete"
+      - "RLS impact assessment complete"
+    requires_deployment_window: false
+
+  metric_definition_change:
+    approval_required: true
+    approvers:
+      primary: "Product Manager"
+      secondary: "Analytics Tech Lead"
+    sla_hours: 48
+    pre_approval_checklist:
+      - "metric definition document"
+      - "comparison: old vs new calculation"
+      - "merchant communication plan"
+      - "impact on existing dashboards"
+      - "backfill strategy (if needed)"
+    breaking_change_assessment: "required"
+
+  rls_rule_change:
+    approval_required: true
+    approvers:
+      primary: "Security Engineer"
+      secondary: "Data Engineer"
+    sla_hours: 4
+    pre_approval_checklist:
+      - "RLS test cases pass"
+      - "cross-tenant access test passes"
+      - "no silent data leaks (manual test)"
+    emergency_approval:
+      allows: ["CTO", "Security Engineer"]
+      min_approvers: 2
+      requires: ["incident ticket", "post-mortem"]
+
+  dashboard_default_change:
+    approval_required: false
+    change_type: "cosmetic"
+    notification: "slack #analytics"
+
+  visualization_layout_change:
+    approval_required: false
+    change_type: "cosmetic"
+    notification: "slack #analytics"
+
+  superset_dataset_change:
+    approval_required: true
+    approvers:
+      primary: "Data Engineer"
+      secondary: "Analytics Tech Lead"
+    sla_hours: 24
+    pre_approval_checklist:
+      - "dataset schema validated"
+      - "RLS policies verified"
+      - "performance benchmarked"
+
+# Rollback bypasses normal approval - requires only authority verification
+rollback_approval:
+  bypass_normal_approval: true
+  trigger_authority:
+    - "Analytics Oncall"
+    - "Security Oncall"
+    - "CTO"
+  audit_required: true
+  post_rollback_review: "required"

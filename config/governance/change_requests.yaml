@@ -1,0 +1,78 @@
+# Active Change Requests
+# This file tracks all pending and approved change requests
+# AI reads this file - does NOT modify approval status
+
+change_requests:
+  - id: "CR-2026-001"
+    type: "metric_definition_change"
+    title: "Update revenue metric to include shipping fees"
+    description: "Change revenue calculation from SUM(order_subtotal) to SUM(order_subtotal + shipping_fee)"
+    requested_by: "jane.doe@company.com"
+    requested_at: "2026-01-20T10:00:00Z"
+    status: "pending_approval"
+    breaking_change: true
+    affected_dashboards:
+      - "merchant_overview"
+      - "revenue_trend"
+    affected_merchants: 47
+    checklist_completed:
+      - "metric definition document"
+      - "comparison: old vs new calculation"
+    checklist_pending:
+      - "merchant communication plan"
+      - "impact on existing dashboards"
+    approvals: []
+    sla_deadline: "2026-01-22T10:00:00Z"
+
+  - id: "CR-2026-002"
+    type: "dbt_model_change"
+    title: "Add campaign attribution window column"
+    description: "Add attribution_window column to fact_orders model"
+    requested_by: "john.smith@company.com"
+    requested_at: "2026-01-21T14:00:00Z"
+    status: "approved"
+    breaking_change: false
+    affected_dashboards: []
+    affected_merchants: 0
+    checklist_completed:
+      - "dbt test passes locally"
+      - "dbt docs generated"
+      - "query impact analysis complete"
+      - "RLS impact assessment complete"
+    checklist_pending: []
+    approvals:
+      - approver: "alice.engineer@company.com"
+        role: "Data Engineer"
+        approved_at: "2026-01-21T15:30:00Z"
+        comment: "Reviewed - non-breaking additive change"
+    sla_deadline: "2026-01-22T14:00:00Z"
+
+  - id: "CR-2026-003"
+    type: "rls_rule_change"
+    title: "Fix agency multi-tenant RLS policy"
+    description: "Update RLS to properly handle agencies with 10+ clients"
+    requested_by: "security@company.com"
+    requested_at: "2026-01-25T09:00:00Z"
+    status: "emergency_approved"
+    breaking_change: false
+    affected_dashboards:
+      - "agency_overview"
+    affected_merchants: 12
+    checklist_completed:
+      - "RLS test cases pass"
+      - "cross-tenant access test passes"
+      - "no silent data leaks (manual test)"
+    checklist_pending: []
+    approvals:
+      - approver: "cto@company.com"
+        role: "CTO"
+        approved_at: "2026-01-25T09:15:00Z"
+        comment: "Emergency approval - security fix"
+      - approver: "security.lead@company.com"
+        role: "Security Engineer"
+        approved_at: "2026-01-25T09:20:00Z"
+        comment: "Verified fix, post-mortem scheduled"
+    emergency: true
+    incident_ticket: "INC-2026-042"
+    post_mortem_required: true
+    sla_deadline: "2026-01-25T13:00:00Z"

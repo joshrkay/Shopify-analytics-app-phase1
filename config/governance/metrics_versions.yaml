@@ -1,0 +1,58 @@
+# Metric Versioning Configuration
+# Defines all metric versions, deprecation schedules, and migration paths
+# AI MUST NOT auto-migrate or approve version changes
+
+deprecation_enforcement:
+  warn_on_query: true
+  warn_days_before_sunset: 30
+  block_on_sunset: true
+  merchant_visibility:
+    - dashboard_banner
+    - email_notification
+
+metrics:
+  revenue:
+    current_version: "v2"
+
+    v2:
+      dbt_model: "fact_orders"
+      definition: "SUM(revenue)"
+      status: "active"
+      released_date: "2026-01-15"
+      description: "Includes refunds & adjustments"
+
+    v1:
+      dbt_model: "fact_orders_legacy"
+      definition: "SUM(revenue) WHERE refund_status != 'returned'"
+      status: "deprecated"
+      deprecated_date: "2026-01-15"
+      sunset_date: "2026-04-15"
+      migration_guide: "docs/migrate_revenue_v1_to_v2.md"
+
+  roas:
+    current_version: "v1"
+
+    v1:
+      dbt_model: "mart_campaign_performance"
+      definition: "revenue / ad_spend"
+      status: "active"
+      released_date: "2025-06-01"
+      description: "Return on ad spend ratio"
+
+  conversion_rate:
+    current_version: "v1"
+
+    v1:
+      dbt_model: "mart_funnel_metrics"
+      definition: "orders / sessions"
+      status: "active"
+      released_date: "2025-06-01"
+      description: "Order conversion rate"
+
+# Migration settings - NEVER auto-migrate
+migration:
+  auto_migrate: false
+  require_explicit_approval: true
+  affected_dashboards_must_be_listed: true
+  merchant_notification_required: true
+  minimum_notice_days: 30
