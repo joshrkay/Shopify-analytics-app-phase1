@@ -16,6 +16,17 @@ from .base import load_yaml_config, serialize_dataclass
 logger = logging.getLogger(__name__)
 
 
+def _parse_date_with_timezone(date_str: str) -> datetime:
+    """Parse a date string and ensure it's timezone-aware (UTC)."""
+    # Handle Z suffix for UTC
+    date_str = date_str.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(date_str)
+    # If timezone-naive, assume UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 class MetricStatus(Enum):
     """Status of a metric version."""
 
@@ -227,9 +238,7 @@ class MetricVersionResolver:
         sunset_date_str = version_config.get("sunset_date")
         if sunset_date_str:
             try:
-                sunset_date = datetime.fromisoformat(
-                    sunset_date_str.replace("Z", "+00:00")
-                )
+                sunset_date = _parse_date_with_timezone(sunset_date_str)
                 if datetime.now(timezone.utc) > sunset_date:
                     return True
             except ValueError:
@@ -307,9 +316,7 @@ class MetricVersionResolver:
 
         if sunset_date_str:
             try:
-                sunset_date = datetime.fromisoformat(
-                    sunset_date_str.replace("Z", "+00:00")
-                )
+                sunset_date = _parse_date_with_timezone(sunset_date_str)
                 delta = sunset_date - datetime.now(timezone.utc)
                 days_until_sunset = delta.days
             except ValueError:
