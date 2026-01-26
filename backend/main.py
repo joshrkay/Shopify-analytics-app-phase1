@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.platform.tenant_context import TenantContextMiddleware, get_tenant_context
+from src.platform.csp_middleware import EmbedOnlyCSPMiddleware
 from src.api.routes import health
 from src.api.routes import billing
 from src.api.routes import webhooks_shopify
@@ -21,6 +22,7 @@ from src.api.routes import admin_plans
 from src.api.routes import sync
 from src.api.routes import data_health
 from src.api.routes import backfills
+from src.api.routes import embed
 
 # Configure structured logging
 logging.basicConfig(
@@ -78,13 +80,21 @@ app = FastAPI(
 )
 
 # CORS middleware (configure for your frontend domain)
+# Include Shopify Admin in CORS origins for embedding
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+if "https://admin.shopify.com" not in cors_origins:
+    cors_origins.append("https://admin.shopify.com")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# CSP middleware for Shopify Admin embedding (only applied to /api/v1/embed routes)
+app.add_middleware(EmbedOnlyCSPMiddleware)
 
 # CRITICAL: Add tenant context middleware
 # Middleware uses lazy initialization - env vars validated in lifespan startup
@@ -112,6 +122,9 @@ app.include_router(data_health.router)
 
 # Include backfill routes (requires authentication)
 app.include_router(backfills.router)
+
+# Include embed routes for Shopify Admin embedding (requires authentication)
+app.include_router(embed.router)
 
 
 # Example protected endpoint

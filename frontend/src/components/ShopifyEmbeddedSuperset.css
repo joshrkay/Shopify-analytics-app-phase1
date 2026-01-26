@@ -1,0 +1,228 @@
+/**
+ * Superset Embedded Analytics Styles for Shopify Admin
+ *
+ * Styles optimized for embedding within Shopify Admin iframe.
+ * Uses Shopify Polaris design system spacing and colors.
+ */
+
+/* Main container */
+.superset-embed-container {
+  width: 100%;
+  height: 100%;
+  min-height: 600px;
+  border: none;
+  background-color: var(--p-color-bg-surface, #ffffff);
+  border-radius: var(--p-border-radius-300, 8px);
+}
+
+/* Iframe styling */
+.superset-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 600px;
+  border: none;
+  border-radius: var(--p-border-radius-200, 8px);
+  box-shadow: var(--p-shadow-100, 0 1px 2px rgba(0, 0, 0, 0.05));
+  background-color: var(--p-color-bg-surface, #ffffff);
+}
+
+/* Loading state */
+.superset-embed-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 600px;
+  padding: var(--p-space-500, 20px);
+  text-align: center;
+  gap: var(--p-space-400, 16px);
+  color: var(--p-color-text-secondary, #6d7175);
+  font-size: var(--p-font-size-325, 14px);
+}
+
+.superset-embed-loading .Polaris-Spinner {
+  margin-bottom: var(--p-space-300, 12px);
+}
+
+/* Error state */
+.superset-embed-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 600px;
+  padding: var(--p-space-500, 20px);
+  text-align: center;
+  background-color: var(--p-color-bg-surface-critical, #fef5f5);
+  border: 1px solid var(--p-color-border-critical, #fed3d1);
+  border-radius: var(--p-border-radius-200, 8px);
+  color: var(--p-color-text-critical, #d72c0d);
+  gap: var(--p-space-400, 16px);
+}
+
+.superset-embed-error p {
+  margin: 0 0 var(--p-space-400, 16px) 0;
+  max-width: 400px;
+}
+
+.superset-embed-error button {
+  padding: var(--p-space-200, 8px) var(--p-space-400, 16px);
+  background-color: var(--p-color-bg-fill-critical, #d72c0d);
+  color: var(--p-color-text-on-color, white);
+  border: none;
+  border-radius: var(--p-border-radius-200, 4px);
+  cursor: pointer;
+  font-size: var(--p-font-size-325, 14px);
+  font-weight: var(--p-font-weight-medium, 500);
+  transition: background-color 0.2s ease;
+}
+
+.superset-embed-error button:hover {
+  background-color: var(--p-color-bg-fill-critical-hover, #b71c1c);
+}
+
+.superset-embed-error button:focus {
+  outline: 2px solid var(--p-color-border-focus, #005bd3);
+  outline-offset: 2px;
+}
+
+/* Refreshing state overlay */
+.superset-embed-container.refreshing::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* Debug info (development only) */
+.superset-embed-debug {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: var(--p-space-100, 4px) var(--p-space-200, 8px);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #00ff00;
+  font-family: monospace;
+  font-size: 10px;
+  z-index: 100;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .superset-embed-container {
+    min-height: 400px;
+  }
+
+  .superset-iframe {
+    min-height: 400px;
+  }
+
+  .superset-embed-loading,
+  .superset-embed-error {
+    min-height: 400px;
+    padding: var(--p-space-400, 16px);
+  }
+}
+
+/* Tablet */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .superset-embed-container {
+    min-height: 500px;
+  }
+
+  .superset-iframe {
+    min-height: 500px;
+  }
+}
+
+/* Full screen mode */
+.superset-embed-container.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  border-radius: 0;
+  min-height: 100vh;
+}
+
+.superset-embed-container.fullscreen .superset-iframe {
+  min-height: 100vh;
+  border-radius: 0;
+}
+
+/* Animation for loading */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.superset-embed-loading .loading-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.superset-embed-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--p-color-bg-surface-secondary, #f6f6f7) 0%,
+    var(--p-color-bg-surface, #ffffff) 50%,
+    var(--p-color-bg-surface-secondary, #f6f6f7) 100%
+  );
+  background-size: 2000px 100%;
+  animation: shimmer 2s linear infinite;
+  border-radius: var(--p-border-radius-200, 8px);
+}
+
+/* Hide Superset chrome via iframe styling */
+.superset-iframe::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.superset-iframe::-webkit-scrollbar-track {
+  background: var(--p-color-bg-surface-secondary, #f6f6f7);
+}
+
+.superset-iframe::-webkit-scrollbar-thumb {
+  background-color: var(--p-color-border, #c9cccf);
+  border-radius: 4px;
+}
+
+.superset-iframe::-webkit-scrollbar-thumb:hover {
+  background-color: var(--p-color-border-hover, #8c9196);
+}
+
+/* Print styles */
+@media print {
+  .superset-embed-container {
+    min-height: auto;
+    page-break-inside: avoid;
+  }
+
+  .superset-embed-debug {
+    display: none;
+  }
+}
