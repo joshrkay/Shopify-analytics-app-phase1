@@ -48,7 +48,20 @@ CACHE_CONFIG = {
     'CACHE_TYPE': 'RedisCache',
     'CACHE_REDIS_URL': os.getenv('REDIS_URL', 'redis://redis:6379/0'),
     'CACHE_DEFAULT_TIMEOUT': 3600,  # 1 hour TTL
+    'CACHE_REDIS_DB': 0,
+    'CACHE_REDIS_SOCKET_CONNECT_TIMEOUT': 5,
+    'CACHE_REDIS_SOCKET_TIMEOUT': 5,
 }
+
+# Cache Invalidation Strategy
+# TTL-based: 1 hour default timeout
+# Manual: triggered by dbt deploy or dashboard refresh button
+
+# Performance Indices (to be created in PostgreSQL for optimal query performance)
+# Expected improvement: ~5s -> ~200-300ms for date-based queries
+# CREATE INDEX IF NOT EXISTS idx_orders_tenant_date ON fact_orders (tenant_id, order_date);
+# CREATE INDEX IF NOT EXISTS idx_spend_tenant_channel ON fact_marketing_spend (tenant_id, channel);
+# CREATE INDEX IF NOT EXISTS idx_campaign_performance_tenant ON fact_campaign_performance (tenant_id, campaign_id);
 
 # Session Configuration
 PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
