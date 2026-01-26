@@ -298,11 +298,36 @@ class TestBillingService:
     ):
         """Test getting subscription info when no subscription exists."""
         from src.services.billing_service import BillingService
+        from src.models.plan import Plan
 
-        # Mock no subscription found
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = None
-        mock_db_session.query.return_value = mock_query
+        # Create a mock free plan
+        mock_free_plan = MagicMock(spec=Plan)
+        mock_free_plan.id = "plan_free"
+        mock_free_plan.name = "free"
+        mock_free_plan.display_name = "Free"
+
+        # The service makes 3 queries:
+        # 1. _get_active_subscription(): filter().first() -> None
+        # 2. Check cancelled/declined/expired: filter().order_by().first() -> None
+        # 3. Get free plan: filter().first() -> mock_free_plan
+
+        # Query 1: _get_active_subscription
+        mock_active_sub_query = MagicMock()
+        mock_active_sub_query.filter.return_value.first.return_value = None
+
+        # Query 2: cancelled/declined/expired subscriptions
+        mock_old_sub_query = MagicMock()
+        mock_old_sub_query.filter.return_value.order_by.return_value.first.return_value = None
+
+        # Query 3: free plan lookup
+        mock_plan_query = MagicMock()
+        mock_plan_query.filter.return_value.first.return_value = mock_free_plan
+
+        mock_db_session.query.side_effect = [
+            mock_active_sub_query,
+            mock_old_sub_query,
+            mock_plan_query
+        ]
 
         service = BillingService(mock_db_session, test_tenant_id)
         info = service.get_subscription_info()
@@ -480,7 +505,7 @@ class TestReconciliationJob:
 
         stats = ReconciliationStats()
 
-        with patch("src.jobs.reconcile_subscriptions.BillingService"):
+        with patch("src.services.billing_service.BillingService"):
             await check_grace_period_expirations(mock_db_session, stats)
 
         assert stats.subscriptions_updated == 1
