@@ -33,6 +33,7 @@ class Permission(str, Enum):
     # Analytics permissions
     ANALYTICS_VIEW = "analytics:view"
     ANALYTICS_EXPORT = "analytics:export"
+    ANALYTICS_EXPLORE = "analytics:explore"  # Superset Explore mode access
 
     # Store/connector permissions
     STORE_VIEW = "store:view"
@@ -88,6 +89,7 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         # All viewer permissions
         Permission.ANALYTICS_VIEW,
         Permission.ANALYTICS_EXPORT,
+        Permission.ANALYTICS_EXPLORE,  # Superset Explore mode
         Permission.STORE_VIEW,
         Permission.STORE_CREATE,
         Permission.STORE_UPDATE,
@@ -104,6 +106,7 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         # All editor permissions plus management
         Permission.ANALYTICS_VIEW,
         Permission.ANALYTICS_EXPORT,
+        Permission.ANALYTICS_EXPLORE,  # Superset Explore mode
         Permission.STORE_VIEW,
         Permission.STORE_CREATE,
         Permission.STORE_UPDATE,
@@ -128,6 +131,7 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         # All permissions including admin
         Permission.ANALYTICS_VIEW,
         Permission.ANALYTICS_EXPORT,
+        Permission.ANALYTICS_EXPLORE,  # Superset Explore mode
         Permission.STORE_VIEW,
         Permission.STORE_CREATE,
         Permission.STORE_UPDATE,

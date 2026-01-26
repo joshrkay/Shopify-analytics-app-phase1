@@ -1,0 +1,260 @@
+# Dataset-level Explore Restrictions for Superset
+# This file documents allowed explore capabilities per dataset.
+#
+# IMPORTANT: The authoritative configuration is in explore_guardrails.py
+# This YAML is for human reference and can be used for validation/sync.
+
+# =============================================================================
+# PERFORMANCE GUARDRAILS (Hard Limits)
+# =============================================================================
+guardrails:
+  max_date_range_days: 90
+  query_timeout_seconds: 20
+  row_limit: 50000
+  max_group_by_dimensions: 2
+  cache_ttl_minutes: 30
+  max_filters: 10
+  max_metrics_per_query: 5
+
+# =============================================================================
+# EXPLORATION PERSONAS
+# =============================================================================
+personas:
+  merchant:
+    name: "Merchant User"
+    description: "Standard store owner with basic explore capabilities"
+    allowed_datasets:
+      - fact_orders
+      - fact_marketing_spend
+      - fact_campaign_performance
+
+  agency:
+    name: "Agency User"
+    description: "Agency user with expanded metrics access (e.g., ROAS calculations)"
+    allowed_datasets:
+      - fact_orders
+      - fact_marketing_spend
+      - fact_campaign_performance
+    additional_capabilities:
+      - "Access to ROAS calculation metrics"
+
+# =============================================================================
+# DATASET CONFIGURATIONS
+# =============================================================================
+datasets:
+  # ---------------------------------------------------------------------------
+  # FACT_ORDERS - Order data with revenue metrics
+  # ---------------------------------------------------------------------------
+  fact_orders:
+    enable_explore: true
+    description: "Explore merchant orders with guardrails"
+    date_column: order_date
+
+    allowed_explore_columns:
+      dimensions:
+        - order_date
+        - channel
+        - campaign_id
+        - product_category
+      metrics:
+        - SUM(revenue)
+        - COUNT(order_id)
+        - AVG(revenue)
+        - COUNT(DISTINCT customer_id)
+
+    # Columns that should NEVER be exposed in Explore
+    restricted_columns:
+      - payment_method_details
+      - customer_email
+      - customer_phone
+      - customer_address
+      - customer_ip
+
+    visualizations_allowed:
+      - line       # Trend analysis
+      - bar        # Comparisons
+      - pie        # Composition
+      - table      # Detailed view
+      - number     # KPI display
+
+    visualizations_disallowed:
+      - scatter    # Can reveal individual customer patterns
+      - geo_map    # Location privacy concerns
+      - box_plot   # Statistical analysis not in scope
+
+    # Example filter configurations
+    filter_examples:
+      - column: channel
+        operator: "IN"
+        values: ["facebook", "google", "tiktok"]
+      - column: order_date
+        operator: "BETWEEN"
+        description: "Max 90-day range"
+
+  # ---------------------------------------------------------------------------
+  # FACT_MARKETING_SPEND - Ad spend data
+  # ---------------------------------------------------------------------------
+  fact_marketing_spend:
+    enable_explore: true
+    description: "Explore marketing spend with guardrails"
+    date_column: spend_date
+
+    allowed_explore_columns:
+      dimensions:
+        - spend_date
+        - channel
+        - campaign_id
+      metrics:
+        - SUM(spend)
+        - AVG(spend)
+        - SUM(impressions)
+        - SUM(clicks)
+
+    restricted_columns:
+      - api_credentials
+      - account_id
+      - access_token
+      - refresh_token
+
+    visualizations_allowed:
+      - line
+      - bar
+      - table
+      - number
+
+    visualizations_disallowed:
+      - pie        # Spend composition less useful
+      - scatter
+      - geo_map
+
+  # ---------------------------------------------------------------------------
+  # FACT_CAMPAIGN_PERFORMANCE - Campaign-level aggregations
+  # ---------------------------------------------------------------------------
+  fact_campaign_performance:
+    enable_explore: true
+    description: "Explore campaign performance with guardrails"
+    date_column: campaign_date
+
+    allowed_explore_columns:
+      dimensions:
+        - campaign_date
+        - campaign_id
+        - channel
+      metrics:
+        - SUM(revenue)
+        - SUM(spend)
+        - SUM(revenue)/NULLIF(SUM(spend), 0)  # ROAS
+        - SUM(conversions)
+        - AVG(cpa)
+
+    restricted_columns:
+      - internal_campaign_id
+      - platform_campaign_id
+      - api_campaign_id
+
+    visualizations_allowed:
+      - line
+      - bar
+      - table
+      - number
+
+    # Agency-specific additional metrics
+    agency_only_metrics:
+      - SUM(revenue)/NULLIF(SUM(spend), 0)  # ROAS calculation
+
+  # ---------------------------------------------------------------------------
+  # DIM_CUSTOMERS - DISABLED (PII)
+  # ---------------------------------------------------------------------------
+  dim_customers:
+    enable_explore: false
+    reason: "No customer PII exposure in Explore mode"
+    description: "Customer dimension table - Explore disabled for privacy"
+
+    # If ever enabled, these would be the only allowed columns
+    # (none currently - all restricted)
+    allowed_explore_columns:
+      dimensions: []
+      metrics: []
+
+    restricted_columns:
+      - "*"  # All columns restricted
+
+  # ---------------------------------------------------------------------------
+  # DIM_PRODUCTS - DISABLED
+  # ---------------------------------------------------------------------------
+  dim_products:
+    enable_explore: false
+    reason: "Product catalog restricted to admin views"
+    description: "Product dimension table - Explore disabled"
+
+    allowed_explore_columns:
+      dimensions: []
+      metrics: []
+
+    restricted_columns:
+      - "*"  # All columns restricted
+
+# =============================================================================
+# ALLOWED FILTER TYPES
+# =============================================================================
+allowed_filter_operators:
+  - "="
+  - "!="
+  - "<"
+  - "<="
+  - ">"
+  - ">="
+  - "IN"
+  - "NOT IN"
+  - "BETWEEN"
+  - "LIKE"
+  - "IS NULL"
+  - "IS NOT NULL"
+
+disallowed_filter_operators:
+  - "REGEXP"     # Potential for ReDoS
+  - "SIMILAR TO" # PostgreSQL specific, performance risk
+
+# =============================================================================
+# ALLOWED GROUP BY GRANULARITIES
+# =============================================================================
+date_group_by_options:
+  - day
+  - week
+  - month
+
+# =============================================================================
+# SUPERSET FEATURE FLAGS
+# =============================================================================
+feature_flags:
+  # Disabled features (security/stability)
+  ENABLE_CUSTOM_METRICS: false
+  SQLLAB_BACKEND_PERSISTENCE: false
+  ALLOW_USER_METRIC_EDIT: false
+  SQL_QUERIES_ALLOWED: false
+  EXPLORE_ALLOW_SUBQUERY: false
+  ENABLE_ADVANCED_DATA_TYPES: false
+  ALLOW_ADHOC_SUBQUERY: false
+
+  # Disabled exports
+  ENABLE_PIVOT_TABLE_DATA_EXPORT: false
+  CSV_EXPORT: false
+
+  # Enabled features
+  EMBEDDED_SUPERSET: true
+  ENABLE_EXPLORE_JSON_CSRF_PROTECTION: true
+  ENABLE_TEMPLATE_PROCESSING: false  # No Jinja in user queries
+
+# =============================================================================
+# RLS ENFORCEMENT
+# =============================================================================
+rls_enforcement:
+  enabled: true
+  clause_template: "tenant_id = '{{ current_user.tenant_id }}'"
+  applies_to:
+    - fact_orders
+    - fact_marketing_spend
+    - fact_campaign_performance
+  note: >
+    RLS rules are applied independently of Explore guardrails.
+    See rls_rules.py for full RLS configuration.
