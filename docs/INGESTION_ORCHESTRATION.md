@@ -222,7 +222,7 @@ Run the test suite:
 
 ```bash
 # Job isolation tests
-pytest backend/src/tests/test_job_isolation.py -v
+pytest backend/src/tests/regression/test_job_isolation.py -v
 
 # Retry and DLQ tests
 pytest backend/src/tests/test_retry_and_dlq.py -v
