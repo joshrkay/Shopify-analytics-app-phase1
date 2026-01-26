@@ -67,9 +67,9 @@ class BackfillExecution(Base, TimestampMixin, TenantScopedMixin):
     )
 
     status = Column(
-        String(50),
+        Enum(BackfillStatus),
         nullable=False,
-        default=BackfillStatus.PENDING.value,
+        default=BackfillStatus.PENDING,
         index=True,
         comment="Backfill status: pending, running, completed, failed, cancelled"
     )
