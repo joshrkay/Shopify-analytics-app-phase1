@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum as PyEnum
 
 from sqlalchemy import (
-    Column, String, Integer, DateTime, Text, Float, Boolean, Index
+    Column, String, Integer, DateTime, Text, Float, Boolean, Index, Enum
 )
 
 from src.db_base import Base
