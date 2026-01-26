@@ -10,6 +10,7 @@ import enTranslations from '@shopify/polaris/locales/en.json';
 import '@shopify/polaris/build/esm/styles.css';
 
 import AdminPlans from './pages/AdminPlans';
+import Analytics from './pages/Analytics';
 
 function App() {
   return (
@@ -17,7 +18,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/admin/plans" element={<AdminPlans />} />
-          <Route path="/" element={<Navigate to="/admin/plans" replace />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/" element={<Navigate to="/analytics" replace />} />
         </Routes>
       </BrowserRouter>
     </AppProvider>
