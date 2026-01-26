@@ -21,15 +21,49 @@ rollback_strategy:
     - "Security incident detected"
 
   rollback_scope:
+    # BLAST RADIUS CONTROL
+    # Choose scope based on impact assessment:
+    # - If 100 merchants affected but only 5 have issues → use tenant_subset
+    # - If uncertain impact → use gradual (canary)
+    # - If critical security/data corruption → use global
+    
     global:
       description: "Revert all merchants"
-      use_when: "Critical security issue or data corruption"
+      use_when: "Critical security issue or data corruption affecting all tenants"
+      blast_radius: "100% of merchants"
+      estimated_downtime_minutes: 5
+      example_scenarios:
+        - "Security breach detected"
+        - "Data corruption in shared tables"
+        - "RLS policy failure allowing cross-tenant access"
+    
     tenant_subset:
       description: "Revert only affected tenants"
-      use_when: "Issue isolated to specific merchants"
+      use_when: "Issue isolated to specific merchants (e.g., 5 out of 100 affected)"
+      blast_radius: "Configurable - specify tenant IDs"
+      estimated_downtime_minutes: 2
+      configuration:
+        # Specify tenants via:
+        # - tenant_ids: ["tenant_123", "tenant_124"]
+        # - tenant_pattern: "tenant_*_staging"  # Pattern matching
+        # - affected_count: 5  # Rollback first N affected tenants
+        tenant_ids: []  # Set at rollback time
+        tenant_pattern: null
+        affected_count: null
+      example_scenarios:
+        - "Metric change breaks 5 merchants, others unaffected"
+        - "Dashboard issue isolated to specific tenant segment"
+        - "Data quality issue in tenant-specific data"
+    
     gradual:
       description: "Revert 10% of tenants per 5 min (canary rollback)"
       use_when: "Uncertain blast radius, need controlled rollback"
+      blast_radius: "Starts at 10%, expands gradually"
+      estimated_downtime_minutes: "Variable (5-30 min depending on success)"
+      example_scenarios:
+        - "New metric version deployed, monitoring for issues"
+        - "Dashboard change with unknown impact"
+        - "Need to validate rollback doesn't cause new issues"
 
   rollback_actions:
     - action: "revert_superset_dataset"
@@ -39,7 +73,8 @@ rollback_strategy:
       order: 1
 
     - action: "clear_redis_cache"
-      scope: "all_keys"
+      scope: "all_keys"  # Options: "all_keys" or "tenant_${tenant_id}" for scoped rollback
+      # For tenant_subset rollback, scope will be set to "tenant_${tenant_id}" per tenant
       time_to_complete_minutes: 1
       order: 2
 
@@ -51,28 +86,49 @@ rollback_strategy:
     - action: "notify_slack"
       channel: "#analytics-alerts"
       message_template: |
-        ROLLBACK EXECUTED
+        🚨 ROLLBACK EXECUTED
         Dataset: ${dataset_name}
         Reason: ${trigger_reason}
+        Scope: ${rollback_scope}
         Affected Merchants: ${merchant_count}
         Estimated Impact: ${impact_minutes} min downtime
+        Rollback ID: ${rollback_id}
       order: 4
 
     - action: "auto_create_incident"
       system: "pagerduty"
       severity: "high"
       assign_to: "analytics_oncall"
+      message: "Rollback executed. Investigation needed."
       order: 5
 
   gradual_rollback:
     enabled: true
-    canary_percentage: 10
-    rollout_interval_minutes: 5
+    # Canary rollback: Start with small percentage, expand if successful
+    canary_percentage: 10  # Start with 10% of tenants
+    rollout_interval_minutes: 5  # Wait 5 min between batches
+    # Rollout progression: 10% → 25% → 50% → 100% (if all successful)
+    rollout_stages:
+      - percentage: 10
+        wait_minutes: 5
+      - percentage: 25
+        wait_minutes: 5
+      - percentage: 50
+        wait_minutes: 5
+      - percentage: 100
+        wait_minutes: 5
     success_criteria:
       - "no new error alerts in 10 min"
-      - "query latency stable"
-    success_action: "continue_rollout"
-    failure_action: "pause_and_alert"
+      - "query latency stable (p95 < 5000ms)"
+      - "error rate < 1%"
+      - "no merchant escalations"
+    success_action: "continue_rollout"  # Proceed to next stage
+    failure_action: "pause_and_alert"  # Pause, alert on-call, require manual decision
+    # If failure detected, can:
+    # - Pause and wait for manual decision
+    # - Auto-rollback the failed batch
+    # - Continue with reduced percentage
+    failure_handling: "pause_and_alert"
 
   verification:
     checks:
@@ -80,9 +136,57 @@ rollback_strategy:
         query: "SELECT error_rate FROM metrics WHERE time > NOW() - INTERVAL '5 minutes'"
         threshold: 0.01
         comparison: "less_than"
+        description: "Error rate must be < 1%"
       - name: "latency_check"
         query: "SELECT p95_latency FROM metrics WHERE time > NOW() - INTERVAL '5 minutes'"
         threshold: 5000
         comparison: "less_than"
+        description: "P95 latency must be < 5000ms"
+      - name: "merchant_escalation_check"
+        query: "SELECT COUNT(*) FROM support_tickets WHERE created_at > NOW() - INTERVAL '1 hour'"
+        threshold: 3
+        comparison: "less_than"
+        description: "No more than 3 support tickets in last hour"
     timeout_seconds: 300
     retry_interval_seconds: 30
+    # Verification must pass before considering rollback successful
+    required_checks: ["error_rate_check", "latency_check"]
+
+# PREVENTION STRATEGIES
+# These should be enforced BEFORE deployment to reduce rollback need
+prevention:
+  pre_deployment:
+    - rule: "Always deploy to staging first"
+      enforcement: "CI/CD gate - staging deployment required"
+      description: "All changes must pass staging validation before production"
+    
+    - rule: "Run 24-hour canary (5% of merchants) before full rollout"
+      enforcement: "Feature flag or gradual rollout"
+      description: "Deploy to 5% of merchants, monitor for 24 hours, then expand"
+      canary_percentage: 5
+      canary_duration_hours: 24
+      success_criteria:
+        - "No error rate increase"
+        - "No latency degradation"
+        - "No merchant escalations"
+    
+    - rule: "Merchant notification: 48 hours before metric change"
+      enforcement: "Change approval workflow"
+      description: "Merchants using deprecated metrics must be notified 48h before sunset"
+      notification_channels:
+        - "email"
+        - "dashboard_banner"
+      minimum_notice_hours: 48
+  
+  monitoring:
+    - rule: "Real-time alerting on error rate spikes"
+      threshold: "> 1% error rate"
+      action: "Alert on-call, consider rollback"
+    
+    - rule: "Query timeout monitoring"
+      threshold: "> 5% of queries timeout"
+      action: "Alert on-call, consider rollback"
+    
+    - rule: "Merchant escalation tracking"
+      threshold: "> 3 tickets in 1 hour"
+      action: "Alert on-call, investigate and consider rollback"

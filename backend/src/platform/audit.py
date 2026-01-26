@@ -115,6 +115,14 @@ class AuditAction(str, Enum):
     BACKFILL_STARTED = "backfill.started"
     BACKFILL_COMPLETED = "backfill.completed"
     BACKFILL_FAILED = "backfill.failed"
+    
+    # Entitlement events
+    ENTITLEMENT_DENIED = "entitlement.denied"
+    ENTITLEMENT_ALLOWED = "entitlement.allowed"
+    
+    # Job entitlement events
+    JOB_SKIPPED_DUE_TO_ENTITLEMENT = "job.skipped_due_to_entitlement"
+    JOB_ALLOWED = "job.allowed"
 
 
 class AuditLog(AuditBase):

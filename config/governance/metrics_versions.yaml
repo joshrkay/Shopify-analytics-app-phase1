@@ -26,8 +26,35 @@ metrics:
       definition: "SUM(revenue) WHERE refund_status != 'returned'"
       status: "deprecated"
       deprecated_date: "2026-01-15"
-      sunset_date: "2026-04-15"
+      sunset_date: "2026-04-15"  # 90-day notice period
       migration_guide: "docs/migrate_revenue_v1_to_v2.md"
+      merchants_affected: 47
+
+    # MIGRATION STRATEGY for revenue metric
+    # Auto-migration: FALSE - explicit approval needed
+    # Merchants using v1 will NOT be auto-upgraded to v2
+    # Breaking changes: v2 includes refunds, which changes historical values
+    migration:
+      auto_migrate: false  # explicit approval needed
+      affected_dashboards:
+        - name: "merchant_overview"
+          usage: "uses v1 in 3 cards"
+        - name: "revenue_trend"
+          usage: "uses v1"
+      affected_merchants:
+        - tenant_id: "tenant_123"
+          dashboards_count: 2
+          dashboards: ["merchant_overview", "revenue_trend"]
+        - tenant_id: "tenant_124"
+          dashboards_count: 1
+          dashboards: ["merchant_overview"]
+      communication:
+        - channel: "email"
+          template: "merchants_using_revenue_v1.txt"
+          sent_date: null  # Will be set when migration is approved
+        - channel: "dashboard_alert"
+          message: "Your reports will change on 2026-04-15"
+          show_days_before: 30
 
   roas:
     current_version: "v1"
@@ -39,6 +66,12 @@ metrics:
       released_date: "2025-06-01"
       description: "Return on ad spend ratio"
 
+    # No migration needed - only one version exists
+    migration:
+      auto_migrate: false
+      affected_dashboards: []
+      affected_merchants: []
+
   conversion_rate:
     current_version: "v1"
 
@@ -49,10 +82,67 @@ metrics:
       released_date: "2025-06-01"
       description: "Order conversion rate"
 
-# Migration settings - NEVER auto-migrate
+    # No migration needed - only one version exists
+    migration:
+      auto_migrate: false
+      affected_dashboards: []
+      affected_merchants: []
+
+# Global migration settings - NEVER auto-migrate
 migration:
   auto_migrate: false
   require_explicit_approval: true
   affected_dashboards_must_be_listed: true
   merchant_notification_required: true
   minimum_notice_days: 30
+
+# Dashboard Versioning
+# Tracks dashboard versions, breaking changes, and rollback capabilities
+dashboards:
+  merchant_overview:
+    current_version: "1.3.0"
+    release_notes: |
+      - Added campaign ROI card
+      - Removed unused "Customer Lifetime Value" card (low usage)
+      - Updated revenue metric to v2 (includes refunds)
+    
+    history:
+      "1.3.0":
+        released_date: "2026-01-20"
+        breaking_changes: false
+        metric_changes:
+          - "revenue_metric: v1 → v2"
+        description: "Added ROI card, removed CLV card"
+        
+      "1.2.0":
+        released_date: "2025-11-10"
+        breaking_changes: false
+        metric_changes:
+          - "revenue_metric: v1 → v2"
+        description: "Updated revenue calculation"
+        
+      "1.1.0":
+        released_date: "2025-08-01"
+        breaking_changes: true  # Removed 3 cards, merchants complained
+        metric_changes: []
+        description: "Removed 3 low-usage cards (merchant feedback: negative)"
+        
+    # Rollback capability: Can quickly revert to previous version if issues
+    rollback_available_to: "1.2.0"  # Can quickly revert if issues
+    rollback_sla_minutes: 15  # 15 minutes to rollback dashboard version
+
+  revenue_trend:
+    current_version: "1.0.0"
+    release_notes: |
+      - Initial release
+      - Uses revenue v1 metric
+    
+    history:
+      "1.0.0":
+        released_date: "2025-06-01"
+        breaking_changes: false
+        metric_changes: []
+        description: "Initial dashboard release"
+        
+    rollback_available_to: null  # No previous version to rollback to
+    rollback_sla_minutes: null

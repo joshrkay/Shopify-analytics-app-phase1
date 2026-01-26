@@ -1,0 +1,68 @@
+{
+  "grace_period_days": 3,
+  "canceled_behavior": "immediate",
+  "past_due_behavior": "hard_block",
+  "expired_behavior": "hard_block",
+  "grace_period_behavior": "allow_with_warning",
+  "features": {
+    "premium_analytics": {
+      "description": "Advanced analytics and reporting features",
+      "required_plan": "plan_growth"
+    },
+    "ai_insights": {
+      "description": "AI-powered insights and recommendations",
+      "required_plan": "plan_free"
+    },
+    "custom_reports": {
+      "description": "Custom report builder",
+      "required_plan": "plan_growth"
+    },
+    "data_export": {
+      "description": "Export data to CSV/Excel",
+      "required_plan": "plan_enterprise"
+    },
+    "api_access": {
+      "description": "API access for integrations",
+      "required_plan": "plan_growth"
+    },
+    "agency_access": {
+      "description": "Multi-tenant agency access",
+      "required_plan": "plan_growth"
+    },
+    "ai_actions": {
+      "description": "AI-powered actions and automations",
+      "required_plan": "plan_growth"
+    },
+    "advanced_analytics": {
+      "description": "Advanced analytics including attribution models",
+      "required_plan": "plan_enterprise"
+    }
+  },
+  "premium_jobs": {
+    "sync": {
+      "required_feature": "premium_analytics",
+      "skip_on_deny": true,
+      "description": "Data sync jobs require premium analytics"
+    },
+    "export": {
+      "required_feature": "data_export",
+      "skip_on_deny": true,
+      "description": "Data export jobs require data_export feature"
+    },
+    "ai_action": {
+      "required_feature": "ai_actions",
+      "skip_on_deny": true,
+      "description": "AI action jobs require ai_actions feature"
+    },
+    "backfill": {
+      "required_feature": "premium_analytics",
+      "skip_on_deny": true,
+      "description": "Backfill jobs require premium analytics"
+    },
+    "attribution_model": {
+      "required_feature": "advanced_analytics",
+      "skip_on_deny": true,
+      "description": "Attribution model jobs require advanced_analytics feature"
+    }
+  }
+}

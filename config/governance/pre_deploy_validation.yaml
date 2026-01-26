@@ -18,21 +18,48 @@ pre_deploy_validation:
         description: "All models compile without error"
         command: "dbt compile"
         blocking: true
+        # Must have exit code 0, no errors in stderr
+        success_criteria:
+          - "exit_code: 0"
+          - "no ERROR in stderr"
+          - "all models listed in manifest.json"
+      
       - name: "tests_pass"
         description: "All tests pass (>95% coverage)"
         command: "dbt test"
-        threshold: 0.95
+        threshold: 0.95  # Minimum 95% test coverage
         blocking: true
+        # All tests must pass, coverage must meet threshold
+        success_criteria:
+          - "all tests: PASSED"
+          - "coverage >= 0.95"
+          - "no test failures"
+      
       - name: "no_deprecation_warnings"
         description: "No deprecation warnings in output"
         blocking: true
+        # Zero deprecation warnings allowed
+        success_criteria:
+          - "deprecation_warning_count: 0"
+          - "no WARN messages containing 'deprecated'"
+      
       - name: "docs_generated"
         description: "dbt docs generated successfully"
         command: "dbt docs generate"
         blocking: true
+        success_criteria:
+          - "exit_code: 0"
+          - "target/index.html exists"
+          - "target/manifest.json exists"
+      
       - name: "lineage_acyclic"
         description: "dbt lineage acyclic (no circular deps)"
         blocking: true
+        # Must detect no circular dependencies in lineage graph
+        success_criteria:
+          - "circular_dependency_count: 0"
+          - "lineage_graph_is_dag: true"
+    
     failure_behavior: "BLOCK_DEPLOYMENT"
 
   superset_dataset_sync:
@@ -41,20 +68,44 @@ pre_deploy_validation:
         description: "Sync completes in <5 minutes"
         threshold_seconds: 300
         blocking: true
+        # Sync must complete within 5 minutes
+        success_criteria:
+          - "sync_duration_seconds < 300"
+          - "sync_status: 'completed'"
+      
       - name: "row_count_match"
         description: "Row count matches dbt source"
         tolerance_percent: 1
         blocking: true
+        # Row count difference must be within ±1%
+        success_criteria:
+          - "abs(superset_rows - dbt_rows) / dbt_rows < 0.01"
+          - "row_count_diff_percent < 1.0"
+      
       - name: "schema_match"
         description: "Schema matches dbt output"
         blocking: true
+        # All columns must match, types must be compatible
+        success_criteria:
+          - "all_columns_match: true"
+          - "column_types_compatible: true"
+          - "no_missing_columns: true"
+          - "no_extra_columns: true"
+      
       - name: "cache_freshness"
         description: "No stale cache entries (age < 1 min)"
         max_age_seconds: 60
         blocking: true
+        # All cache entries must be < 1 minute old
+        success_criteria:
+          - "max_cache_age_seconds < 60"
+          - "stale_cache_count: 0"
+    
     validation_query: |
       SELECT COUNT(*) FROM superset_dataset
       WHERE sync_timestamp > NOW() - INTERVAL '1 minute'
+      AND sync_status = 'completed'
+    
     failure_behavior: "BLOCK_DEPLOYMENT"
 
   rls_verification:
@@ -62,22 +113,60 @@ pre_deploy_validation:
       - name: "cross_tenant_isolation"
         description: "Cross-tenant isolation test passes"
         blocking: true
+        # Tenant A cannot see Tenant B's data
+        success_criteria:
+          - "tenant_a_can_query_tenant_b: false"
+          - "cross_tenant_query_count: 0"
+      
       - name: "multi_tenant_access"
         description: "Multi-tenant access test passes"
         blocking: true
+        # Multi-tenant queries return correct data
+        success_criteria:
+          - "multi_tenant_query_success: true"
+          - "data_scoped_correctly: true"
+      
       - name: "merchant_data_isolation"
         description: "Merchant sees only own data"
         blocking: true
+        # Merchant can only query their own tenant_id
+        success_criteria:
+          - "merchant_sees_own_data: true"
+          - "merchant_sees_other_tenant_data: false"
+          - "merchant_query_tenant_id_matches: 100%"
+      
       - name: "agency_client_isolation"
         description: "Agency sees assigned clients only"
         blocking: true
+        # Agency can see assigned clients, not unassigned
+        success_criteria:
+          - "agency_sees_assigned_clients: true"
+          - "agency_sees_unassigned_clients: false"
+          - "agency_client_mapping_correct: true"
+      
       - name: "super_admin_access"
         description: "Super admin sees all data"
         blocking: true
+        # Super admin can query all tenants
+        success_criteria:
+          - "super_admin_sees_all_tenants: true"
+          - "super_admin_query_success: true"
+    
     test_coverage:
-      min_test_tenants: 3
+      min_test_tenants: 3  # At least 3 test tenants required
       require_edge_cases: true
-      simulate_agency_clients: 5
+      edge_cases:
+        - "tenant with 0 records"
+        - "tenant with 1M+ records"
+        - "tenant with special characters in name"
+      simulate_agency_clients: 5  # Agency must have 5+ assigned clients
+      test_scenarios:
+        - "happy_path: normal tenant queries"
+        - "edge_case: empty tenant"
+        - "edge_case: large tenant"
+        - "edge_case: agency with 10+ clients"
+        - "edge_case: agency with 0 clients"
+    
     failure_behavior: "BLOCK_DEPLOYMENT"
 
   dashboard_performance:
@@ -86,32 +175,87 @@ pre_deploy_validation:
         description: "All dashboards load in <5s"
         threshold_seconds: 5
         blocking: false
+        # Measured under specific conditions (see below)
+        success_criteria:
+          - "p95_load_time_seconds < 5"
+          - "p99_load_time_seconds < 8"
+          - "all_dashboards_under_threshold: true"
+      
       - name: "network_conditions"
         description: "Measured on GCP VM (us-central1) with 4G throttling"
         blocking: false
+        # Test environment specification
+        test_environment:
+          cloud_provider: "GCP"
+          region: "us-central1"
+          vm_type: "n1-standard-2"
+          network_throttling: "4G"  # Simulates 4G network (10 Mbps down, 2 Mbps up)
+          latency_ms: 50  # Simulated network latency
+        success_criteria:
+          - "tests_run_on_gcp_vm: true"
+          - "network_throttling_applied: true"
+      
       - name: "empty_cache_test"
         description: "Measured with empty Redis cache"
         blocking: false
+        # Must test with cold cache (worst case)
+        success_criteria:
+          - "redis_cache_cleared_before_test: true"
+          - "cache_hit_rate_at_start: 0%"
+      
       - name: "no_console_errors"
         description: "No browser console errors"
         blocking: true
+        # Zero JavaScript errors allowed
+        success_criteria:
+          - "console_error_count: 0"
+          - "console_warn_count: 0"  # Warnings also block
+          - "no_network_errors: true"
+    
     sample_size:
-      modified_dashboards: "all"
-      most_used_dashboards: 5
+      modified_dashboards: "all"  # Test all modified dashboards
+      most_used_dashboards: 5  # Test 5 most-used dashboards
+      # Must test both modified and high-traffic dashboards
+    
     failure_behavior: "WARN_REQUIRE_APPROVAL"
+    # Performance failures don't block, but require explicit approval
 
   metrics_validation:
     checks:
       - name: "calculation_match"
         description: "Metric calculation matches dbt"
         blocking: true
+        # Metric values must match dbt output exactly (or within tolerance)
+        success_criteria:
+          - "metric_value_matches_dbt: true"
+          - "calculation_diff_percent < tolerance"
+      
       - name: "historical_comparison"
         description: "Compare against previous day's data"
         blocking: true
+        # Compare today's metric vs yesterday's (for same date range)
+        success_criteria:
+          - "historical_comparison_completed: true"
+          - "variance_within_expected_range: true"
+      
       - name: "row_count_match"
         description: "Row counts match (within tolerance)"
         tolerance_percent: 1
         blocking: true
+        # Row counts must match within ±1%
+        success_criteria:
+          - "abs(metric_rows - dbt_rows) / dbt_rows < 0.01"
+          - "row_count_diff_percent < 1.0"
+    
+    validation_threshold:
+      # Tolerance rules for different change types
+      rounding_errors:
+        tolerance_percent: 1  # ±1% for rounding errors
+        applies_to: ["decimal_precision", "aggregation_rounding"]
+      structural_changes:
+        tolerance_percent: 0  # ±0% for structural changes (must match exactly)
+        applies_to: ["schema_changes", "column_additions", "filter_changes"]
+    
     failure_behavior: "BLOCK_DEPLOYMENT"
 
   smoke_tests:
@@ -135,13 +279,17 @@ sign_off:
       - "Analytics Tech Lead"
     metric_change:
       - "Analytics Tech Lead"
-      - "Product Manager"
+      - "Product Manager"  # if metric change
     rls_change:
       - "Analytics Tech Lead"
-      - "Security Engineer"
+      - "Security Engineer"  # if RLS change
+  
   template: |
     [ ] All pre-deploy checks passed
     [ ] I tested this in staging
     [ ] I understand the blast radius
     [ ] Rollback plan is clear
     [ ] Communication sent to affected merchants (if needed)
+  
+  # Sign-off is required before deployment can proceed
+  enforcement: "BLOCK_DEPLOYMENT_UNTIL_SIGNED"

@@ -19,6 +19,8 @@ from src.services.billing_service import (
     StoreNotFoundError,
     SubscriptionError
 )
+from src.entitlements.policy import EntitlementPolicy, BillingState
+from src.models.subscription import Subscription
 
 logger = logging.getLogger(__name__)
 
@@ -332,3 +334,115 @@ async def cancel_subscription(
         "subscription_id": info.subscription_id,
         "current_plan": info.plan_name
     }
+
+
+class FeatureEntitlementResponse(BaseModel):
+    """Feature entitlement information."""
+    feature: str
+    is_entitled: bool
+    billing_state: str
+    plan_id: Optional[str]
+    plan_name: Optional[str]
+    reason: Optional[str] = None
+    required_plan: Optional[str] = None
+    grace_period_ends_on: Optional[str] = None
+
+
+class EntitlementsResponse(BaseModel):
+    """Complete entitlements information for UI."""
+    billing_state: str
+    plan_id: Optional[str]
+    plan_name: Optional[str]
+    features: dict[str, FeatureEntitlementResponse]
+    grace_period_days_remaining: Optional[int] = None
+
+
+@router.get("/entitlements", response_model=EntitlementsResponse)
+async def get_entitlements(
+    request: Request,
+    billing_service: BillingService = Depends(get_billing_service),
+    db_session=Depends(get_db_session)
+):
+    """
+    Get current entitlements for the tenant.
+
+    Returns billing state, plan info, and feature entitlements.
+    Used by UI to determine what features to show/disable.
+    """
+    tenant_ctx = get_tenant_context(request)
+
+    logger.info("Getting entitlements", extra={
+        "tenant_id": tenant_ctx.tenant_id
+    })
+
+    try:
+        # Get subscription info
+        subscription_info = billing_service.get_subscription_info()
+        
+        # Get subscription object for policy evaluation
+        subscription = db_session.query(Subscription).filter(
+            Subscription.tenant_id == tenant_ctx.tenant_id
+        ).order_by(Subscription.created_at.desc()).first()
+        
+        # Create policy and get billing state
+        policy = EntitlementPolicy(db_session)
+        billing_state = policy.get_billing_state(subscription)
+        
+        # Calculate grace period days remaining
+        grace_period_days_remaining = None
+        if billing_state == BillingState.GRACE_PERIOD and subscription and subscription.grace_period_ends_on:
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            delta = subscription.grace_period_ends_on - now
+            if delta.total_seconds() > 0:
+                grace_period_days_remaining = delta.days + (1 if delta.seconds > 0 else 0)
+        
+        # Get plan name
+        plan_name = subscription_info.plan_name if subscription_info else None
+        
+        # Build feature entitlements (check common features)
+        from src.services.billing_entitlements import BillingFeature
+        feature_keys = [
+            BillingFeature.AGENCY_ACCESS,
+            BillingFeature.ADVANCED_DASHBOARDS,
+            BillingFeature.EXPLORE_MODE,
+            BillingFeature.DATA_EXPORT,
+            BillingFeature.AI_INSIGHTS,
+            BillingFeature.AI_ACTIONS,
+            BillingFeature.CUSTOM_REPORTS,
+        ]
+        
+        features = {}
+        for feature_key in feature_keys:
+            result = policy.check_feature_entitlement(
+                tenant_id=tenant_ctx.tenant_id,
+                feature=feature_key,
+                subscription=subscription,
+            )
+            features[feature_key] = FeatureEntitlementResponse(
+                feature=feature_key,
+                is_entitled=result.is_entitled,
+                billing_state=result.billing_state.value,
+                plan_id=result.plan_id,
+                plan_name=plan_name if result.plan_id == subscription_info.plan_id else None,
+                reason=result.reason,
+                required_plan=result.required_plan,
+                grace_period_ends_on=result.grace_period_ends_on.isoformat() if result.grace_period_ends_on else None,
+            )
+        
+        return EntitlementsResponse(
+            billing_state=billing_state.value,
+            plan_id=subscription_info.plan_id,
+            plan_name=plan_name,
+            features=features,
+            grace_period_days_remaining=grace_period_days_remaining,
+        )
+    except Exception as e:
+        logger.error("Error getting entitlements", extra={
+            "tenant_id": tenant_ctx.tenant_id,
+            "error": str(e)
+        }, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get entitlements"
+        )

@@ -81,43 +81,183 @@ ai_restrictions:
       - redirect_target
 
 human_responsibility_examples:
+  # Example 1: Approving metric definition changes
   metric_definition_change:
     scenario:
       change: "Revenue metric now includes shipping fees"
       old_definition: "SUM(order_subtotal)"
       new_definition: "SUM(order_subtotal + shipping_fee)"
       breaking: true
+      merchant_count: 500
     required_decisions:
-      - "Is shipping fee always accurate in the database?"
-      - "How do we communicate to merchants?"
-      - "Do we backfill historical data?"
-      - "What if a merchant wants old definition?"
-    ai_cannot_decide: "Only domain expert knows if change is safe"
+      - decision: "Is shipping fee always accurate in the database?"
+        context: "QA check needed - verify data quality"
+        why_human: "Domain expert must validate data integrity"
+      
+      - decision: "How do we communicate to 500 merchants?"
+        context: "Message draft required - tone and timing matter"
+        why_human: "Customer communication requires human judgment on tone and impact"
+        example_message: |
+          "We're updating how revenue is calculated to include shipping fees.
+          This will make your reports more accurate. Your historical data
+          will be updated on [date]."
+      
+      - decision: "Do we backfill historical data?"
+        context: "3 months of reports affected - backfill strategy needed"
+        why_human: "Business decision on data history preservation"
+        considerations:
+          - "How far back to backfill?"
+          - "Performance impact of backfill?"
+          - "Merchant expectations?"
+      
+      - decision: "What if a merchant wants old definition?"
+        context: "Versioning needed - support for multiple metric versions"
+        why_human: "Product decision on versioning strategy"
+    
+    ai_cannot_decide: "Only domain expert knows if change is safe and how to communicate impact"
 
+  # Example 2: Deciding breaking vs non-breaking
   breaking_vs_nonbreaking:
-    scenario_breaking:
+    scenario_a_breaking:
       change: "ROAS calculation: swap numerator/denominator"
       merchant_impact: "Charts invert (950% ROAS becomes 105%)"
+      is_breaking: true
       why_human_needed: "Merchant will think analytics is broken. Needs proactive comms."
-    scenario_nonbreaking:
+      human_decision_required:
+        - "Classify as breaking change"
+        - "Draft proactive communication"
+        - "Plan merchant support response"
+        - "Consider versioning strategy"
+    
+    scenario_b_nonbreaking:
       change: "Remove unused 'Abandoned Cart Rate' card from dashboard"
       merchant_impact: "Dashboard layout shifts"
+      is_breaking: false
       why_human_needed: "Usage analytics show no one clicks it. But confirm with customer?"
+      human_decision_required:
+        - "Verify usage analytics (0% click rate)"
+        - "Confirm with customer success team"
+        - "Decide if removal is safe"
+        - "Plan layout adjustment"
 
+  # Example 3: Interpreting merchant-reported discrepancies
   data_discrepancy:
     scenario:
       merchant_says: "Revenue dashboard shows $50K but Shopify shows $48K"
-      possible_causes:
-        - "RLS excluding some stores (merchant has 3 stores)"
-        - "Data freshness (sync ran 2 hours ago)"
-        - "Metric definition (excludes refunds or tax)"
-        - "Rounding errors (display vs calculation)"
-        - "Cache showing stale data"
+      discrepancy_amount: "$2,000 (4% difference)"
+      merchant_context: "Merchant has 3 stores, uses multiple payment gateways"
+    
+    possible_causes:
+      - cause: "RLS excluding some stores (merchant has 3 stores)"
+        investigation: "Check RLS policies for multi-store merchants"
+        human_check: "Verify all stores are included in RLS policy"
+      
+      - cause: "Data freshness (sync ran 2 hours ago)"
+        investigation: "Compare sync timestamp vs merchant's Shopify data"
+        human_check: "Verify sync schedule and latency"
+      
+      - cause: "Metric definition (excludes refunds or tax)"
+        investigation: "Compare metric definition vs merchant expectation"
+        human_check: "Review metric calculation logic"
+      
+      - cause: "Rounding errors (display vs calculation)"
+        investigation: "Compare raw dbt output vs dashboard display"
+        human_check: "Verify rounding logic in frontend"
+      
+      - cause: "Cache showing stale data"
+        investigation: "Check cache TTL and last refresh time"
+        human_check: "Verify cache invalidation logic"
+    
     investigation_needed: "AI cannot determine which cause without human interpretation"
+    human_steps:
+      1: "Check if merchant has multiple stores"
+      2: "Verify metric definition matches merchant's expectation"
+      3: "Check data freshness (compare sync timestamp)"
+      4: "Compare raw dbt output vs dashboard display"
+      5: "Verify cache status and TTL"
+      6: "Review RLS policies for merchant's tenant_id"
+    
+    why_human_needed: "Root cause analysis requires domain knowledge and systematic investigation"
 
+  # Example 4: Sign-off before prod rollout
   production_signoff:
     scenario:
       metric_change: "Refund policy updated. Refunds now counted in 'Net Revenue'."
       staging_tests: "All passed"
       merchant_impact: "500+ merchants see different numbers"
-    why_human_needed: "Sign-off = accountability. AI cannot take responsibility."
+      affected_dashboards:
+        - "merchant_overview"
+        - "revenue_trend"
+        - "financial_summary"
+    
+    sign_off_checklist:
+      - item: "I understand the merchant communication"
+        why_human: "Must review communication draft for accuracy and tone"
+      
+      - item: "I've reviewed the rollback plan"
+        why_human: "Must understand rollback steps and impact"
+      
+      - item: "I'm confident in the data accuracy"
+        why_human: "Must validate data quality and calculation correctness"
+      
+      - item: "I'm on-call for 24 hours post-rollout"
+        why_human: "Accountability - must be available for issues"
+    
+    why_human_needed: "Sign-off = accountability. AI cannot take responsibility for production impact."
+
+  # Example 5: Coordinating rollback communication
+  rollback_communication:
+    scenario:
+      incident: "Metric mismatch detected. 350 merchants affected."
+      trigger: "Data quality check failed - revenue calculation mismatch"
+      severity: "high"
+      affected_merchants: 350
+      affected_dashboards: ["merchant_overview", "revenue_trend"]
+    
+    actions_needed:
+      1:
+        action: "Decide: rollback or investigate?"
+        why_human: "Human call - requires assessment of impact vs investigation time"
+        decision_factors:
+          - "How many merchants affected?"
+          - "Is data incorrect or just delayed?"
+          - "Can we fix forward or must rollback?"
+      
+      2:
+        action: "Draft customer notification email"
+        why_human: "Human tone - must balance transparency with reassurance"
+        example_draft: |
+          Subject: Important Update: Revenue Dashboard Correction
+          
+          We detected a calculation issue in your revenue dashboard and have
+          temporarily reverted to the previous version while we investigate.
+          
+          Your data is safe. We'll restore the updated dashboard within 24 hours.
+          
+          If you have questions, please contact support.
+      
+      3:
+        action: "Decide: public status page update?"
+        why_human: "Human judgment - public communication affects brand reputation"
+        considerations:
+          - "Is this affecting all merchants or subset?"
+          - "Is it a data issue or display issue?"
+          - "What's the expected resolution time?"
+      
+      4:
+        action: "Coordinate with support team"
+        why_human: "Human comms - must align messaging and escalation paths"
+        coordination_points:
+          - "Notify support team of incident"
+          - "Provide talking points for merchant inquiries"
+          - "Set up escalation path for urgent cases"
+      
+      5:
+        action: "Schedule merchant office hours"
+        why_human: "Human decision - determine if office hours needed based on impact"
+        decision_factors:
+          - "Number of affected merchants"
+          - "Severity of data discrepancy"
+          - "Merchant feedback volume"
+    
+    why_human_needed: "Public trust + brand reputation at stake. Communication strategy requires human judgment."
