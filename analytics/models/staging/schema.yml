@@ -32,6 +32,10 @@ models:
         description: Order name/number from Shopify
       - name: order_number
         description: Order number as integer
+      - name: report_date
+        description: Order date (staging contract standard field, derived from created_at)
+        tests:
+          - not_null
       - name: customer_email
         description: Customer email address
       - name: customer_id_raw
@@ -154,172 +158,323 @@ models:
         description: Airbyte emission timestamp
 
   - name: stg_meta_ads
-    description: Staging model for Meta Ads with normalized fields and tenant isolation
+    description: >
+      Staging model for Meta Ads (Facebook/Instagram) with normalized fields,
+      tenant isolation, and Option B ID normalization.
     columns:
-      - name: ad_account_id
-        description: Meta Ads account ID (primary key component)
+      - name: tenant_id
+        description: Tenant identifier for data isolation
         tests:
           - not_null
-      - name: campaign_id
-        description: Campaign ID (primary key component)
+          - relationships:
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
+              config:
+                where: "tenant_id is not null"
+
+      - name: report_date
+        description: Date of the ad performance (staging contract standard field)
         tests:
           - not_null
-      - name: adset_id
-        description: Ad set ID
-      - name: ad_id
-        description: Ad ID
+
       - name: date
-        description: Date of the ad performance (primary key component)
+        description: Date of the ad performance (kept for backward compatibility)
         tests:
           - not_null
+
       - name: date_stop
         description: End date of the ad performance period
+
+      - name: source
+        description: Source identifier for cross-platform joins
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['meta_ads']
+
+      - name: ad_account_id
+        description: Meta Ads account ID (platform-specific)
+        tests:
+          - not_null
+
+      - name: campaign_id
+        description: Campaign ID (platform-specific)
+        tests:
+          - not_null
+
+      - name: adset_id
+        description: Ad set ID
+
+      - name: ad_id
+        description: Ad ID
+
+      - name: internal_account_id
+        description: Deterministic hash ID for cross-platform account joins
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_ad_accounts')
+              field: internal_account_id
+
+      - name: internal_campaign_id
+        description: Deterministic hash ID for cross-platform campaign joins
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_campaigns')
+              field: internal_campaign_id
+
+      - name: platform_channel
+        description: Platform-specific channel/placement
+        tests:
+          - not_null
+
+      - name: canonical_channel
+        description: Normalized channel from taxonomy
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['paid_social', 'paid_search', 'paid_shopping', 'email', 'organic_social', 'organic_search', 'direct', 'referral', 'affiliate', 'other']
+
       - name: spend
         description: Amount spent (numeric, normalized currency)
         tests:
           - not_null
+
       - name: impressions
         description: Number of impressions (integer)
         tests:
           - not_null
+
       - name: clicks
         description: Number of clicks (integer)
         tests:
           - not_null
+
       - name: conversions
         description: Number of conversions (numeric)
         tests:
           - not_null
+
+      - name: conversion_value
+        description: Value of conversions (numeric)
+        tests:
+          - not_null
+
       - name: currency
         description: Currency code (uppercase, 3-letter)
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
+              values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
               config:
                 where: "currency is not null"
+
+      - name: cpm
+        description: Cost per mille (thousand impressions) - calculated
+
+      - name: cpc
+        description: Cost per click - calculated
+
+      - name: ctr
+        description: Click-through rate (percentage) - calculated
+
+      - name: cpa
+        description: Cost per acquisition - calculated
+
+      - name: roas_platform
+        description: Platform ROAS (conversion_value / spend) - calculated
+
       - name: campaign_name
         description: Campaign name
+
       - name: adset_name
         description: Ad set name
+
       - name: ad_name
         description: Ad name
+
       - name: objective
         description: Campaign objective
+
       - name: reach
         description: Number of unique people reached
+
       - name: frequency
         description: Average frequency
-      - name: cpm
-        description: Cost per mille (thousand impressions)
+
       - name: cpp
-        description: Cost per purchase
-      - name: ctr
-        description: Click-through rate (percentage)
+        description: Cost per purchase (from platform)
+
       - name: platform
-        description: Platform identifier
+        description: Platform identifier (kept for backward compatibility)
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values: ['meta_ads']
-      - name: tenant_id
-        description: Tenant identifier for data isolation
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('_tenant_airbyte_connections')
-                field: tenant_id
-              config:
-                where: "tenant_id is not null"
+              values: ['meta_ads']
+
       - name: airbyte_record_id
         description: Airbyte record ID
+
       - name: airbyte_emitted_at
         description: Airbyte emission timestamp
 
   - name: stg_google_ads
-    description: Staging model for Google Ads with normalized fields and tenant isolation
+    description: >
+      Staging model for Google Ads with normalized fields,
+      tenant isolation, and Option B ID normalization.
     columns:
-      - name: ad_account_id
-        description: Google Ads customer ID (primary key component)
-        tests:
-          - not_null
-      - name: campaign_id
-        description: Campaign ID (primary key component)
-        tests:
-          - not_null
-      - name: ad_group_id
-        description: Ad group ID
-      - name: ad_id
-        description: Ad ID
-      - name: date
-        description: Date of the ad performance (primary key component)
-        tests:
-          - not_null
-      - name: spend
-        description: Amount spent (numeric, normalized from micros or decimal)
-        tests:
-          - not_null
-      - name: impressions
-        description: Number of impressions (integer)
-        tests:
-          - not_null
-      - name: clicks
-        description: Number of clicks (integer)
-        tests:
-          - not_null
-      - name: conversions
-        description: Number of conversions (numeric)
-        tests:
-          - not_null
-      - name: conversion_value
-        description: Value of conversions (numeric)
-      - name: currency
-        description: Currency code (uppercase, 3-letter)
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
-              config:
-                where: "currency is not null"
-      - name: campaign_name
-        description: Campaign name
-      - name: ad_group_name
-        description: Ad group name
-      - name: ad_type
-        description: Type of ad
-      - name: device
-        description: Device type
-      - name: network
-        description: Network type
-      - name: ctr
-        description: Click-through rate (percentage)
-      - name: average_cpc
-        description: Average cost per click
-      - name: cost_per_conversion
-        description: Cost per conversion
-      - name: platform
-        description: Platform identifier
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ['google_ads']
       - name: tenant_id
         description: Tenant identifier for data isolation
         tests:
           - not_null
           - relationships:
-              arguments:
-                to: ref('_tenant_airbyte_connections')
-                field: tenant_id
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
               config:
                 where: "tenant_id is not null"
+
+      - name: report_date
+        description: Date of the ad performance (staging contract standard field)
+        tests:
+          - not_null
+
+      - name: date
+        description: Date of the ad performance (kept for backward compatibility)
+        tests:
+          - not_null
+
+      - name: source
+        description: Source identifier for cross-platform joins
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['google_ads']
+
+      - name: ad_account_id
+        description: Google Ads customer ID (platform-specific)
+        tests:
+          - not_null
+
+      - name: campaign_id
+        description: Campaign ID (platform-specific)
+        tests:
+          - not_null
+
+      - name: ad_group_id
+        description: Ad group ID
+
+      - name: ad_id
+        description: Ad ID
+
+      - name: internal_account_id
+        description: Deterministic hash ID for cross-platform account joins
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_ad_accounts')
+              field: internal_account_id
+
+      - name: internal_campaign_id
+        description: Deterministic hash ID for cross-platform campaign joins
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_campaigns')
+              field: internal_campaign_id
+
+      - name: platform_channel
+        description: Platform-specific channel/network
+        tests:
+          - not_null
+
+      - name: canonical_channel
+        description: Normalized channel from taxonomy
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['paid_social', 'paid_search', 'paid_shopping', 'email', 'organic_social', 'organic_search', 'direct', 'referral', 'affiliate', 'other']
+
+      - name: spend
+        description: Amount spent (numeric, normalized from micros or decimal)
+        tests:
+          - not_null
+
+      - name: impressions
+        description: Number of impressions (integer)
+        tests:
+          - not_null
+
+      - name: clicks
+        description: Number of clicks (integer)
+        tests:
+          - not_null
+
+      - name: conversions
+        description: Number of conversions (numeric)
+        tests:
+          - not_null
+
+      - name: conversion_value
+        description: Value of conversions (numeric)
+        tests:
+          - not_null
+
+      - name: currency
+        description: Currency code (uppercase, 3-letter)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
+              config:
+                where: "currency is not null"
+
+      - name: cpm
+        description: Cost per mille (thousand impressions) - calculated
+
+      - name: cpc
+        description: Cost per click - calculated
+
+      - name: ctr
+        description: Click-through rate (percentage) - calculated
+
+      - name: cpa
+        description: Cost per acquisition - calculated
+
+      - name: roas_platform
+        description: Platform ROAS (conversion_value / spend) - calculated
+
+      - name: campaign_name
+        description: Campaign name
+
+      - name: ad_group_name
+        description: Ad group name
+
+      - name: ad_type
+        description: Type of ad
+
+      - name: device
+        description: Device type
+
+      - name: network
+        description: Network type
+
+      - name: average_cpc
+        description: Average cost per click (from platform)
+
+      - name: cost_per_conversion
+        description: Cost per conversion (from platform)
+
+      - name: platform
+        description: Platform identifier (kept for backward compatibility)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['google_ads']
+
       - name: airbyte_record_id
         description: Airbyte record ID
+
       - name: airbyte_emitted_at
         description: Airbyte emission timestamp
 

@@ -218,9 +218,12 @@ orders_with_tenant as (
 )
 
 select
+    tenant_id,
     order_id,
     order_name,
     order_number,
+    -- report_date: Standard date field for staging contract consistency
+    created_at::date as report_date,
     customer_email,
     customer_id_raw,
     created_at,
@@ -237,8 +240,7 @@ select
     note,
     refunds_json,
     airbyte_record_id,
-    airbyte_emitted_at,
-    tenant_id
+    airbyte_emitted_at
 from orders_with_tenant
 where tenant_id is not null
     and order_id is not null  -- Edge case: Filter out null primary keys

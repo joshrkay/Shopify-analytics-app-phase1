@@ -24,6 +24,9 @@ models:
         +schema: staging
       ads:
         +schema: staging
+      dimensions:
+        +materialized: table
+        +schema: staging
     facts:
       +materialized: incremental
       +unique_key: id
@@ -48,8 +51,36 @@ data_tests:
 
 vars:
   tenant_isolation_enforced: true
+
   # Source schema configuration - override these when Airbyte/platform tables
   # are in different schemas than the defaults
   # Example: dbt run --vars '{airbyte_raw_schema: my_raw_schema, platform_schema: my_platform}'
   airbyte_raw_schema: airbyte_raw  # Schema containing _airbyte_raw_* tables
   platform_schema: platform  # Schema containing tenant_airbyte_connections table
+
+  # Lookback window configuration for incremental models
+  # Controls how far back to look for late-arriving data during incremental runs
+  # Override per-source as needed based on data latency characteristics
+  lookback_days_default: 3
+  lookback_days_shopify: 3
+  lookback_days_meta_ads: 3
+  lookback_days_google_ads: 3
+  lookback_days_tiktok_ads: 3
+  lookback_days_pinterest_ads: 3
+  lookback_days_snap_ads: 3
+  lookback_days_amazon_ads: 3
+  lookback_days_klaviyo: 3
+  lookback_days_ga4: 3
+  lookback_days_recharge: 3
+
+  # Freshness thresholds configuration
+  # These are placeholder values - actual thresholds should be configured
+  # based on Story 7.6 freshness SLA requirements
+  # Units: hours
+  freshness_warn_hours_default: 24
+  freshness_error_hours_default: 48
+  # Per-source overrides (uncomment and configure based on Story 7.6)
+  # freshness_warn_hours_shopify: 24
+  # freshness_error_hours_shopify: 48
+  # freshness_warn_hours_meta_ads: 24
+  # freshness_error_hours_meta_ads: 48
