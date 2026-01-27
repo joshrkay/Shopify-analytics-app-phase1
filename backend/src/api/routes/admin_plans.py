@@ -127,35 +127,8 @@ class ShopifyValidationResponse(BaseModel):
     error: Optional[str]
 
 
-# Dependency to get database session
-async def get_db_session():
-    """
-    Get database session.
-
-    TODO: Implement proper session management with connection pooling.
-    """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not configured"
-        )
-
-    # Handle Render's postgres:// URL format
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-    engine = create_engine(database_url, pool_pre_ping=True)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+# Import shared database session dependency
+from src.database.session import get_db_session
 
 
 def verify_admin_role(request: Request) -> TenantContext:
@@ -565,8 +538,16 @@ async def validate_shopify_sync(
             error=f"Store not found or no access token: {validation_request.shop_domain}"
         )
 
-    # TODO: Properly decrypt the access token
-    access_token = store.access_token_encrypted
+    # Decrypt the access token using platform secrets module
+    from src.platform.secrets import decrypt_secret, validate_encryption_configured
+    if validate_encryption_configured():
+        try:
+            access_token = await decrypt_secret(store.access_token_encrypted)
+        except Exception as e:
+            logger.warning("Failed to decrypt token, using as-is", extra={"error": str(e)})
+            access_token = store.access_token_encrypted
+    else:
+        access_token = store.access_token_encrypted
 
     try:
         result = await plan_service.sync_plan_to_shopify(

@@ -74,19 +74,8 @@ class StaleSourcesResponse(BaseModel):
 # Dependencies
 # =============================================================================
 
-async def get_db_session():
-    """Get database session."""
-    if not SessionLocal:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not configured",
-        )
-
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+# Import shared database session dependency
+from src.database.session import get_db_session
 
 
 def get_data_health_service(

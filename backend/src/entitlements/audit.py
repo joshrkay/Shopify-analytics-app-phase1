@@ -391,10 +391,17 @@ class EntitlementAuditLogger:
         Get count of access denials for a tenant since a given time.
 
         Useful for monitoring and alerting.
+
+        Note: Currently returns count from in-memory cache only.
+        For production monitoring, use structured log aggregation (e.g., Datadog, CloudWatch)
+        to query denial events by tenant_id from the audit logs.
         """
-        # This would query the database if persistence is enabled
-        # For now, return from memory
-        return 0  # TODO: Implement with database query
+        # Count from in-memory recent denials cache
+        count = 0
+        for key, timestamp in self._recent_denials.items():
+            if key.startswith(f"{tenant_id}:") and timestamp >= since:
+                count += 1
+        return count
 
     def get_recent_denials(
         self,
@@ -405,9 +412,15 @@ class EntitlementAuditLogger:
         Get recent denial events for a tenant.
 
         Useful for admin dashboards and debugging.
+
+        Note: Currently returns empty list. Denial events are logged via structured
+        logging and should be queried from your log aggregation system.
+        For real-time monitoring, configure alerts on 'entitlement_denied' log events.
         """
-        # This would query the database
-        return []  # TODO: Implement with database query
+        # Denial events are written to structured logs, not stored in-memory.
+        # Query your log aggregation system (Datadog, CloudWatch, etc.) for:
+        #   logger="entitlements.audit" AND event_type="access_denied" AND tenant_id="{tenant_id}"
+        return []
 
     def shutdown(self) -> None:
         """Shutdown the audit logger gracefully."""

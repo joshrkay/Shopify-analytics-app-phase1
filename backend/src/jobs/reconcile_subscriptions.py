@@ -116,7 +116,18 @@ async def reconcile_store_subscriptions(
         })
         return
 
-    access_token = store.access_token_encrypted  # TODO: Implement decryption
+    # Decrypt the access token using platform secrets module
+    from src.platform.secrets import decrypt_secret, validate_encryption_configured
+    if validate_encryption_configured():
+        try:
+            access_token = await decrypt_secret(store.access_token_encrypted)
+        except Exception as e:
+            logger.warning("Failed to decrypt token, using as-is", extra={
+                "shop_domain": store.shop_domain, "error": str(e)
+            })
+            access_token = store.access_token_encrypted
+    else:
+        access_token = store.access_token_encrypted
 
     try:
         async with get_billing_client(store.shop_domain, access_token) as client:

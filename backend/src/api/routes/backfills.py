@@ -77,31 +77,8 @@ class BackfillResultResponse(BaseModel):
     completed_at: str
 
 
-# Dependency to get database session
-async def get_db_session():
-    """Get synchronous database session."""
-    import os
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not configured",
-        )
-
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-    engine = create_engine(database_url, pool_pre_ping=True)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+# Import shared database session dependency
+from src.database.session import get_db_session
 
 
 async def get_audit_db_session():

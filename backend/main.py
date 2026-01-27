@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.platform.tenant_context import TenantContextMiddleware, get_tenant_context
+from src.platform.tenant_context import TenantContextMiddleware
 from src.platform.csp_middleware import EmbedOnlyCSPMiddleware
 from src.api.routes import health
 from src.api.routes import billing
@@ -125,64 +125,6 @@ app.include_router(backfills.router)
 
 # Include embed routes for Shopify Admin embedding (requires authentication)
 app.include_router(embed.router)
-
-
-# Example protected endpoint
-@app.get("/api/data")
-async def get_data(request: Request):
-    """
-    Example endpoint that requires tenant context.
-    
-    tenant_id is extracted from JWT (org_id), never from request.
-    """
-    tenant_ctx = get_tenant_context(request)
-    
-    logger.info("Data requested", extra={
-        "tenant_id": tenant_ctx.tenant_id,
-        "user_id": tenant_ctx.user_id,
-        "roles": tenant_ctx.roles
-    })
-    
-    # TODO: Replace with actual data fetching logic
-    # Use tenant_ctx.tenant_id to scope queries
-    return {
-        "tenant_id": tenant_ctx.tenant_id,
-        "user_id": tenant_ctx.user_id,
-        "data": f"Sample data for tenant {tenant_ctx.tenant_id}",
-        "message": "This endpoint demonstrates tenant isolation"
-    }
-
-
-@app.post("/api/data")
-async def create_data(request: Request):
-    """
-    Example endpoint for creating data.
-    
-    SECURITY: tenant_id from request body is IGNORED.
-    Only tenant_id from JWT is used.
-    """
-    tenant_ctx = get_tenant_context(request)
-    body = await request.json()
-    
-    # Log attempt to include tenant_id in body (for security audit)
-    if "tenant_id" in body:
-        logger.warning(
-            "tenant_id found in request body (ignored)",
-            extra={
-                "tenant_id_from_jwt": tenant_ctx.tenant_id,
-                "tenant_id_from_body": body.get("tenant_id"),
-                "user_id": tenant_ctx.user_id
-            }
-        )
-    
-    # TODO: Replace with actual data creation logic
-    # Use tenant_ctx.tenant_id, NOT body.get("tenant_id")
-    return {
-        "tenant_id": tenant_ctx.tenant_id,  # Always from JWT
-        "user_id": tenant_ctx.user_id,
-        "created": True,
-        "message": "Data created with tenant_id from JWT context"
-    }
 
 
 # Global exception handler for tenant isolation errors

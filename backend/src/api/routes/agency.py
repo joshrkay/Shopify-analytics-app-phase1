@@ -169,21 +169,34 @@ def _get_store_info_from_tenant(
     """
     Get store information for a tenant.
 
-    NOTE: In production, this would query the ShopifyStore model.
-    This is a placeholder that returns mock data.
+    Queries the ShopifyStore model for actual store data.
+    Falls back to placeholder data if store not found (for new/pending stores).
     """
-    # TODO: Query actual store data from database
-    # from src.models.store import ShopifyStore
-    # store = db.query(ShopifyStore).filter(
-    #     ShopifyStore.tenant_id == tenant_id
-    # ).first()
+    from src.models.store import ShopifyStore
 
-    # Placeholder response
+    store = db.query(ShopifyStore).filter(
+        ShopifyStore.tenant_id == tenant_id
+    ).first()
+
+    if store:
+        return AssignedStoreResponse(
+            tenant_id=tenant_id,
+            store_name=store.shop_name or store.shop_domain,
+            shop_domain=store.shop_domain,
+            status=store.status or "active",
+            assigned_at=(store.installed_at or store.created_at or datetime.now(timezone.utc)).isoformat(),
+            permissions=["analytics:view", "store:view"],
+        )
+
+    # Fallback for stores not yet in database (pending setup)
+    logger.debug("Store not found in database, using placeholder", extra={
+        "tenant_id": tenant_id
+    })
     return AssignedStoreResponse(
         tenant_id=tenant_id,
         store_name=f"Store {tenant_id[-4:]}",
-        shop_domain=f"store-{tenant_id[-4:]}.myshopify.com",
-        status="active",
+        shop_domain=f"pending-{tenant_id[-4:]}.myshopify.com",
+        status="pending",
         assigned_at=datetime.now(timezone.utc).isoformat(),
         permissions=["analytics:view", "store:view"],
     )
@@ -338,28 +351,59 @@ async def get_cross_store_summary(request: Request):
     Get a summary report across all assigned stores.
 
     Requires AGENCY_REPORTS_VIEW permission and agency billing entitlement.
+    Aggregates metrics from subscriptions and billing events across all allowed tenants.
     """
     tenant_context = get_tenant_context(request)
     _require_agency_user(tenant_context)
 
-    # TODO: Implement cross-store summary aggregation
-    # This would query metrics across all allowed_tenants
+    db = _get_db_session(request)
+
+    # Query aggregated metrics across all allowed tenants
+    from src.models.store import ShopifyStore
+    from src.models.subscription import Subscription, SubscriptionStatus
+
+    # Get store count and status
+    stores = db.query(ShopifyStore).filter(
+        ShopifyStore.tenant_id.in_(tenant_context.allowed_tenants)
+    ).all()
+
+    active_stores = [s for s in stores if s.status == "active"]
+
+    # Get active subscriptions across all tenants
+    active_subs = db.query(Subscription).filter(
+        Subscription.tenant_id.in_(tenant_context.allowed_tenants),
+        Subscription.status == SubscriptionStatus.ACTIVE.value
+    ).count()
 
     logger.info(
         "Cross-store summary requested",
         extra={
             "user_id": tenant_context.user_id,
             "tenant_count": len(tenant_context.allowed_tenants),
+            "stores_found": len(stores),
+            "active_stores": len(active_stores),
         }
     )
 
+    # Note: Order/revenue metrics would require querying the analytics layer (dbt models)
+    # This provides the billing/subscription summary from the platform layer
     return {
         "summary": {
             "total_stores": len(tenant_context.allowed_tenants),
-            "active_stores": len(tenant_context.allowed_tenants),
-            "total_orders_30d": 0,  # TODO: Aggregate from all tenants
-            "total_revenue_30d": 0,  # TODO: Aggregate from all tenants
+            "active_stores": len(active_stores),
+            "stores_with_data": len(stores),
+            "active_subscriptions": active_subs,
+            "total_orders_30d": None,  # Requires analytics layer query
+            "total_revenue_30d": None,  # Requires analytics layer query
         },
-        "stores": tenant_context.allowed_tenants,
+        "stores": [
+            {
+                "tenant_id": s.tenant_id,
+                "shop_domain": s.shop_domain,
+                "status": s.status,
+            }
+            for s in stores
+        ],
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "note": "Order/revenue metrics available via analytics dashboard",
     }

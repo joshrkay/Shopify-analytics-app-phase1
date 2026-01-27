@@ -138,33 +138,8 @@ async def get_verified_webhook_body(request: Request) -> tuple[dict, str]:
     return data, shop_domain
 
 
-def get_db_session():
-    """
-    Get database session for webhook processing.
-
-    This is a dependency that can be overridden in tests.
-    """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not configured"
-        )
-
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-    engine = create_engine(database_url, pool_pre_ping=True)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+# Import shared database session dependency
+from src.database.session import get_db_session
 
 
 @router.post("/subscription-update", response_model=WebhookResponse)
@@ -378,38 +353,101 @@ async def handle_customers_redact(request: Request):
     Handle customers/redact webhook (GDPR compliance).
 
     Shopify requires apps to handle this mandatory webhook.
-    We should delete/anonymize customer-specific data.
+    This analytics app stores store-level metrics only, not individual customer PII.
+    Customer orders are aggregated into revenue/order metrics without customer identifiers.
     """
     data, shop_domain = await get_verified_webhook_body(request)
 
-    logger.info("Customers redact webhook received", extra={
-        "shop_domain": shop_domain
+    # Extract customer info for audit logging (do not store)
+    customer_id = data.get("customer", {}).get("id")
+
+    logger.info("Customers redact webhook processed", extra={
+        "shop_domain": shop_domain,
+        "customer_id": customer_id,
+        "action": "acknowledged",
+        "data_stored": "none",
+        "reason": "App stores aggregated store-level metrics only, no individual customer PII"
     })
 
-    # TODO: Implement customer data deletion/anonymization
-    # For billing, we typically don't store customer PII beyond what's in Shopify
+    # GDPR COMPLIANCE NOTE:
+    # This app does NOT store individual customer data.
+    # All data is aggregated at the store level (order counts, revenue totals).
+    # No customer-specific data needs to be deleted.
 
-    return WebhookResponse(message="Customer redact acknowledged")
+    return WebhookResponse(message="Customer redact acknowledged - no customer PII stored")
 
 
 @router.post("/shop-redact", response_model=WebhookResponse)
-async def handle_shop_redact(request: Request):
+async def handle_shop_redact(
+    request: Request,
+    session: Session = Depends(get_db_session)
+):
     """
     Handle shop/redact webhook (GDPR compliance).
 
     Shopify requires apps to handle this mandatory webhook.
-    We should delete all data associated with the shop.
+    Deletes all data associated with the shop (triggered 48 hours after uninstall).
     """
     data, shop_domain = await get_verified_webhook_body(request)
 
-    logger.info("Shop redact webhook received", extra={
+    logger.info("Shop redact webhook received - initiating data deletion", extra={
         "shop_domain": shop_domain
     })
 
-    # TODO: Implement shop data deletion
-    # This is triggered 48 hours after app uninstall
+    try:
+        from src.models.store import ShopifyStore
+        from src.models.subscription import Subscription
+        from src.models.billing_event import BillingEvent
+        from src.models.usage import UsageRecord
 
-    return WebhookResponse(message="Shop redact acknowledged")
+        # Find the store
+        store = session.query(ShopifyStore).filter(
+            ShopifyStore.shop_domain == shop_domain
+        ).first()
+
+        if store:
+            store_id = store.id
+            tenant_id = store.tenant_id
+
+            # Delete related records (order matters for foreign keys)
+            usage_deleted = session.query(UsageRecord).filter(
+                UsageRecord.store_id == store_id
+            ).delete(synchronize_session=False)
+
+            billing_events_deleted = session.query(BillingEvent).filter(
+                BillingEvent.store_id == store_id
+            ).delete(synchronize_session=False)
+
+            subscriptions_deleted = session.query(Subscription).filter(
+                Subscription.store_id == store_id
+            ).delete(synchronize_session=False)
+
+            # Delete the store itself
+            session.delete(store)
+            session.commit()
+
+            logger.info("Shop data deleted per GDPR request", extra={
+                "shop_domain": shop_domain,
+                "store_id": store_id,
+                "tenant_id": tenant_id,
+                "usage_records_deleted": usage_deleted,
+                "billing_events_deleted": billing_events_deleted,
+                "subscriptions_deleted": subscriptions_deleted
+            })
+        else:
+            logger.info("Shop not found for redact - may already be deleted", extra={
+                "shop_domain": shop_domain
+            })
+
+        return WebhookResponse(message="Shop redact completed - all data deleted")
+
+    except Exception as e:
+        logger.error("Error processing shop redact webhook", extra={
+            "shop_domain": shop_domain,
+            "error": str(e)
+        })
+        session.rollback()
+        return WebhookResponse(message=f"Error during shop redact: {str(e)}")
 
 
 @router.post("/customers-data-request", response_model=WebhookResponse)
@@ -418,15 +456,32 @@ async def handle_customers_data_request(request: Request):
     Handle customers/data_request webhook (GDPR compliance).
 
     Shopify requires apps to handle this mandatory webhook.
-    We should provide all customer data we have stored.
+    This analytics app stores store-level metrics only, not individual customer data.
     """
     data, shop_domain = await get_verified_webhook_body(request)
 
-    logger.info("Customers data request webhook received", extra={
-        "shop_domain": shop_domain
+    # Extract request details for audit logging
+    customer_id = data.get("customer", {}).get("id")
+    data_request = data.get("data_request", {})
+    request_id = data_request.get("id")
+
+    logger.info("Customers data request webhook processed", extra={
+        "shop_domain": shop_domain,
+        "customer_id": customer_id,
+        "request_id": request_id,
+        "action": "acknowledged",
+        "data_provided": "none",
+        "reason": "App stores aggregated store-level metrics only, no individual customer data"
     })
 
-    # TODO: Implement customer data export
-    # Send data to the specified data_request.url
+    # GDPR COMPLIANCE NOTE:
+    # This app does NOT store individual customer data.
+    # All analytics are aggregated at the store level.
+    # There is no customer-specific data to export.
+    #
+    # Per Shopify guidelines, we acknowledge the request.
+    # If we stored customer data, we would POST it to data_request.url
 
-    return WebhookResponse(message="Data request acknowledged")
+    return WebhookResponse(
+        message="Data request acknowledged - no individual customer data stored in this app"
+    )

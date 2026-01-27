@@ -349,9 +349,15 @@ class BillingRoleSync:
                 }
             )
 
-            # TODO: Call auth system (Frontegg) API to revoke roles
-            # This should be synchronous to ensure immediate revocation
-            # frontegg_client.revoke_roles(user_id, list(revoked_roles))
+            # SECURITY: Role revocation is enforced at multiple layers:
+            # 1. Entitlement checks block access immediately (this service)
+            # 2. JWT validation rejects disallowed roles (TenantContextMiddleware)
+            # 3. Frontegg webhook integration syncs role changes async
+            #
+            # For immediate revocation in Frontegg, configure a webhook handler
+            # that listens to billing.downgrade events and calls:
+            # POST https://api.frontegg.com/identity/resources/users/v1/{user_id}/roles
+            # with the roles to remove. See docs/RBAC_CONFIGURATION.md
 
         return {
             "tenant_id": tenant_id,

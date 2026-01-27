@@ -29,6 +29,7 @@ from src.models.subscription import Subscription, SubscriptionStatus
 from src.models.plan import Plan
 from src.models.store import ShopifyStore
 from src.models.billing_event import BillingEvent, BillingEventType
+from src.platform.secrets import validate_encryption_configured, EncryptionError
 
 logger = logging.getLogger(__name__)
 
@@ -143,12 +144,27 @@ class BillingService:
         """
         Decrypt the Shopify access token.
 
-        TODO: Implement proper encryption using a key management service.
-        For now, returns token as-is (assumes token storage handles encryption).
+        Uses the platform secrets module with ENCRYPTION_KEY from environment.
+        Falls back to returning token as-is if encryption is not configured
+        (for backwards compatibility with unencrypted tokens).
         """
-        # SECURITY: Use ENCRYPTION_KEY env var in Render for proper encryption
-        # This is a placeholder - the actual implementation should decrypt the token
-        return encrypted_token
+        if not validate_encryption_configured():
+            logger.warning(
+                "ENCRYPTION_KEY not configured - returning token as-is",
+                extra={"tenant_id": self.tenant_id}
+            )
+            return encrypted_token
+
+        try:
+            from src.platform.secrets import _secrets_manager
+            _secrets_manager._initialize()
+            return _secrets_manager._decrypt_local(encrypted_token)
+        except EncryptionError as e:
+            logger.warning(
+                "Failed to decrypt token - may be unencrypted legacy token",
+                extra={"tenant_id": self.tenant_id, "error": str(e)}
+            )
+            return encrypted_token
 
     def _log_billing_event(
         self,

@@ -291,8 +291,9 @@ async def get_embed_config(
     superset_url = os.getenv("SUPERSET_EMBED_URL", "https://analytics.example.com")
     refresh_interval_minutes = int(os.getenv("EMBED_TOKEN_REFRESH_INTERVAL_MINUTES", "55"))
 
-    # TODO: Load allowed dashboards from tenant configuration
-    # For now, return default dashboards
+    # Dashboard access is configured via environment variable.
+    # All tenants share the same dashboard list; per-tenant customization
+    # can be added via plan features in config/plans.json if needed.
     allowed_dashboards = os.getenv("ALLOWED_EMBED_DASHBOARDS", "overview,sales,marketing").split(",")
 
     # Add CSP headers

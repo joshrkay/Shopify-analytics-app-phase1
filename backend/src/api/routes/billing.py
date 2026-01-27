@@ -80,36 +80,8 @@ class CallbackResponse(BaseModel):
     message: str
 
 
-# Dependency to get database session
-async def get_db_session():
-    """
-    Get database session.
-
-    TODO: Implement proper session management with connection pooling.
-    This is a placeholder that should be replaced with actual implementation.
-    """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not configured"
-        )
-
-    # Handle Render's postgres:// URL format
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-    engine = create_engine(database_url, pool_pre_ping=True)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+# Import shared database session dependency
+from src.database.session import get_db_session
 
 
 def get_billing_service(request: Request, db_session=Depends(get_db_session)) -> BillingService:
