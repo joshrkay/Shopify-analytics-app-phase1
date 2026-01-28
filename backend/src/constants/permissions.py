@@ -127,6 +127,11 @@ class Permission(str, Enum):
     # Multi-tenant access permission
     MULTI_TENANT_ACCESS = "multi_tenant:access"     # Access multiple tenant_ids
 
+    # Action Proposal permissions (Story 8.4)
+    ACTION_PROPOSALS_VIEW = "action_proposals:view"       # View proposals
+    ACTION_PROPOSALS_APPROVE = "action_proposals:approve" # Approve/reject proposals
+    ACTION_PROPOSALS_AUDIT = "action_proposals:audit"     # View audit trail
+
 
 # Permission matrix: Role -> Set of Permissions
 # This is the canonical source of truth for RBAC
@@ -182,6 +187,10 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         Permission.AUTOMATION_EXECUTE,
         Permission.SETTINGS_VIEW,
         Permission.SETTINGS_MANAGE,
+        # Action Proposal permissions (Story 8.4)
+        Permission.ACTION_PROPOSALS_VIEW,
+        Permission.ACTION_PROPOSALS_APPROVE,
+        Permission.ACTION_PROPOSALS_AUDIT,
     ]),
 
     Role.ADMIN: frozenset([
@@ -216,6 +225,10 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         Permission.AGENCY_STORES_SWITCH,
         Permission.AGENCY_REPORTS_VIEW,
         Permission.MULTI_TENANT_ACCESS,
+        # Action Proposal permissions (Story 8.4)
+        Permission.ACTION_PROPOSALS_VIEW,
+        Permission.ACTION_PROPOSALS_APPROVE,
+        Permission.ACTION_PROPOSALS_AUDIT,
     ]),
 
     # --- Merchant Roles (single tenant access) ---
@@ -239,6 +252,10 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         Permission.AUTOMATION_EXECUTE,
         Permission.SETTINGS_VIEW,
         Permission.SETTINGS_MANAGE,
+        # Action Proposal permissions (Story 8.4)
+        Permission.ACTION_PROPOSALS_VIEW,
+        Permission.ACTION_PROPOSALS_APPROVE,
+        Permission.ACTION_PROPOSALS_AUDIT,
     ]),
 
     Role.MERCHANT_VIEWER: frozenset([
@@ -250,6 +267,8 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         Permission.AI_INSIGHTS_VIEW,
         Permission.AUTOMATION_VIEW,
         Permission.SETTINGS_VIEW,
+        # Action Proposal permissions (view only, no approval)
+        Permission.ACTION_PROPOSALS_VIEW,
     ]),
 
     # --- Agency Roles (multi-tenant access via allowed_tenants[]) ---
@@ -267,6 +286,10 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         Permission.AGENCY_STORES_SWITCH,
         Permission.AGENCY_REPORTS_VIEW,
         Permission.MULTI_TENANT_ACCESS,
+        # Action Proposal permissions (Story 8.4)
+        Permission.ACTION_PROPOSALS_VIEW,
+        Permission.ACTION_PROPOSALS_APPROVE,
+        Permission.ACTION_PROPOSALS_AUDIT,
     ]),
 
     Role.AGENCY_VIEWER: frozenset([
@@ -279,6 +302,8 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         Permission.AGENCY_STORES_VIEW,
         Permission.AGENCY_STORES_SWITCH,
         Permission.MULTI_TENANT_ACCESS,
+        # Action Proposal permissions (view only, no approval)
+        Permission.ACTION_PROPOSALS_VIEW,
     ]),
 
     # --- Super Admin (platform-level, all access) ---
@@ -313,8 +338,31 @@ ROLE_PERMISSIONS: dict[Role, FrozenSet[Permission]] = {
         Permission.AGENCY_STORES_SWITCH,
         Permission.AGENCY_REPORTS_VIEW,
         Permission.MULTI_TENANT_ACCESS,
+        # Action Proposal permissions (Story 8.4)
+        Permission.ACTION_PROPOSALS_VIEW,
+        Permission.ACTION_PROPOSALS_APPROVE,
+        Permission.ACTION_PROPOSALS_AUDIT,
     ]),
 }
+
+
+# Roles that can approve/reject action proposals (Story 8.4)
+# These roles have Permission.ACTION_PROPOSALS_APPROVE
+APPROVER_ROLES: FrozenSet[Role] = frozenset([
+    Role.MERCHANT_ADMIN,
+    Role.AGENCY_ADMIN,
+    Role.ADMIN,
+    Role.OWNER,
+    Role.SUPER_ADMIN,
+])
+
+# Roles that can only view proposals but NOT approve/reject
+PROPOSAL_VIEWER_ONLY_ROLES: FrozenSet[Role] = frozenset([
+    Role.MERCHANT_VIEWER,
+    Role.AGENCY_VIEWER,
+    Role.VIEWER,
+    Role.EDITOR,
+])
 
 
 def get_permissions_for_role(role: Role) -> FrozenSet[Permission]:
@@ -489,3 +537,86 @@ def get_allowed_roles_for_billing_tier(billing_tier: str) -> list[str]:
     """
     allowed_roles = BILLING_TIER_ALLOWED_ROLES.get(billing_tier.lower(), frozenset())
     return [role.value for role in allowed_roles]
+
+
+# ============================================================================
+# Action Proposal Permission Helpers (Story 8.4)
+# ============================================================================
+
+
+def can_approve_action_proposals(roles: list[str]) -> bool:
+    """
+    Check if any of the given roles can approve/reject action proposals.
+
+    Args:
+        roles: List of role names from JWT
+
+    Returns:
+        True if user can approve/reject action proposals
+    """
+    return roles_have_permission(roles, Permission.ACTION_PROPOSALS_APPROVE)
+
+
+def can_view_action_proposals(roles: list[str]) -> bool:
+    """
+    Check if any of the given roles can view action proposals.
+
+    Args:
+        roles: List of role names from JWT
+
+    Returns:
+        True if user can view action proposals
+    """
+    return roles_have_permission(roles, Permission.ACTION_PROPOSALS_VIEW)
+
+
+def can_view_action_proposal_audit(roles: list[str]) -> bool:
+    """
+    Check if any of the given roles can view action proposal audit trail.
+
+    Args:
+        roles: List of role names from JWT
+
+    Returns:
+        True if user can view audit trail
+    """
+    return roles_have_permission(roles, Permission.ACTION_PROPOSALS_AUDIT)
+
+
+def is_approver_role(role_name: str) -> bool:
+    """
+    Check if a role name is an approver role.
+
+    Args:
+        role_name: The role name to check
+
+    Returns:
+        True if the role can approve action proposals
+    """
+    try:
+        role = Role(role_name.lower())
+        return role in APPROVER_ROLES
+    except ValueError:
+        return False
+
+
+def get_primary_approver_role(roles: list[str]) -> str | None:
+    """
+    Get the primary approver role from a list of roles.
+
+    Useful for audit logging to capture which role was used for approval.
+
+    Args:
+        roles: List of role names from JWT
+
+    Returns:
+        The first approver role found, or None if no approver role
+    """
+    for role_name in roles:
+        try:
+            role = Role(role_name.lower())
+            if role in APPROVER_ROLES:
+                return role.value
+        except ValueError:
+            continue
+    return None
