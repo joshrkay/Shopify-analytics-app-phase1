@@ -39,6 +39,7 @@
         "max_users": 1,
         "api_calls_per_month": 0,
         "ai_insights_per_month": 0,
+        "ai_actions_per_month": 0,
         "data_retention_days": 30,
         "export_rows_per_request": 100
       },
@@ -81,6 +82,7 @@
         "max_users": 5,
         "api_calls_per_month": 10000,
         "ai_insights_per_month": 50,
+        "ai_actions_per_month": 0,
         "data_retention_days": 90,
         "export_rows_per_request": 10000
       },
@@ -123,6 +125,7 @@
         "max_users": 20,
         "api_calls_per_month": 100000,
         "ai_insights_per_month": 500,
+        "ai_actions_per_month": 100,
         "data_retention_days": 365,
         "export_rows_per_request": 100000
       },
@@ -166,6 +169,7 @@
         "max_users": -1,
         "api_calls_per_month": -1,
         "ai_insights_per_month": -1,
+        "ai_actions_per_month": -1,
         "data_retention_days": -1,
         "export_rows_per_request": -1
       },

@@ -301,7 +301,7 @@ VALUES
     (uuid_generate_v4()::TEXT, 'plan_pro', 'data_export_csv', TRUE, 100000, '{"rows_per_export": 100000}'),
     (uuid_generate_v4()::TEXT, 'plan_pro', 'data_export_api', TRUE, NULL, NULL),
     (uuid_generate_v4()::TEXT, 'plan_pro', 'ai_insights', TRUE, 500, '{"monthly_limit": 500}'),
-    (uuid_generate_v4()::TEXT, 'plan_pro', 'ai_actions', TRUE, NULL, NULL),
+    (uuid_generate_v4()::TEXT, 'plan_pro', 'ai_actions', TRUE, 100, '{"monthly_limit": 100}'),
     (uuid_generate_v4()::TEXT, 'plan_pro', 'api_access', TRUE, 100000, '{"monthly_calls": 100000}'),
     (uuid_generate_v4()::TEXT, 'plan_pro', 'multi_store', TRUE, NULL, NULL)
 ON CONFLICT (plan_id, feature_key) DO UPDATE SET
