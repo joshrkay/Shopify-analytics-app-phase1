@@ -15,7 +15,7 @@
 -- Test 3a: Query for non-existent tenant returns NULL/0
 WITH empty_tenant_revenue AS (
     SELECT
-        COALESCE(SUM(revenue), 0) AS total_revenue,
+        COALESCE(SUM(revenue_gross), 0) AS total_revenue,
         COUNT(*) AS order_count
     FROM {{ ref('fact_orders') }}
     WHERE tenant_id = 'non_existent_tenant_xyz_12345'

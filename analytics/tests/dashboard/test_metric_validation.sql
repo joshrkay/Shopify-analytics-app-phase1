@@ -16,7 +16,7 @@
 
 WITH dbt_revenue AS (
     SELECT
-        COALESCE(SUM(revenue), 0) AS total_revenue,
+        COALESCE(SUM(revenue_gross), 0) AS total_revenue,
         COUNT(*) AS order_count
     FROM {{ ref('fact_orders') }}
     WHERE order_created_at >= CURRENT_DATE - INTERVAL '30 days'
@@ -25,7 +25,7 @@ WITH dbt_revenue AS (
 dashboard_revenue AS (
     -- This represents what the dashboard query returns
     SELECT
-        COALESCE(SUM(revenue), 0) AS total_revenue,
+        COALESCE(SUM(revenue_gross), 0) AS total_revenue,
         COUNT(*) AS order_count
     FROM {{ ref('fact_orders') }}
     WHERE order_created_at >= CURRENT_DATE - INTERVAL '30 days'
