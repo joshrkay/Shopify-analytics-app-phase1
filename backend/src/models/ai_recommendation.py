@@ -38,7 +38,6 @@ from sqlalchemy import (
     UniqueConstraint,
     ForeignKey,
 )
-from sqlalchemy.orm import relationship
 
 from src.db_base import Base
 from src.models.base import TimestampMixin, TenantScopedMixin
@@ -235,13 +234,9 @@ class AIRecommendation(Base, TimestampMixin, TenantScopedMixin):
         comment="SHA256 hash of input data for deduplication"
     )
 
-    # Relationships
-    actions = relationship(
-        "AIAction",
-        back_populates="recommendation",
-        lazy="dynamic",
-        cascade="all, delete-orphan"
-    )
+    # Note: Relationship to AIAction is defined on the AIAction model
+    # to avoid circular import issues. Query actions via:
+    # session.query(AIAction).filter(AIAction.recommendation_id == rec.id)
 
     # Indexes for efficient querying
     __table_args__ = (

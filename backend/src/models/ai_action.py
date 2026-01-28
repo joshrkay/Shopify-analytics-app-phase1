@@ -281,7 +281,6 @@ class AIAction(Base, TimestampMixin, TenantScopedMixin):
     # Relationships
     recommendation = relationship(
         "AIRecommendation",
-        back_populates="actions",
         lazy="joined"
     )
 
