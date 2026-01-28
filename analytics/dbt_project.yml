@@ -53,3 +53,10 @@ vars:
   # Example: dbt run --vars '{airbyte_raw_schema: my_raw_schema, platform_schema: my_platform}'
   airbyte_raw_schema: airbyte_raw  # Schema containing _airbyte_raw_* tables
   platform_schema: platform  # Schema containing tenant_airbyte_connections table
+
+  # Incremental lookback windows (in days) - per user story 7.7.1
+  # These control how far back incremental models look for changed records
+  # Default: 7 days. Override per-source as needed.
+  fact_orders_lookback_days: 7
+  fact_ad_spend_lookback_days: 7
+  fact_campaign_performance_lookback_days: 7
