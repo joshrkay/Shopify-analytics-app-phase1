@@ -79,14 +79,14 @@ orders_with_net_revenue as (
 ad_spend as (
     select
         tenant_id,
-        platform,
-        spend_date,
+        source_platform as platform,
+        date as spend_date,
         currency,
         campaign_id,
         sum(spend) as total_spend
     from {{ ref('fact_ad_spend') }}
     where tenant_id is not null
-        and platform in ('meta_ads', 'google_ads')
+        and source_platform in ('meta_ads', 'google_ads')
         and spend is not null
         and spend >= 0  -- Edge case: negative spend should not happen
     group by 1, 2, 3, 4, 5
