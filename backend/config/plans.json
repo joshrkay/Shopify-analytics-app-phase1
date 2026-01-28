@@ -243,5 +243,28 @@
     "api_access": "REST API access",
     "priority_support": "Priority customer support",
     "dedicated_support": "Dedicated account manager"
+  },
+  "premium_jobs": {
+    "sync": {
+      "required_feature": "dashboard_basic",
+      "skip_on_deny": true
+    },
+    "export": {
+      "required_feature": "data_export_api",
+      "skip_on_deny": true
+    },
+    "ai_action": {
+      "required_feature": "ai_actions",
+      "skip_on_deny": true,
+      "monthly_limit_key": "ai_actions_per_month"
+    },
+    "backfill": {
+      "required_feature": "dashboard_advanced",
+      "skip_on_deny": true
+    },
+    "attribution_model": {
+      "required_feature": "dashboard_advanced",
+      "skip_on_deny": true
+    }
   }
 }
