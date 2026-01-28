@@ -27,6 +27,7 @@ from src.api.routes import insights
 from src.api.routes import recommendations
 from src.api.routes import action_proposals
 from src.api.routes import actions
+from src.api.routes import llm_config
 from src.api.dq import routes as sync_health
 
 # Configure structured logging
@@ -147,6 +148,10 @@ app.include_router(action_proposals.router)
 # Include actions routes (requires authentication and AI_ACTIONS entitlement)
 # Story 8.5 - Action Execution (Scoped & Reversible)
 app.include_router(actions.router)
+
+# Include LLM config routes (requires authentication and AI entitlement)
+# Story 8.8 - Model Routing & Prompt Governance
+app.include_router(llm_config.router)
 
 
 # Global exception handler for tenant isolation errors

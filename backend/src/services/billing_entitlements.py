@@ -43,6 +43,8 @@ class BillingFeature:
     AI_RECOMMENDATIONS = "ai_recommendations"  # Story 8.3
     AI_ACTIONS = "ai_actions"
     CUSTOM_REPORTS = "custom_reports"
+    LLM_ROUTING = "llm_routing"  # Story 8.8
+    CUSTOM_PROMPTS = "custom_prompts"  # Story 8.8 - Enterprise only
 
 
 # Billing tier feature matrix
@@ -57,6 +59,8 @@ BILLING_TIER_FEATURES = {
         BillingFeature.AI_RECOMMENDATIONS: True,  # Limited (Story 8.3)
         BillingFeature.AI_ACTIONS: False,
         BillingFeature.CUSTOM_REPORTS: False,
+        BillingFeature.LLM_ROUTING: False,  # Story 8.8
+        BillingFeature.CUSTOM_PROMPTS: False,  # Story 8.8
         'max_dashboard_access': 3,
         'max_users': 2,
     },
@@ -70,6 +74,8 @@ BILLING_TIER_FEATURES = {
         BillingFeature.AI_RECOMMENDATIONS: True,  # Story 8.3
         BillingFeature.AI_ACTIONS: True,     # Limited
         BillingFeature.CUSTOM_REPORTS: True,
+        BillingFeature.LLM_ROUTING: True,   # Story 8.8
+        BillingFeature.CUSTOM_PROMPTS: False,  # Story 8.8 - Enterprise only
         'max_dashboard_access': 10,
         'max_users': 10,
         'max_agency_stores': 5,
@@ -84,6 +90,8 @@ BILLING_TIER_FEATURES = {
         BillingFeature.AI_RECOMMENDATIONS: True,  # Story 8.3
         BillingFeature.AI_ACTIONS: True,
         BillingFeature.CUSTOM_REPORTS: True,
+        BillingFeature.LLM_ROUTING: True,    # Story 8.8
+        BillingFeature.CUSTOM_PROMPTS: True,  # Story 8.8 - Custom prompt templates
         'max_dashboard_access': 999,
         'max_users': 999,
         'max_agency_stores': 999,

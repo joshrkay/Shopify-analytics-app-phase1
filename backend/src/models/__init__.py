@@ -61,6 +61,13 @@ from src.models.notification import (
     EVENT_IMPORTANCE_MAP,
 )
 from src.models.notification_preference import NotificationPreference
+from src.models.llm_routing import (
+    LLMModelRegistry,
+    LLMOrgConfig,
+    LLMPromptTemplate,
+    LLMUsageLog,
+    LLMResponseStatus,
+)
 
 __all__ = [
     "TimestampMixin",
@@ -140,4 +147,10 @@ __all__ = [
     "NotificationStatus",
     "EVENT_IMPORTANCE_MAP",
     "NotificationPreference",
+    # LLM Routing models (Story 8.8)
+    "LLMModelRegistry",
+    "LLMOrgConfig",
+    "LLMPromptTemplate",
+    "LLMUsageLog",
+    "LLMResponseStatus",
 ]
