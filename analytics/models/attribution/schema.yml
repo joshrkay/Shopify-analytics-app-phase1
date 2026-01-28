@@ -46,8 +46,10 @@ models:
         description: Order name/number from Shopify (e.g., #1001)
       - name: order_number
         description: Order number as integer
-      - name: customer_email
-        description: Customer email address
+      - name: customer_key
+        description: Pseudonymized customer identifier (MD5 hash of email or customer_id)
+        tests:
+          - not_null
       - name: order_created_at
         description: Order creation timestamp (UTC)
         tests:

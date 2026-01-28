@@ -15,33 +15,41 @@
 -- SECURITY: Tenant isolation is enforced - all rows must have tenant_id
 -- and tenant_id is validated against _tenant_airbyte_connections
 
-with staging_orders as (
+with tenant_timezones as (
+    select tenant_id, timezone
+    from {{ ref('dim_tenant') }}
+),
+
+staging_orders as (
     select
-        order_id,
-        order_name,
-        order_number,
-        customer_email,
-        customer_id_raw,
-        created_at,
-        updated_at,
-        cancelled_at,
-        closed_at,
-        total_price,
-        subtotal_price,
-        total_tax,
-        currency,
-        financial_status,
-        fulfillment_status,
-        tags,
-        note,
-        refunds_json,
-        airbyte_record_id,
-        airbyte_emitted_at,
-        tenant_id
-    from {{ ref('stg_shopify_orders') }}
-    where tenant_id is not null
-        and order_id is not null
-        and trim(order_id) != ''
+        o.order_id,
+        o.order_name,
+        o.order_number,
+        -- PII fields used only for hashing (not exposed in final output)
+        o.customer_email,
+        o.customer_id_raw,
+        o.created_at,
+        o.updated_at,
+        o.cancelled_at,
+        o.closed_at,
+        o.total_price,
+        o.subtotal_price,
+        o.total_tax,
+        o.currency,
+        o.financial_status,
+        o.fulfillment_status,
+        o.tags,
+        o.note,
+        o.refunds_json,
+        o.airbyte_record_id,
+        o.airbyte_emitted_at,
+        o.tenant_id,
+        coalesce(t.timezone, 'UTC') as tenant_timezone
+    from {{ ref('stg_shopify_orders') }} o
+    left join tenant_timezones t on o.tenant_id = t.tenant_id
+    where o.tenant_id is not null
+        and o.order_id is not null
+        and trim(o.order_id) != ''
     
     {% if var('backfill_start_date', none) and var('backfill_end_date', none) %}
         -- Backfill mode: filter by date range
@@ -52,11 +60,10 @@ with staging_orders as (
             and tenant_id = '{{ var("backfill_tenant_id") }}'
         {% endif %}
     {% elif is_incremental() %}
-        -- Incremental mode: only process new or updated records
-        -- This assumes airbyte_emitted_at increases for updates
-        and airbyte_emitted_at > (
-            select coalesce(max(ingested_at), '1970-01-01'::timestamp with time zone)
-            from {{ this }}
+        -- Incremental mode with configurable lookback window (default 7 days)
+        -- This reprocesses recent data to catch late-arriving records and updates
+        and airbyte_emitted_at >= (
+            current_timestamp - interval '{{ var("fact_orders_lookback_days", 7) }} days'
         )
     {% endif %}
 )
@@ -70,20 +77,34 @@ select
     order_id,
     order_name,
     order_number,
-    
-    -- Customer information
-    customer_email,
-    customer_id_raw,
-    
+
+    -- Customer identifier (pseudonymized per Shopify pattern)
+    -- Uses hashed email/ID instead of raw PII for customer-level analytics
+    -- Enables: CAC, LTV, cohort analysis without exposing PII
+    md5(lower(trim(coalesce(
+        nullif(customer_email, ''),
+        customer_id_raw::text,
+        ''
+    )))) as customer_key,
+
+    -- Source platform (canonical column per user story 7.7.1)
+    'shopify' as source_platform,
+
     -- Timestamps (all UTC)
     created_at as order_created_at,
     updated_at as order_updated_at,
     cancelled_at as order_cancelled_at,
     closed_at as order_closed_at,
+
+    -- Tenant local date (per user story 7.7.1)
+    -- Normalized to tenant's timezone for consistent daily reporting
+    {{ convert_to_tenant_local_date('created_at', 'tenant_timezone') }} as date,
     
     -- Financial fields (all numeric, normalized)
-    total_price as revenue,
-    subtotal_price,
+    -- revenue_gross: total price including tax (use for gross revenue metrics)
+    -- revenue_net: subtotal before tax (use as default revenue per user story 7.7.1)
+    total_price as revenue_gross,
+    subtotal_price as revenue_net,
     total_tax,
     currency,
     

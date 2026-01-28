@@ -3,12 +3,22 @@ version: 2
 models:
   - name: fact_orders
     description: |
-      Canonical fact table for Shopify orders.
-      
+      Canonical fact table for Shopify orders (User Story 7.7.1).
+
+      Grain: One row per order.
+
       This is the source of truth for all order events. The table is incremental
-      and processes new/updated orders based on airbyte_emitted_at.
-      
+      with a configurable lookback window (default 7 days).
+
+      Canonical Columns:
+        - tenant_id: Required for tenant isolation
+        - date: Order date in tenant's local timezone
+        - source_platform: Always 'shopify'
+        - revenue_gross: Total price including tax
+        - revenue_net: Subtotal before tax (default for ROAS)
+
       SECURITY: All rows are tenant-isolated via tenant_id.
+      PII: customer_email and customer_id_raw intentionally excluded.
     tests:
       - test_freshness:
           arguments:
@@ -21,6 +31,12 @@ models:
             date_column: order_created_at
             min_daily_records: 1
             lookback_days: 7
+          config:
+            severity: warn
+      - test_tenant_has_rows:
+          arguments:
+            tenant_id_column: tenant_id
+            min_rows: 1
           config:
             severity: warn
     columns:
@@ -39,12 +55,23 @@ models:
         description: Order name/number from Shopify (e.g., #1001)
       - name: order_number
         description: Order number as integer
-      - name: customer_email
-        description: Customer email address
+      - name: customer_key
+        description: |
+          Pseudonymized customer identifier (MD5 hash of email or customer_id).
+          Enables customer-level analytics (CAC, LTV, cohorts) without exposing PII.
+          Uses Shopify's internal customer ID pattern.
         meta:
           superset_expose: true
-      - name: customer_id_raw
-        description: Raw customer ID from Shopify
+        tests:
+          - not_null
+      - name: source_platform
+        description: Source platform identifier (canonical column)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['shopify']
       - name: order_created_at
         description: Order creation timestamp (UTC)
         meta:
@@ -57,14 +84,24 @@ models:
         description: Order cancellation timestamp (UTC, nullable)
       - name: order_closed_at
         description: Order closure timestamp (UTC, nullable)
-      - name: revenue
-        description: Total order revenue (numeric)
+      - name: date
+        description: Order date in tenant's local timezone (canonical column per 7.7.1)
         meta:
           superset_expose: true
         tests:
           - not_null
-      - name: subtotal_price
-        description: Subtotal before tax (numeric)
+      - name: revenue_gross
+        description: Total order revenue including tax (use for gross revenue metrics)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+      - name: revenue_net
+        description: Order subtotal before tax (default for ROAS per user story 7.7.1)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
       - name: total_tax
         description: Total tax amount (numeric)
       - name: currency
@@ -72,8 +109,7 @@ models:
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
+              values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
               config:
                 where: "currency is not null"
       - name: financial_status
@@ -85,15 +121,14 @@ models:
       - name: note
         description: Order notes
       - name: tenant_id
-        description: Tenant identifier for data isolation
+        description: Tenant identifier for data isolation (canonical column)
         meta:
           superset_expose: true
         tests:
           - not_null
           - relationships:
-              arguments:
-                to: ref('_tenant_airbyte_connections')
-                field: tenant_id
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
               config:
                 where: "tenant_id is not null"
       - name: airbyte_record_id
@@ -115,12 +150,22 @@ models:
 
   - name: fact_ad_spend
     description: |
-      Canonical fact table for ad spend across all platforms (Meta Ads, Google Ads).
-      
-      This table unifies ad spend data from multiple ad platforms into a single
-      source of truth. The table is incremental and processes new records based
-      on airbyte_emitted_at.
-      
+      Canonical fact table for marketing spend (User Story 7.7.1).
+      Also known as fact_marketing_spend.
+
+      Grain: Per day + channel + campaign.
+
+      This table unifies ad spend data from Meta Ads and Google Ads into a single
+      source of truth. The table is incremental with a configurable lookback
+      window (default 7 days).
+
+      Canonical Columns:
+        - tenant_id: Required for tenant isolation
+        - date: Spend date (renamed from spend_date)
+        - source_platform: Platform identifier (meta_ads, google_ads)
+        - channel: Marketing channel (paid_social, paid_search)
+        - spend: Amount spent
+
       SECURITY: All rows are tenant-isolated via tenant_id.
     tests:
       - test_freshness:
@@ -131,19 +176,58 @@ models:
             severity: error
       - test_volume_anomaly:
           arguments:
-            date_column: spend_date
+            date_column: date
             min_daily_records: 1
             lookback_days: 7
           config:
             severity: warn
+      - test_tenant_has_rows:
+          arguments:
+            tenant_id_column: tenant_id
+            min_rows: 1
+          config:
+            severity: warn
     columns:
       - name: id
-        description: Surrogate key (MD5 hash of tenant_id + platform + ad_account_id + campaign_id + ad_id + spend_date)
+        description: Surrogate key (MD5 hash of tenant_id + platform + ad_account_id + campaign_id + ad_id + date)
         meta:
           superset_expose: true
         tests:
           - not_null
           - unique
+      - name: tenant_id
+        description: Tenant identifier for data isolation (canonical column)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+          - relationships:
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
+              config:
+                where: "tenant_id is not null"
+      - name: date
+        description: Date of the spend (canonical column, renamed from spend_date)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+      - name: source_platform
+        description: Source platform identifier (canonical column)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['meta_ads', 'google_ads']
+      - name: channel
+        description: Marketing channel derived from platform (canonical column per 7.7.1)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['paid_social', 'paid_search', 'other']
       - name: ad_account_id
         description: Ad account ID (platform-specific)
         meta:
@@ -164,12 +248,6 @@ models:
         description: Ad ID (platform-specific, nullable)
         meta:
           superset_expose: true
-      - name: spend_date
-        description: Date of the spend (DATE)
-        meta:
-          superset_expose: true
-        tests:
-          - not_null
       - name: spend
         description: Amount spent (numeric, normalized currency)
         meta:
@@ -183,33 +261,19 @@ models:
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
+              values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
               config:
                 where: "currency is not null"
       - name: platform
-        description: Platform identifier (meta_ads or google_ads)
+        description: Platform identifier (legacy, use source_platform)
         meta:
-          superset_expose: true
+          superset_expose: false
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values: ['meta_ads', 'google_ads']
+              values: ['meta_ads', 'google_ads']
               config:
                 where: "platform is not null"
-      - name: tenant_id
-        description: Tenant identifier for data isolation
-        meta:
-          superset_expose: true
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('_tenant_airbyte_connections')
-                field: tenant_id
-              config:
-                where: "tenant_id is not null"
       - name: airbyte_record_id
         description: Airbyte record ID for tracking
         meta:
@@ -229,12 +293,27 @@ models:
 
   - name: fact_campaign_performance
     description: |
-      Canonical fact table for campaign performance across all platforms (Meta Ads, Google Ads).
-      
-      This table unifies campaign-level performance metrics from multiple ad platforms
-      into a single source of truth. The table is incremental and processes new records
-      based on airbyte_emitted_at.
-      
+      Canonical fact table for campaign performance (User Story 7.7.1).
+
+      Grain: Per day + campaign.
+
+      This table unifies campaign-level performance metrics from Meta Ads and
+      Google Ads into a single source of truth. The table is incremental with
+      a configurable lookback window (default 7 days).
+
+      Canonical Columns:
+        - tenant_id: Required for tenant isolation
+        - date: Performance date (renamed from performance_date)
+        - source_platform: Platform identifier (meta_ads, google_ads)
+        - channel: Marketing channel (paid_social, paid_search)
+        - campaign_id: Campaign identifier
+        - spend: Amount spent
+
+      Calculated Metrics:
+        - ctr: Click-through rate (clicks/impressions * 100)
+        - cpc: Cost per click (spend/clicks)
+        - cpa: Cost per acquisition (spend/conversions)
+
       SECURITY: All rows are tenant-isolated via tenant_id.
     tests:
       - test_freshness:
@@ -244,19 +323,59 @@ models:
           config:
             severity: error
       - test_volume_anomaly:
-          date_column: performance_date
-          min_daily_records: 1
-          lookback_days: 7
+          arguments:
+            date_column: date
+            min_daily_records: 1
+            lookback_days: 7
+          config:
+            severity: warn
+      - test_tenant_has_rows:
+          arguments:
+            tenant_id_column: tenant_id
+            min_rows: 1
           config:
             severity: warn
     columns:
       - name: id
-        description: Surrogate key (MD5 hash of tenant_id + platform + ad_account_id + campaign_id + performance_date)
+        description: Surrogate key (MD5 hash of tenant_id + platform + ad_account_id + campaign_id + date)
         meta:
           superset_expose: true
         tests:
           - not_null
           - unique
+      - name: tenant_id
+        description: Tenant identifier for data isolation (canonical column)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+          - relationships:
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
+              config:
+                where: "tenant_id is not null"
+      - name: date
+        description: Date of the performance metrics (canonical column, renamed from performance_date)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+      - name: source_platform
+        description: Source platform identifier (canonical column)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['meta_ads', 'google_ads']
+      - name: channel
+        description: Marketing channel derived from platform (canonical column per 7.7.1)
+        meta:
+          superset_expose: true
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['paid_social', 'paid_search', 'other']
       - name: ad_account_id
         description: Ad account ID (platform-specific)
         meta:
@@ -273,12 +392,6 @@ models:
         description: Campaign name
         meta:
           superset_expose: true
-      - name: performance_date
-        description: Date of the performance metrics (DATE)
-        meta:
-          superset_expose: true
-        tests:
-          - not_null
       - name: spend
         description: Amount spent (numeric, normalized currency)
         meta:
@@ -304,15 +417,15 @@ models:
         tests:
           - not_null
       - name: ctr
-        description: Click-through rate (percentage, calculated)
+        description: Click-through rate (percentage, calculated as clicks/impressions * 100)
         meta:
           superset_expose: true
       - name: cpc
-        description: Cost per click (calculated)
+        description: Cost per click (calculated as spend/clicks)
         meta:
           superset_expose: true
       - name: cpa
-        description: Cost per acquisition/conversion (calculated)
+        description: Cost per acquisition/conversion (calculated as spend/conversions)
         meta:
           superset_expose: true
       - name: currency
@@ -322,33 +435,19 @@ models:
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
+              values: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CNY']
               config:
                 where: "currency is not null"
       - name: platform
-        description: Platform identifier (meta_ads or google_ads)
+        description: Platform identifier (legacy, use source_platform)
         meta:
-          superset_expose: true
+          superset_expose: false
         tests:
           - not_null
           - accepted_values:
-              arguments:
-                values: ['meta_ads', 'google_ads']
+              values: ['meta_ads', 'google_ads']
               config:
                 where: "platform is not null"
-      - name: tenant_id
-        description: Tenant identifier for data isolation
-        meta:
-          superset_expose: true
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('_tenant_airbyte_connections')
-                field: tenant_id
-              config:
-                where: "tenant_id is not null"
       - name: airbyte_record_id
         description: Airbyte record ID for tracking
         meta:

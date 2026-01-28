@@ -126,11 +126,12 @@ models:
       - name: order_number
         description: Numeric order number
 
-      - name: customer_email
-        description: Customer email address
-
-      - name: customer_id_raw
-        description: Shopify customer ID
+      - name: customer_key
+        description: |
+          Pseudonymized customer identifier (MD5 hash of email or customer_id).
+          Enables customer-level analytics without exposing PII.
+        tests:
+          - not_null
 
       - name: revenue_date
         description: |

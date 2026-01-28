@@ -20,7 +20,7 @@ WITH dbt_roas AS (
             ELSE SUM(conversions) / NULLIF(SUM(spend), 0)
         END AS roas
     FROM {{ ref('fact_campaign_performance') }}
-    WHERE performance_date >= CURRENT_DATE - INTERVAL '30 days'
+    WHERE date >= CURRENT_DATE - INTERVAL '30 days'
     GROUP BY campaign_id, campaign_name, platform
 ),
 
@@ -37,7 +37,7 @@ dashboard_roas AS (
             ELSE SUM(conversions) / NULLIF(SUM(spend), 0)
         END AS roas
     FROM {{ ref('fact_campaign_performance') }}
-    WHERE performance_date >= CURRENT_DATE - INTERVAL '30 days'
+    WHERE date >= CURRENT_DATE - INTERVAL '30 days'
     GROUP BY campaign_id, campaign_name, platform
 ),
 

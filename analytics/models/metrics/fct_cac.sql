@@ -11,7 +11,7 @@
 -- Business Rules:
 -- - CAC = Total Ad Spend / Number of New Customers Acquired (ALL new customers)
 -- - nCAC = Total Ad Spend / Number of Net New Customers (excludes cancelled/fully refunded)
--- - New Customer = First order ever (based on customer_email or customer_id)
+-- - New Customer = First order ever (based on customer_key - pseudonymized identifier)
 -- - Net New Customer = First order was NOT cancelled or fully refunded
 -- - Ad Spend = Meta Ads + Google Ads (same denominator as ROAS)
 -- - Calculated per tenant, per platform, per time period
@@ -30,27 +30,23 @@ with all_orders as (
     select
         tenant_id,
         order_id,
-        customer_email,
-        customer_id_raw,
+        customer_key,  -- Pseudonymized customer identifier
         order_created_at,
-        revenue,
+        revenue_gross,
         currency,
         financial_status
     from {{ ref('fact_orders') }}
     where tenant_id is not null
         and order_id is not null
-        and (customer_email is not null or customer_id_raw is not null)  -- Must have customer identifier
+        and customer_key is not null  -- Must have customer identifier
+        and customer_key != md5('')  -- Exclude empty hash
 ),
 
 -- Identify first order for each customer
 first_orders as (
     select
         tenant_id,
-        -- Use email as primary identifier, fall back to customer_id if email missing
-        coalesce(
-            nullif(trim(lower(customer_email)), ''),
-            customer_id_raw
-        ) as customer_identifier,
+        customer_key,  -- Already pseudonymized
         min(order_created_at) as first_order_date,
         min(order_id) as first_order_id  -- Tie-breaker if multiple orders same timestamp
     from all_orders
@@ -61,11 +57,10 @@ first_orders as (
 first_order_details as (
     select
         o.tenant_id,
-        f.customer_identifier,
+        f.customer_key,
         f.first_order_date,
         f.first_order_id,
-        o.customer_email,
-        o.revenue as first_order_revenue,
+        o.revenue_gross as first_order_revenue,
         o.currency,
         o.financial_status
     from first_orders f
@@ -78,10 +73,9 @@ first_order_details as (
 first_order_attribution as (
     select
         f.tenant_id,
-        f.customer_identifier,
+        f.customer_key,
         f.first_order_date,
         f.first_order_id,
-        f.customer_email,
         f.first_order_revenue,
         f.currency,
         f.financial_status,
@@ -111,8 +105,8 @@ first_order_with_net_revenue as (
         on f.tenant_id = r.tenant_id
         and f.first_order_id = r.order_id
     group by
-        f.tenant_id, f.customer_identifier, f.first_order_date, f.first_order_id,
-        f.customer_email, f.first_order_revenue, f.currency, f.financial_status,
+        f.tenant_id, f.customer_key, f.first_order_date, f.first_order_id,
+        f.first_order_revenue, f.currency, f.financial_status,
         f.platform, f.campaign_id, f.campaign_name, f.attribution_status,
         f.utm_source, f.utm_medium, f.utm_campaign
 ),
@@ -121,10 +115,9 @@ first_order_with_net_revenue as (
 paid_acquired_customers as (
     select
         tenant_id,
-        customer_identifier,
+        customer_key,
         first_order_date,
         first_order_id,
-        customer_email,
         first_order_revenue,
         first_order_net_revenue,
         currency,
@@ -152,14 +145,14 @@ paid_acquired_customers as (
 ad_spend as (
     select
         tenant_id,
-        platform,
-        spend_date,
+        source_platform as platform,
+        date as spend_date,
         currency,
         campaign_id,
         sum(spend) as total_spend
     from {{ ref('fact_ad_spend') }}
     where tenant_id is not null
-        and platform in ('meta_ads', 'google_ads')
+        and source_platform in ('meta_ads', 'google_ads')
         and spend is not null
         and spend >= 0
     group by 1, 2, 3, 4, 5
@@ -173,8 +166,8 @@ daily_new_customers as (
         date_trunc('day', first_order_date) as acquisition_date,
         currency,
         campaign_id,
-        count(distinct customer_identifier) as new_customers,
-        count(distinct case when is_net_new_customer then customer_identifier end) as net_new_customers,
+        count(distinct customer_key) as new_customers,
+        count(distinct case when is_net_new_customer then customer_key end) as net_new_customers,
         sum(first_order_revenue) as first_order_revenue_total,
         sum(case when is_net_new_customer then first_order_net_revenue else 0 end) as net_first_order_revenue_total
     from paid_acquired_customers
@@ -436,14 +429,13 @@ where tenant_id is not null
 
 -- Edge Cases Handled:
 -- 1. Zero new customers: CAC = 0 (not NULL or infinity)
--- 2. Customers without email: Use customer_id as fallback
--- 3. Customers with multiple emails: Treated as separate customers (limitation)
--- 4. Same customer on multiple platforms: Counted once per platform (platform-level CAC)
--- 5. Organic customers: Excluded from paid CAC
--- 6. Refunded first orders: Included in new_customers count (per requirements)
--- 7. Multi-currency: CAC calculated separately per currency
--- 8. Spend without new customers: CAC not calculated (no customers to divide by)
--- 9. New customers without spend: CAC = 0
--- 10. Tenant isolation: All calculations scoped by tenant_id
--- 11. Campaign-level detail: Preserved in campaign_id field
--- 12. First order revenue: Tracked for LTV-to-CAC ratio analysis
+-- 2. Customer identification: Uses customer_key (hashed identifier) - no PII
+-- 3. Same customer on multiple platforms: Counted once per platform (platform-level CAC)
+-- 4. Organic customers: Excluded from paid CAC
+-- 5. Refunded first orders: Included in new_customers count (per requirements)
+-- 6. Multi-currency: CAC calculated separately per currency
+-- 7. Spend without new customers: CAC not calculated (no customers to divide by)
+-- 8. New customers without spend: CAC = 0
+-- 9. Tenant isolation: All calculations scoped by tenant_id
+-- 10. Campaign-level detail: Preserved in campaign_id field
+-- 11. First order revenue: Tracked for LTV-to-CAC ratio analysis

@@ -29,7 +29,7 @@ with order_revenue as (
         tenant_id,
         order_id,
         order_name,
-        customer_email,
+        customer_key,  -- Pseudonymized customer identifier
         min(order_created_at) as order_date,  -- Use earliest event date
         currency,
         sum(gross_revenue) as gross_revenue,
@@ -92,7 +92,7 @@ orders_filtered as (
         tenant_id,
         order_id,
         order_name,
-        customer_email,
+        customer_key,
         order_date,
         currency,
         gross_revenue,

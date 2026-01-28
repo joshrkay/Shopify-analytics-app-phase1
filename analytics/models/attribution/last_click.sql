@@ -84,9 +84,9 @@ orders_fact as (
         order_id,
         order_name,
         order_number,
-        customer_email,
+        customer_key,  -- Pseudonymized customer identifier (replaces PII)
         order_created_at,
-        revenue,
+        revenue_gross as revenue,
         currency,
         tenant_id
     from {{ ref('fact_orders') }}
@@ -99,8 +99,8 @@ campaigns as (
         ad_account_id,
         campaign_id,
         campaign_name,
-        platform,
-        performance_date,
+        source_platform as platform,
+        date as performance_date,
         spend,
         clicks,
         impressions,
@@ -120,7 +120,7 @@ attribution_joined as (
         ord.order_id,
         ord.order_name,
         ord.order_number,
-        ord.customer_email,
+        ord.customer_key,
         ord.order_created_at,
         ord.revenue,
         ord.currency,
@@ -186,12 +186,12 @@ attribution_raw as (
 select
     -- Primary key: deterministic hash of order_id + tenant_id
     md5(concat(order_id, '|', tenant_id, '|', 'last_click')) as id,
-    
+
     -- Order identifiers
     order_id,
     order_name,
     order_number,
-    customer_email,
+    customer_key,
     order_created_at,
     
     -- Financial metrics

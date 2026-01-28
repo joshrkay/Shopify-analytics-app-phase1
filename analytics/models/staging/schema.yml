@@ -1,6 +1,28 @@
 version: 2
 
 models:
+  - name: dim_tenant
+    description: |
+      Tenant dimension with timezone support for date normalization (User Story 7.7.1).
+
+      Provides tenant-level attributes including timezone for normalizing
+      timestamps to tenant local dates. Currently defaults to UTC; will be
+      updated when tenant timezone data source is available.
+    columns:
+      - name: tenant_id
+        description: Tenant identifier
+        tests:
+          - not_null
+          - unique
+      - name: timezone
+        description: IANA timezone string for the tenant (default UTC)
+        tests:
+          - not_null
+      - name: dbt_updated_at
+        description: Timestamp when record was last updated by dbt
+        tests:
+          - not_null
+
   - name: _tenant_airbyte_connections
     description: Helper model that exposes tenant_airbyte_connections for staging models
     columns:
