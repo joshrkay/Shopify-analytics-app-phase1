@@ -40,6 +40,7 @@ class BillingFeature:
     EXPLORE_MODE = "explore_mode"
     DATA_EXPORT = "data_export"
     AI_INSIGHTS = "ai_insights"
+    AI_RECOMMENDATIONS = "ai_recommendations"  # Story 8.3
     AI_ACTIONS = "ai_actions"
     CUSTOM_REPORTS = "custom_reports"
 
@@ -53,6 +54,7 @@ BILLING_TIER_FEATURES = {
         BillingFeature.EXPLORE_MODE: False,
         BillingFeature.DATA_EXPORT: False,
         BillingFeature.AI_INSIGHTS: True,  # Limited
+        BillingFeature.AI_RECOMMENDATIONS: True,  # Limited (Story 8.3)
         BillingFeature.AI_ACTIONS: False,
         BillingFeature.CUSTOM_REPORTS: False,
         'max_dashboard_access': 3,
@@ -65,6 +67,7 @@ BILLING_TIER_FEATURES = {
         BillingFeature.EXPLORE_MODE: True,
         BillingFeature.DATA_EXPORT: False,
         BillingFeature.AI_INSIGHTS: True,
+        BillingFeature.AI_RECOMMENDATIONS: True,  # Story 8.3
         BillingFeature.AI_ACTIONS: True,     # Limited
         BillingFeature.CUSTOM_REPORTS: True,
         'max_dashboard_access': 10,
@@ -78,6 +81,7 @@ BILLING_TIER_FEATURES = {
         BillingFeature.EXPLORE_MODE: True,
         BillingFeature.DATA_EXPORT: True,
         BillingFeature.AI_INSIGHTS: True,
+        BillingFeature.AI_RECOMMENDATIONS: True,  # Story 8.3
         BillingFeature.AI_ACTIONS: True,
         BillingFeature.CUSTOM_REPORTS: True,
         'max_dashboard_access': 999,
