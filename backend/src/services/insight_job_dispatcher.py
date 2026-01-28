@@ -15,6 +15,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from src.models.ai_insight import AIInsight
 from src.models.insight_job import InsightJob, InsightJobStatus, InsightJobCadence
 from src.models.subscription import Subscription, SubscriptionStatus
 from src.services.billing_entitlements import BillingEntitlementsService, BillingFeature
@@ -70,6 +71,44 @@ class InsightJobDispatcher:
             return tier == "enterprise"
         return True  # Daily is allowed for all entitled tiers
 
+    def _get_monthly_insight_count(self) -> int:
+        """Count insights generated this month for tenant."""
+        start_of_month = datetime.now(timezone.utc).replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        return (
+            self.db.query(AIInsight)
+            .filter(
+                AIInsight.tenant_id == self.tenant_id,
+                AIInsight.generated_at >= start_of_month,
+            )
+            .count()
+        )
+
+    def _check_monthly_limit(self) -> tuple[bool, str]:
+        """
+        Check if tenant has reached monthly insight limit.
+
+        Returns:
+            Tuple of (within_limit, reason)
+        """
+        service = BillingEntitlementsService(self.db, self.tenant_id)
+        limit = service.get_feature_limit("ai_insights_per_month")
+
+        # 0 means not entitled (handled by entitlement check)
+        # -1 means unlimited
+        if limit == -1:
+            return True, "OK"
+
+        if limit == 0:
+            return False, "Not entitled to AI insights"
+
+        current_count = self._get_monthly_insight_count()
+        if current_count >= limit:
+            return False, f"Monthly limit reached ({current_count}/{limit})"
+
+        return True, "OK"
+
     def should_create_job(self, cadence: InsightJobCadence) -> tuple[bool, str]:
         """
         Check if a job should be created for this tenant at given cadence.
@@ -87,6 +126,11 @@ class InsightJobDispatcher:
         # Check cadence permission
         if not self._is_cadence_allowed(cadence):
             return False, "Hourly cadence requires enterprise tier"
+
+        # Check monthly limit
+        within_limit, limit_reason = self._check_monthly_limit()
+        if not within_limit:
+            return False, limit_reason
 
         # Check for existing active job
         if self._has_active_job():

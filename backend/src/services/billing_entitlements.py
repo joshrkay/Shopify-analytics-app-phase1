@@ -297,6 +297,41 @@ class BillingEntitlementsService:
         max_stores = self.get_max_agency_stores()
         return current_store_count < max_stores
 
+    def get_feature_limit(self, limit_key: str) -> int:
+        """
+        Get a numeric limit from plan features.
+
+        Looks up the limit in the PlanFeature.limits JSON column.
+
+        Args:
+            limit_key: The limit key to look up (e.g., 'ai_insights_per_month')
+
+        Returns:
+            The limit value, or -1 for unlimited, or 0 if not entitled
+        """
+        plan = self._get_plan()
+        if not plan:
+            return 0  # Free tier default - no access
+
+        # Check PlanFeature for the ai_insights feature
+        feature = self.db.query(PlanFeature).filter(
+            PlanFeature.plan_id == plan.id,
+            PlanFeature.feature_key == BillingFeature.AI_INSIGHTS,
+        ).first()
+
+        if not feature or not feature.is_enabled:
+            return 0  # Feature not enabled
+
+        # Check limits JSON column
+        if feature.limits and limit_key in feature.limits:
+            return feature.limits.get(limit_key, -1)
+
+        # Check limit_value as fallback
+        if feature.limit_value is not None:
+            return feature.limit_value
+
+        return -1  # Unlimited if not specified
+
 
 class BillingRoleSync:
     """

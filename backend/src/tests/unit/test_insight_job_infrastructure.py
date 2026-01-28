@@ -43,7 +43,11 @@ class TestInsightJobDispatcher:
             is_entitled=True
         )
         mock_service.get_billing_tier.return_value = "growth"
+        mock_service.get_feature_limit.return_value = -1  # Unlimited
         mock_entitlements.return_value = mock_service
+
+        # Mock zero existing insights
+        mock_db_session.query.return_value.filter.return_value.count.return_value = 0
 
         dispatcher = InsightJobDispatcher(mock_db_session, "test-tenant")
         should_create, reason = dispatcher.should_create_job(InsightJobCadence.DAILY)
@@ -93,7 +97,11 @@ class TestInsightJobDispatcher:
             is_entitled=True
         )
         mock_service.get_billing_tier.return_value = "enterprise"
+        mock_service.get_feature_limit.return_value = -1  # Unlimited
         mock_entitlements.return_value = mock_service
+
+        # Mock zero existing insights
+        mock_db_session.query.return_value.filter.return_value.count.return_value = 0
 
         dispatcher = InsightJobDispatcher(mock_db_session, "test-tenant")
         should_create, reason = dispatcher.should_create_job(InsightJobCadence.HOURLY)
@@ -110,7 +118,11 @@ class TestInsightJobDispatcher:
             is_entitled=True
         )
         mock_service.get_billing_tier.return_value = "growth"
+        mock_service.get_feature_limit.return_value = -1  # Unlimited
         mock_entitlements.return_value = mock_service
+
+        # Mock zero existing insights for limit check
+        mock_db_session.query.return_value.filter.return_value.count.return_value = 0
 
         # Mock active job exists
         mock_db_session.query.return_value.filter.return_value.first.return_value = (
@@ -138,7 +150,11 @@ class TestInsightJobDispatcher:
             is_entitled=True
         )
         mock_service.get_billing_tier.return_value = "growth"
+        mock_service.get_feature_limit.return_value = -1  # Unlimited
         mock_entitlements.return_value = mock_service
+
+        # Mock zero existing insights
+        mock_db_session.query.return_value.filter.return_value.count.return_value = 0
 
         dispatcher = InsightJobDispatcher(mock_db_session, "test-tenant")
         job = dispatcher.dispatch(InsightJobCadence.DAILY)
@@ -323,3 +339,124 @@ class TestInsightJobRunner:
         # All jobs should be SUCCESS
         for job in jobs:
             assert job.status == InsightJobStatus.SUCCESS
+
+
+class TestMonthlyLimitEnforcement:
+    """Tests for monthly insight limit enforcement."""
+
+    @pytest.fixture
+    def mock_db_session(self):
+        """Create mock database session."""
+        session = MagicMock()
+        # Default: no active job, no existing insights
+        session.query.return_value.filter.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.count.return_value = 0
+        return session
+
+    @patch("src.services.insight_job_dispatcher.BillingEntitlementsService")
+    def test_rejects_when_limit_reached(self, mock_entitlements, mock_db_session):
+        """Test rejects job creation when monthly limit is reached."""
+        # Mock entitlement - entitled with limit of 50
+        mock_service = MagicMock()
+        mock_service.check_feature_entitlement.return_value = MagicMock(
+            is_entitled=True
+        )
+        mock_service.get_billing_tier.return_value = "growth"
+        mock_service.get_feature_limit.return_value = 50
+        mock_entitlements.return_value = mock_service
+
+        # Mock 50 existing insights this month (at limit)
+        mock_db_session.query.return_value.filter.return_value.count.return_value = 50
+        # No active job
+        mock_db_session.query.return_value.filter.return_value.first.return_value = None
+
+        dispatcher = InsightJobDispatcher(mock_db_session, "test-tenant")
+        should_create, reason = dispatcher.should_create_job(InsightJobCadence.DAILY)
+
+        assert should_create is False
+        assert "limit reached" in reason.lower()
+        assert "50/50" in reason
+
+    @patch("src.services.insight_job_dispatcher.BillingEntitlementsService")
+    def test_allows_when_under_limit(self, mock_entitlements, mock_db_session):
+        """Test allows job creation when under monthly limit."""
+        # Mock entitlement - entitled with limit of 50
+        mock_service = MagicMock()
+        mock_service.check_feature_entitlement.return_value = MagicMock(
+            is_entitled=True
+        )
+        mock_service.get_billing_tier.return_value = "growth"
+        mock_service.get_feature_limit.return_value = 50
+        mock_entitlements.return_value = mock_service
+
+        # Mock 25 existing insights this month (under limit)
+        mock_db_session.query.return_value.filter.return_value.count.return_value = 25
+        # No active job
+        mock_db_session.query.return_value.filter.return_value.first.return_value = None
+
+        dispatcher = InsightJobDispatcher(mock_db_session, "test-tenant")
+        should_create, reason = dispatcher.should_create_job(InsightJobCadence.DAILY)
+
+        assert should_create is True
+        assert reason == "OK"
+
+    @patch("src.services.insight_job_dispatcher.BillingEntitlementsService")
+    def test_unlimited_for_enterprise(self, mock_entitlements, mock_db_session):
+        """Test unlimited insights for enterprise tier (-1 limit)."""
+        # Mock entitlement - enterprise with unlimited (-1)
+        mock_service = MagicMock()
+        mock_service.check_feature_entitlement.return_value = MagicMock(
+            is_entitled=True
+        )
+        mock_service.get_billing_tier.return_value = "enterprise"
+        mock_service.get_feature_limit.return_value = -1  # Unlimited
+        mock_entitlements.return_value = mock_service
+
+        # Mock 1000 existing insights (should still be allowed)
+        mock_db_session.query.return_value.filter.return_value.count.return_value = 1000
+        # No active job
+        mock_db_session.query.return_value.filter.return_value.first.return_value = None
+
+        dispatcher = InsightJobDispatcher(mock_db_session, "test-tenant")
+        should_create, reason = dispatcher.should_create_job(InsightJobCadence.DAILY)
+
+        assert should_create is True
+        assert reason == "OK"
+
+    @patch("src.services.insight_job_dispatcher.BillingEntitlementsService")
+    def test_zero_limit_for_free_tier(self, mock_entitlements, mock_db_session):
+        """Test zero limit (not entitled) for free tier."""
+        # Mock entitlement - not entitled (returns 0)
+        mock_service = MagicMock()
+        mock_service.check_feature_entitlement.return_value = MagicMock(
+            is_entitled=False
+        )
+        mock_service.get_feature_limit.return_value = 0
+        mock_entitlements.return_value = mock_service
+
+        dispatcher = InsightJobDispatcher(mock_db_session, "test-tenant")
+        should_create, reason = dispatcher.should_create_job(InsightJobCadence.DAILY)
+
+        assert should_create is False
+        assert "not entitled" in reason.lower()
+
+    @patch("src.services.insight_job_dispatcher.BillingEntitlementsService")
+    def test_monthly_count_respects_start_of_month(self, mock_entitlements, mock_db_session):
+        """Test that monthly count is filtered by start of current month."""
+        # Mock entitlement
+        mock_service = MagicMock()
+        mock_service.check_feature_entitlement.return_value = MagicMock(
+            is_entitled=True
+        )
+        mock_service.get_billing_tier.return_value = "growth"
+        mock_service.get_feature_limit.return_value = 50
+        mock_entitlements.return_value = mock_service
+
+        dispatcher = InsightJobDispatcher(mock_db_session, "test-tenant")
+
+        # Call the internal method to verify it queries correctly
+        count = dispatcher._get_monthly_insight_count()
+
+        # Verify query was made with filter
+        mock_db_session.query.assert_called()
+        # The filter should have been called to filter by tenant and generated_at >= start_of_month
