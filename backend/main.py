@@ -23,6 +23,7 @@ from src.api.routes import sync
 from src.api.routes import data_health
 from src.api.routes import backfills
 from src.api.routes import embed
+from src.api.routes import insights
 from src.api.dq import routes as sync_health
 
 # Configure structured logging
@@ -129,6 +130,9 @@ app.include_router(embed.router)
 
 # Include sync health routes for data quality monitoring (requires authentication)
 app.include_router(sync_health.router)
+
+# Include AI insights routes (requires authentication and AI_INSIGHTS entitlement)
+app.include_router(insights.router)
 
 
 # Global exception handler for tenant isolation errors
