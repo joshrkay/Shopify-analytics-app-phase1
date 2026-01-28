@@ -20,6 +20,8 @@ from src.models.dq_models import (
     FRESHNESS_THRESHOLDS, get_freshness_threshold, is_critical_source,
     MAX_MERCHANT_BACKFILL_DAYS,
 )
+from src.models.ai_insight import AIInsight, InsightType, InsightSeverity
+from src.models.insight_job import InsightJob, InsightJobStatus, InsightJobCadence
 
 __all__ = [
     "TimestampMixin",
@@ -53,4 +55,11 @@ __all__ = [
     "get_freshness_threshold",
     "is_critical_source",
     "MAX_MERCHANT_BACKFILL_DAYS",
+    # AI Insight models
+    "AIInsight",
+    "InsightType",
+    "InsightSeverity",
+    "InsightJob",
+    "InsightJobStatus",
+    "InsightJobCadence",
 ]
