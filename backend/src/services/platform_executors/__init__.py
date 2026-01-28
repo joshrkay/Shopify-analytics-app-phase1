@@ -31,6 +31,10 @@ from src.services.platform_executors.meta_executor import (
     MetaAdsExecutor,
     MetaCredentials,
 )
+from src.services.platform_executors.google_executor import (
+    GoogleAdsExecutor,
+    GoogleAdsCredentials,
+)
 
 __all__ = [
     # Base
@@ -43,4 +47,7 @@ __all__ = [
     # Meta
     "MetaAdsExecutor",
     "MetaCredentials",
+    # Google
+    "GoogleAdsExecutor",
+    "GoogleAdsCredentials",
 ]
