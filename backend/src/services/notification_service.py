@@ -63,7 +63,7 @@ class NotificationService:
         entity_type: Optional[str] = None,
         entity_id: Optional[str] = None,
         action_url: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        event_metadata: Optional[dict] = None,
     ) -> Optional[Notification]:
         """
         Create and route a notification.
@@ -78,7 +78,7 @@ class NotificationService:
             entity_type: Related entity type
             entity_id: Related entity ID
             action_url: Deep link URL
-            metadata: Additional event-specific data
+            event_metadata: Additional event-specific data
 
         Returns:
             Created Notification or None if duplicate
@@ -92,7 +92,7 @@ class NotificationService:
             entity_type=entity_type,
             entity_id=entity_id,
             action_url=action_url,
-            metadata=metadata,
+            event_metadata=event_metadata,
         )
 
         try:
@@ -174,7 +174,7 @@ class NotificationService:
                     entity_type="connector",
                     entity_id=connector_id,
                     action_url=action_url,
-                    metadata={"connector_name": connector_name, "error": error_message},
+                    event_metadata={"connector_name": connector_name, "error": error_message},
                 )
                 if notification:
                     notifications.append(notification)
@@ -186,7 +186,7 @@ class NotificationService:
                 entity_type="connector",
                 entity_id=connector_id,
                 action_url=action_url,
-                metadata={"connector_name": connector_name, "error": error_message},
+                event_metadata={"connector_name": connector_name, "error": error_message},
             )
             if notification:
                 notifications.append(notification)
@@ -226,7 +226,7 @@ class NotificationService:
                 entity_type="action",
                 entity_id=action_id,
                 action_url=action_url,
-                metadata={"action_type": action_type},
+                event_metadata={"action_type": action_type},
             )
             if notification:
                 notifications.append(notification)
@@ -258,7 +258,7 @@ class NotificationService:
             entity_type="action",
             entity_id=action_id,
             action_url=f"/actions/{action_id}",
-            metadata={"action_type": action_type},
+            event_metadata={"action_type": action_type},
         )
 
     def notify_action_failed(
@@ -288,7 +288,7 @@ class NotificationService:
             entity_type="action",
             entity_id=action_id,
             action_url=f"/actions/{action_id}",
-            metadata={"action_type": action_type, "error": error_message},
+            event_metadata={"action_type": action_type, "error": error_message},
         )
 
     def notify_incident_declared(
@@ -328,7 +328,7 @@ class NotificationService:
                     entity_type="incident",
                     entity_id=incident_id,
                     action_url=action_url,
-                    metadata={"severity": severity},
+                    event_metadata={"severity": severity},
                 )
                 if notification:
                     notifications.append(notification)
@@ -340,7 +340,7 @@ class NotificationService:
                 entity_type="incident",
                 entity_id=incident_id,
                 action_url=action_url,
-                metadata={"severity": severity},
+                event_metadata={"severity": severity},
             )
             if notification:
                 notifications.append(notification)

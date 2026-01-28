@@ -107,8 +107,8 @@ CREATE TABLE IF NOT EXISTS notifications (
     -- Read tracking
     read_at TIMESTAMP WITH TIME ZONE,
 
-    -- Metadata for extensibility
-    metadata JSONB DEFAULT '{}'::JSONB,
+    -- Event metadata for extensibility
+    event_metadata JSONB DEFAULT '{}'::JSONB,
 
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),

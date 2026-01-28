@@ -121,7 +121,7 @@ class Notification(Base, TimestampMixin, TenantScopedMixin):
     email_error = Column(String(500), nullable=True)
     read_at = Column(DateTime(timezone=True), nullable=True)
 
-    metadata = Column(JSONType, nullable=False, default=dict)
+    event_metadata = Column(JSONType, nullable=False, default=dict)
 
     __table_args__ = (
         Index("ix_notifications_tenant_user_status", "tenant_id", "user_id", "status"),
@@ -190,7 +190,7 @@ class Notification(Base, TimestampMixin, TenantScopedMixin):
         entity_type: Optional[str] = None,
         entity_id: Optional[str] = None,
         action_url: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        event_metadata: Optional[dict] = None,
     ) -> "Notification":
         """Factory method to create a notification with automatic importance."""
         importance = EVENT_IMPORTANCE_MAP.get(event_type, NotificationImportance.ROUTINE)
@@ -209,5 +209,5 @@ class Notification(Base, TimestampMixin, TenantScopedMixin):
             entity_type=entity_type,
             entity_id=entity_id,
             idempotency_key=idempotency_key,
-            metadata=metadata or {},
+            event_metadata=event_metadata or {},
         )
