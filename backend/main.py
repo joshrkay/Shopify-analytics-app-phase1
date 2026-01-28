@@ -24,6 +24,8 @@ from src.api.routes import data_health
 from src.api.routes import backfills
 from src.api.routes import embed
 from src.api.routes import insights
+from src.api.routes import recommendations
+from src.api.routes import action_proposals
 from src.api.dq import routes as sync_health
 
 # Configure structured logging
@@ -133,6 +135,13 @@ app.include_router(sync_health.router)
 
 # Include AI insights routes (requires authentication and AI_INSIGHTS entitlement)
 app.include_router(insights.router)
+
+# Include AI recommendations routes (requires authentication and AI_RECOMMENDATIONS entitlement)
+app.include_router(recommendations.router)
+
+# Include action proposals routes (requires authentication and AI_ACTIONS entitlement)
+# Story 8.4 - Action Proposals (Approval Required)
+app.include_router(action_proposals.router)
 
 
 # Global exception handler for tenant isolation errors

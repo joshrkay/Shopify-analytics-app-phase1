@@ -22,15 +22,37 @@ from src.models.dq_models import (
 )
 from src.models.ai_insight import AIInsight, InsightType, InsightSeverity
 from src.models.insight_job import InsightJob, InsightJobStatus, InsightJobCadence
-# Import AIAction BEFORE AIRecommendation due to relationship dependency
-from src.models.ai_action import AIAction, ActionType, ActionStatus, ActionTargetEntityType
 from src.models.ai_recommendation import (
-    AIRecommendation, RecommendationType, RecommendationPriority,
-    EstimatedImpact, RiskLevel, AffectedEntityType,
+    AIRecommendation,
+    RecommendationType,
+    RecommendationPriority,
+    EstimatedImpact,
+    RiskLevel,
+    AffectedEntityType,
 )
-from src.models.action_execution_log import ActionExecutionLog, ActionLogEventType
-from src.models.action_job import ActionJob, ActionJobStatus
-from src.models.recommendation_job import RecommendationJob, RecommendationJobStatus, RecommendationJobCadence
+from src.models.recommendation_job import (
+    RecommendationJob,
+    RecommendationJobStatus,
+    RecommendationJobCadence,
+)
+from src.models.action_proposal import (
+    ActionProposal,
+    ActionType,
+    ActionStatus,
+    TargetPlatform,
+    TargetEntityType,
+    MAX_SCOPE_RULES,
+    DEFAULT_PROPOSAL_TTL_DAYS,
+)
+from src.models.action_approval_audit import (
+    ActionApprovalAudit,
+    AuditAction,
+)
+from src.models.action_proposal_job import (
+    ActionProposalJob,
+    ActionProposalJobStatus,
+    ActionProposalJobCadence,
+)
 
 __all__ = [
     "TimestampMixin",
@@ -90,4 +112,17 @@ __all__ = [
     "ActionLogEventType",
     "ActionJob",
     "ActionJobStatus",
+    # Action Proposal models (Story 8.4)
+    "ActionProposal",
+    "ActionType",
+    "ActionStatus",
+    "TargetPlatform",
+    "TargetEntityType",
+    "MAX_SCOPE_RULES",
+    "DEFAULT_PROPOSAL_TTL_DAYS",
+    "ActionApprovalAudit",
+    "AuditAction",
+    "ActionProposalJob",
+    "ActionProposalJobStatus",
+    "ActionProposalJobCadence",
 ]
