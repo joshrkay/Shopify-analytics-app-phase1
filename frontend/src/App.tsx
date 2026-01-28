@@ -12,6 +12,8 @@ import '@shopify/polaris/build/esm/styles.css';
 import AdminPlans from './pages/AdminPlans';
 import Analytics from './pages/Analytics';
 import Paywall from './pages/Paywall';
+import InsightsFeed from './pages/InsightsFeed';
+import ApprovalsInbox from './pages/ApprovalsInbox';
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
           <Route path="/admin/plans" element={<AdminPlans />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/paywall" element={<Paywall />} />
+          <Route path="/insights" element={<InsightsFeed />} />
+          <Route path="/approvals" element={<ApprovalsInbox />} />
           <Route path="/" element={<Navigate to="/analytics" replace />} />
         </Routes>
       </BrowserRouter>
