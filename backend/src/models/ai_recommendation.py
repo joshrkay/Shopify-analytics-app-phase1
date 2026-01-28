@@ -38,6 +38,7 @@ from sqlalchemy import (
     UniqueConstraint,
     ForeignKey,
 )
+from sqlalchemy.orm import relationship
 
 from src.db_base import Base
 from src.models.base import TimestampMixin, TenantScopedMixin
@@ -232,6 +233,14 @@ class AIRecommendation(Base, TimestampMixin, TenantScopedMixin):
         nullable=False,
         index=True,
         comment="SHA256 hash of input data for deduplication"
+    )
+
+    # Relationships
+    actions = relationship(
+        "AIAction",
+        back_populates="recommendation",
+        lazy="dynamic",
+        cascade="all, delete-orphan"
     )
 
     # Indexes for efficient querying
