@@ -631,16 +631,18 @@ class InsightGenerationService:
         job_id: str,
     ) -> AIInsight | None:
         """Persist insight to database, handling deduplication."""
-        from src.services.insight_templates import render_insight_summary
+        from src.services.insight_templates import render_insight_summary, render_why_it_matters
 
         content_hash = self._generate_content_hash(detected)
         summary = render_insight_summary(detected)
+        why_it_matters = render_why_it_matters(detected)
 
         insight = AIInsight(
             tenant_id=self.tenant_id,
             insight_type=detected.insight_type,
             severity=detected.severity,
             summary=summary,
+            why_it_matters=why_it_matters,
             supporting_metrics=[m.to_dict() for m in detected.metrics],
             confidence_score=detected.confidence_score,
             period_type=detected.period_type,

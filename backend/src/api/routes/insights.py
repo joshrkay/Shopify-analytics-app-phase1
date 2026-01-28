@@ -40,29 +40,26 @@ router = APIRouter(prefix="/api/insights", tags=["insights"])
 
 
 class SupportingMetricResponse(BaseModel):
-    """A single supporting metric for an insight."""
+    """A single supporting metric for an insight (Story 8.2 format)."""
 
-    metric: str
-    current_value: float
-    prior_value: float
-    delta: float
-    delta_pct: float
-    timeframe: str
+    metric: str  # Business-friendly display name
+    previous: Optional[float] = None
+    current: Optional[float] = None
+    change: Optional[float] = None  # Absolute change
+    change_pct: Optional[float] = None  # Percentage change
 
 
 class InsightResponse(BaseModel):
-    """Response model for a single insight."""
+    """Response model for a single insight (Story 8.2 format)."""
 
     insight_id: str
     insight_type: str
     severity: str
     summary: str
+    why_it_matters: Optional[str] = None  # Story 8.2
     supporting_metrics: List[SupportingMetricResponse]
+    timeframe: str  # Story 8.2: human-readable timeframe
     confidence_score: float
-    period_type: str
-    period_start: datetime
-    period_end: datetime
-    comparison_type: str
     platform: Optional[str] = None
     campaign_id: Optional[str] = None
     currency: Optional[str] = None
@@ -125,19 +122,27 @@ def check_ai_insights_entitlement(request: Request, db_session=Depends(get_db_se
 # =============================================================================
 
 
+def _format_metric_value(value: float | None) -> float | None:
+    """Format metric value with 2 decimal precision."""
+    if value is None:
+        return None
+    return round(float(value), 2)
+
+
 def _insight_to_response(insight: AIInsight) -> InsightResponse:
-    """Convert AIInsight model to response model."""
-    # Parse supporting metrics
+    """Convert AIInsight model to response model (Story 8.2 format)."""
+    from src.services.insight_templates import get_metric_display_name, format_timeframe_human
+
+    # Parse supporting metrics with business-friendly names
     metrics = []
     for m in insight.supporting_metrics or []:
         metrics.append(
             SupportingMetricResponse(
-                metric=m.get("metric", ""),
-                current_value=m.get("current_value", 0),
-                prior_value=m.get("prior_value", 0),
-                delta=m.get("delta", 0),
-                delta_pct=m.get("delta_pct", 0),
-                timeframe=m.get("timeframe", ""),
+                metric=get_metric_display_name(m.get("metric", "")),
+                previous=_format_metric_value(m.get("prior_value")),
+                current=_format_metric_value(m.get("current_value")),
+                change=_format_metric_value(m.get("delta")),
+                change_pct=_format_metric_value(m.get("delta_pct")),
             )
         )
 
@@ -146,12 +151,10 @@ def _insight_to_response(insight: AIInsight) -> InsightResponse:
         insight_type=insight.insight_type.value if insight.insight_type else "",
         severity=insight.severity.value if insight.severity else "",
         summary=insight.summary or "",
+        why_it_matters=insight.why_it_matters,
         supporting_metrics=metrics,
+        timeframe=format_timeframe_human(insight.period_type or ""),
         confidence_score=insight.confidence_score or 0,
-        period_type=insight.period_type or "",
-        period_start=insight.period_start,
-        period_end=insight.period_end,
-        comparison_type=insight.comparison_type or "",
         platform=insight.platform,
         campaign_id=insight.campaign_id,
         currency=insight.currency,

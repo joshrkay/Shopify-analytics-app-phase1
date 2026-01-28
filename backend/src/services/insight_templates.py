@@ -5,6 +5,7 @@ Provides deterministic, human-readable insight summaries.
 No LLM dependency - ensures same inputs produce same outputs.
 
 Story 8.1 - AI Insight Generation (Read-Only Analytics)
+Story 8.2 - Insight Explainability & Evidence
 """
 
 from typing import TYPE_CHECKING
@@ -266,3 +267,232 @@ def render_insight_summary(detected: "DetectedInsight") -> str:
             f"{detected.insight_type.value.replace('_', ' ').title()} detected "
             f"with {abs(primary_metric.delta_pct):.1f}% change."
         )
+
+
+# =============================================================================
+# Story 8.2 - Explainability: Why It Matters Templates
+# =============================================================================
+
+# Metric display names for business-friendly API responses
+METRIC_DISPLAY_NAMES = {
+    "spend": "Marketing Spend",
+    "gross_roas": "Return on Ad Spend (ROAS)",
+    "net_roas": "Net ROAS",
+    "net_revenue": "Net Revenue",
+    "gross_revenue": "Gross Revenue",
+    "cac": "Customer Acquisition Cost (CAC)",
+    "aov": "Average Order Value (AOV)",
+    "new_customers": "New Customers",
+    "order_count": "Order Count",
+}
+
+# Why it matters templates by insight type -> direction -> severity
+WHY_IT_MATTERS_TEMPLATES = {
+    InsightType.SPEND_ANOMALY: {
+        "increase": {
+            InsightSeverity.CRITICAL: (
+                "A significant increase in marketing spend without corresponding "
+                "revenue growth may indicate budget inefficiency. Review campaign "
+                "performance to ensure spend is driving results."
+            ),
+            InsightSeverity.WARNING: (
+                "Rising marketing spend should be monitored to ensure it aligns "
+                "with your growth targets and delivers expected returns."
+            ),
+            InsightSeverity.INFO: (
+                "Tracking spend changes helps you maintain budget control "
+                "and optimize marketing efficiency."
+            ),
+        },
+        "decrease": {
+            InsightSeverity.CRITICAL: (
+                "A sharp drop in marketing spend may reduce your store's visibility "
+                "and customer acquisition. Review if this aligns with your strategy."
+            ),
+            InsightSeverity.WARNING: (
+                "Reduced spend may impact reach. Monitor performance to ensure "
+                "visibility goals are still met."
+            ),
+            InsightSeverity.INFO: (
+                "Lower spending can be strategic. Ensure it aligns with your "
+                "current business objectives."
+            ),
+        },
+    },
+    InsightType.ROAS_CHANGE: {
+        "increase": {
+            InsightSeverity.CRITICAL: (
+                "Your marketing efficiency has improved significantly. Identify "
+                "what's working well and consider scaling those campaigns."
+            ),
+            InsightSeverity.WARNING: (
+                "Improving ROAS is positive. Analyze which channels are "
+                "performing best to replicate success."
+            ),
+            InsightSeverity.INFO: (
+                "Steady ROAS improvements indicate effective optimization. "
+                "Continue monitoring to maintain momentum."
+            ),
+        },
+        "decrease": {
+            InsightSeverity.CRITICAL: (
+                "A declining ROAS means you're earning less revenue per dollar "
+                "spent on ads. This could impact profitability if not addressed."
+            ),
+            InsightSeverity.WARNING: (
+                "Lower returns on ad spend may indicate ad fatigue, increased "
+                "competition, or targeting issues worth investigating."
+            ),
+            InsightSeverity.INFO: (
+                "Monitor ROAS trends to ensure your marketing investment "
+                "continues to generate positive returns."
+            ),
+        },
+    },
+    InsightType.REVENUE_VS_SPEND_DIVERGENCE: {
+        "default": {
+            InsightSeverity.CRITICAL: (
+                "When revenue and spend move in opposite directions, it signals "
+                "a potential efficiency problem. Investigate whether your marketing "
+                "is reaching the right audience."
+            ),
+            InsightSeverity.WARNING: (
+                "Diverging revenue and spend trends warrant attention. Review "
+                "which channels are underperforming relative to investment."
+            ),
+            InsightSeverity.INFO: (
+                "Keep an eye on the relationship between spend and revenue "
+                "to maintain marketing efficiency."
+            ),
+        },
+    },
+    InsightType.CHANNEL_MIX_SHIFT: {
+        "default": {
+            InsightSeverity.WARNING: (
+                "Significant changes in channel mix can affect overall performance. "
+                "Evaluate if this shift aligns with your marketing strategy."
+            ),
+            InsightSeverity.INFO: (
+                "Channel mix naturally evolves. Monitor to ensure changes "
+                "support your business goals."
+            ),
+        },
+    },
+    InsightType.CAC_ANOMALY: {
+        "increase": {
+            InsightSeverity.CRITICAL: (
+                "Rising customer acquisition costs directly impact profitability. "
+                "Review targeting, creative, and funnel conversion rates."
+            ),
+            InsightSeverity.WARNING: (
+                "Higher acquisition costs may indicate market saturation or "
+                "increased competition. Optimize your funnel efficiency."
+            ),
+            InsightSeverity.INFO: (
+                "Monitor CAC trends relative to customer lifetime value "
+                "to ensure sustainable growth."
+            ),
+        },
+        "decrease": {
+            InsightSeverity.CRITICAL: (
+                "Significantly lower acquisition costs is excellent. Identify "
+                "and scale what's working."
+            ),
+            InsightSeverity.WARNING: (
+                "Improved CAC is positive. Analyze the contributing factors "
+                "to replicate success."
+            ),
+            InsightSeverity.INFO: (
+                "Lower acquisition costs mean more efficient growth. Continue "
+                "optimizing your campaigns."
+            ),
+        },
+    },
+    InsightType.AOV_CHANGE: {
+        "increase": {
+            InsightSeverity.CRITICAL: (
+                "Significant AOV increase improves revenue without needing "
+                "more customers. Identify what's driving this positive trend."
+            ),
+            InsightSeverity.WARNING: (
+                "Higher average order values are positive. Consider what's "
+                "driving this trend to replicate it."
+            ),
+            InsightSeverity.INFO: (
+                "Steady AOV improvements indicate effective upselling or "
+                "product mix optimization."
+            ),
+        },
+        "decrease": {
+            InsightSeverity.CRITICAL: (
+                "Sharp AOV decline may indicate customers buying fewer items "
+                "or lower-priced products. Review product mix and pricing strategy."
+            ),
+            InsightSeverity.WARNING: (
+                "Declining order values may impact revenue. Review product "
+                "recommendations and bundling strategies."
+            ),
+            InsightSeverity.INFO: (
+                "Monitor AOV alongside conversion rates for a complete picture "
+                "of customer behavior."
+            ),
+        },
+    },
+}
+
+
+def get_metric_display_name(metric_name: str) -> str:
+    """Get business-friendly display name for a metric."""
+    return METRIC_DISPLAY_NAMES.get(metric_name, metric_name.replace("_", " ").title())
+
+
+def format_timeframe_human(period_type: str) -> str:
+    """Convert period type to human-readable timeframe."""
+    mappings = {
+        "last_7_days": "Last 7 days",
+        "last_14_days": "Last 14 days",
+        "last_30_days": "Last 30 days",
+        "last_90_days": "Last 90 days",
+        "weekly": "Last 7 days",
+        "monthly": "Last 30 days",
+        "daily": "Last 24 hours",
+    }
+    return mappings.get(period_type, period_type.replace("_", " ").title())
+
+
+def render_why_it_matters(detected: "DetectedInsight") -> str:
+    """
+    Render business-friendly explanation of why an insight matters.
+
+    Args:
+        detected: DetectedInsight object with type, severity, and metrics
+
+    Returns:
+        Human-readable explanation string (deterministic)
+    """
+    templates = WHY_IT_MATTERS_TEMPLATES.get(detected.insight_type, {})
+
+    # Determine direction from primary metric
+    direction = "default"
+    if detected.metrics:
+        direction = "increase" if detected.metrics[0].delta_pct > 0 else "decrease"
+
+    # Get direction-specific templates, fall back to default
+    direction_templates = templates.get(direction, templates.get("default", {}))
+
+    # Get severity-specific template
+    template = direction_templates.get(detected.severity)
+
+    # Fallback chain: try INFO, then any available template
+    if not template:
+        template = direction_templates.get(InsightSeverity.INFO)
+    if not template and templates.get("default"):
+        template = templates["default"].get(detected.severity) or templates["default"].get(
+            InsightSeverity.INFO
+        )
+
+    # Final fallback
+    if not template:
+        return "Monitor this metric for changes that may impact your business performance."
+
+    return template

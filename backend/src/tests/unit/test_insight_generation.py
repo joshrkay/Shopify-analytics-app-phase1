@@ -30,7 +30,12 @@ from src.services.insight_generation_service import (
 )
 from src.services.insight_templates import (
     render_insight_summary,
+    render_why_it_matters,
+    get_metric_display_name,
+    format_timeframe_human,
     CURRENCY_SYMBOLS,
+    METRIC_DISPLAY_NAMES,
+    WHY_IT_MATTERS_TEMPLATES,
     _format_timeframe,
 )
 
@@ -579,3 +584,157 @@ class TestDivergenceDetection:
         )
 
         assert len(insights) == 0
+
+
+# =============================================================================
+# Story 8.2 - Explainability Tests
+# =============================================================================
+
+
+class TestWhyItMattersRendering:
+    """Tests for why_it_matters template rendering (Story 8.2)."""
+
+    def test_render_spend_increase_warning(self):
+        """Test why_it_matters for spend increase warning."""
+        detected = DetectedInsight(
+            insight_type=InsightType.SPEND_ANOMALY,
+            severity=InsightSeverity.WARNING,
+            metrics=[
+                MetricChange(
+                    metric_name="spend",
+                    current_value=Decimal("1500"),
+                    prior_value=Decimal("1000"),
+                    delta=Decimal("500"),
+                    delta_pct=50.0,
+                    timeframe="week_over_week",
+                )
+            ],
+            period_type="weekly",
+            period_start=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            period_end=datetime(2024, 1, 7, tzinfo=timezone.utc),
+            comparison_type="week_over_week",
+            confidence_score=0.85,
+        )
+
+        result = render_why_it_matters(detected)
+
+        assert result is not None
+        assert len(result) > 0
+        assert "spend" in result.lower()
+
+    def test_render_roas_decline_critical(self):
+        """Test why_it_matters for ROAS decline critical."""
+        detected = DetectedInsight(
+            insight_type=InsightType.ROAS_CHANGE,
+            severity=InsightSeverity.CRITICAL,
+            metrics=[
+                MetricChange(
+                    metric_name="gross_roas",
+                    current_value=Decimal("1.5"),
+                    prior_value=Decimal("3.0"),
+                    delta=Decimal("-1.5"),
+                    delta_pct=-50.0,
+                    timeframe="week_over_week",
+                )
+            ],
+            period_type="weekly",
+            period_start=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            period_end=datetime(2024, 1, 7, tzinfo=timezone.utc),
+            comparison_type="week_over_week",
+            confidence_score=0.9,
+        )
+
+        result = render_why_it_matters(detected)
+
+        assert "ROAS" in result or "revenue" in result.lower()
+        assert "profitability" in result.lower() or "dollar" in result.lower()
+
+    def test_render_divergence_warning(self):
+        """Test why_it_matters for revenue vs spend divergence."""
+        detected = DetectedInsight(
+            insight_type=InsightType.REVENUE_VS_SPEND_DIVERGENCE,
+            severity=InsightSeverity.WARNING,
+            metrics=[
+                MetricChange(
+                    metric_name="net_revenue",
+                    current_value=Decimal("8000"),
+                    prior_value=Decimal("10000"),
+                    delta=Decimal("-2000"),
+                    delta_pct=-20.0,
+                    timeframe="week_over_week",
+                ),
+            ],
+            period_type="weekly",
+            period_start=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            period_end=datetime(2024, 1, 7, tzinfo=timezone.utc),
+            comparison_type="week_over_week",
+            confidence_score=0.85,
+        )
+
+        result = render_why_it_matters(detected)
+
+        assert "revenue" in result.lower() or "spend" in result.lower()
+
+    def test_render_fallback_for_empty_metrics(self):
+        """Test fallback why_it_matters when no metrics."""
+        detected = DetectedInsight(
+            insight_type=InsightType.SPEND_ANOMALY,
+            severity=InsightSeverity.INFO,
+            metrics=[],
+            period_type="weekly",
+            period_start=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            period_end=datetime(2024, 1, 7, tzinfo=timezone.utc),
+            comparison_type="week_over_week",
+            confidence_score=0.5,
+        )
+
+        result = render_why_it_matters(detected)
+
+        # Should return a valid fallback message
+        assert result is not None
+        assert len(result) > 0
+
+    def test_all_insight_types_have_why_it_matters_templates(self):
+        """Test every insight type has why_it_matters templates."""
+        for insight_type in InsightType:
+            assert insight_type in WHY_IT_MATTERS_TEMPLATES, \
+                f"Missing why_it_matters templates for {insight_type}"
+
+
+class TestMetricDisplayNames:
+    """Tests for metric display name mapping (Story 8.2)."""
+
+    def test_known_metric_names(self):
+        """Test known metrics return business-friendly names."""
+        assert get_metric_display_name("gross_roas") == "Return on Ad Spend (ROAS)"
+        assert get_metric_display_name("cac") == "Customer Acquisition Cost (CAC)"
+        assert get_metric_display_name("aov") == "Average Order Value (AOV)"
+        assert get_metric_display_name("spend") == "Marketing Spend"
+        assert get_metric_display_name("net_revenue") == "Net Revenue"
+
+    def test_unknown_metric_fallback(self):
+        """Test unknown metrics get title-cased fallback."""
+        assert get_metric_display_name("unknown_metric") == "Unknown Metric"
+        assert get_metric_display_name("some_new_metric") == "Some New Metric"
+
+    def test_all_metrics_defined(self):
+        """Test all expected metrics have display names."""
+        expected = ["spend", "gross_roas", "net_roas", "cac", "aov", "net_revenue"]
+        for metric in expected:
+            assert metric in METRIC_DISPLAY_NAMES
+
+
+class TestTimeframeFormatting:
+    """Tests for human-readable timeframe formatting (Story 8.2)."""
+
+    def test_known_period_types(self):
+        """Test known period types return human-readable strings."""
+        assert format_timeframe_human("last_7_days") == "Last 7 days"
+        assert format_timeframe_human("last_14_days") == "Last 14 days"
+        assert format_timeframe_human("last_30_days") == "Last 30 days"
+        assert format_timeframe_human("weekly") == "Last 7 days"
+        assert format_timeframe_human("monthly") == "Last 30 days"
+
+    def test_unknown_period_type_fallback(self):
+        """Test unknown period types get title-cased fallback."""
+        assert format_timeframe_human("custom_period") == "Custom Period"

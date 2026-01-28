@@ -103,6 +103,13 @@ class AIInsight(Base, TimestampMixin, TenantScopedMixin):
         comment="1-2 sentence natural language summary"
     )
 
+    # Explainability: why this insight matters (Story 8.2)
+    why_it_matters = Column(
+        Text,
+        nullable=True,
+        comment="Business-friendly explanation of insight importance"
+    )
+
     # Supporting metrics (structured data)
     supporting_metrics = Column(
         JSONType,
