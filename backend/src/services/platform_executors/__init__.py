@@ -27,12 +27,20 @@ from src.services.platform_executors.base_executor import (
     RetryConfig,
     PlatformAPIError,
 )
+from src.services.platform_executors.meta_executor import (
+    MetaAdsExecutor,
+    MetaCredentials,
+)
 
 __all__ = [
+    # Base
     "BasePlatformExecutor",
     "ExecutionResult",
     "ExecutionResultStatus",
     "StateCapture",
     "RetryConfig",
     "PlatformAPIError",
+    # Meta
+    "MetaAdsExecutor",
+    "MetaCredentials",
 ]
