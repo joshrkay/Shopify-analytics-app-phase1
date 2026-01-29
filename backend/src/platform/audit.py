@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from src.db_base import Base
 from src.monitoring.audit_metrics import get_audit_metrics
+from src.monitoring.audit_alerts import get_audit_alert_manager
 
 logger = logging.getLogger(__name__)
 fallback_logger = logging.getLogger("audit.fallback")
@@ -473,6 +474,12 @@ def _write_fallback_log(event: AuditEvent, audit_id: str, error_reason: str) -> 
     get_audit_metrics().record_failure(
         error_type=type(Exception(error_reason)).__name__,
         tenant_id=event.tenant_id,
+    )
+
+    # Check alert threshold
+    get_audit_alert_manager().record_logging_failure(
+        tenant_id=event.tenant_id,
+        error_type=type(Exception(error_reason)).__name__,
     )
 
 

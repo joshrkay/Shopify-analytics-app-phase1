@@ -236,16 +236,17 @@ def _log_cross_tenant_attempt(
     role: str,
 ) -> None:
     """
-    Log cross-tenant access attempt to audit system.
+    Log cross-tenant access attempt to audit system and trigger alert.
 
     Internal function called by validate_access when db_session is provided.
     """
-    # Lazy import to avoid circular dependency
+    # Lazy imports to avoid circular dependency
     from src.platform.audit import (
         AuditAction,
         AuditOutcome,
         log_system_audit_event_sync,
     )
+    from src.monitoring.audit_alerts import get_audit_alert_manager
 
     try:
         log_system_audit_event_sync(
@@ -265,3 +266,10 @@ def _log_cross_tenant_attempt(
             "Failed to log cross-tenant access attempt",
             extra={"error": str(e), "user_id": user_id},
         )
+
+    # Trigger security alert
+    get_audit_alert_manager().alert_cross_tenant_access(
+        requesting_tenant=requesting_tenant,
+        target_tenant=target_tenant,
+        user_id=user_id,
+    )
