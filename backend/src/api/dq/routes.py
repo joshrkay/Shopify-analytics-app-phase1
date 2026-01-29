@@ -90,6 +90,45 @@ class DashboardBlockStatusResponse(BaseModel):
     blocking_messages: List[str]
 
 
+class CompactHealthResponse(BaseModel):
+    """Lightweight health response for frequent polling.
+
+    Story 9.5 - Data Freshness Indicators
+    """
+    overall_status: str  # healthy, degraded, critical
+    health_score: float
+    stale_count: int
+    critical_count: int
+    has_blocking_issues: bool
+    oldest_sync_minutes: Optional[int]
+    last_checked_at: str
+
+
+class ActiveIncidentBanner(BaseModel):
+    """Active incident for banner display.
+
+    Story 9.6 - Incident Communication
+    """
+    id: str
+    severity: str
+    title: str
+    message: str
+    scope: str
+    eta: Optional[str]
+    status_page_url: Optional[str]
+    started_at: str
+
+
+class ActiveIncidentsResponse(BaseModel):
+    """Active incidents for banner display.
+
+    Story 9.6 - Incident Communication
+    """
+    incidents: List[ActiveIncidentBanner]
+    has_critical: bool
+    has_blocking: bool
+
+
 class BackfillRequest(BaseModel):
     """Request to trigger a backfill."""
     start_date: str = Field(
@@ -246,6 +285,54 @@ async def get_sync_health_summary(
 
 
 @router.get(
+    "/compact",
+    response_model=CompactHealthResponse,
+)
+async def get_compact_health(
+    request: Request,
+    service: DQService = Depends(get_dq_service),
+):
+    """
+    Get lightweight health status for frequent polling.
+
+    Returns minimal data for header badges and indicators.
+    Designed for polling every 15-60 seconds.
+
+    Story 9.5 - Data Freshness Indicators
+
+    SECURITY: Only returns health data for the authenticated tenant.
+    """
+    tenant_ctx = get_tenant_context(request)
+
+    logger.debug(
+        "Compact health requested",
+        extra={"tenant_id": tenant_ctx.tenant_id},
+    )
+
+    summary = service.get_sync_health_summary()
+
+    # Calculate oldest sync time across all connectors
+    oldest_minutes = None
+    if summary.connectors:
+        sync_minutes = [
+            c.minutes_since_sync for c in summary.connectors
+            if c.minutes_since_sync is not None
+        ]
+        if sync_minutes:
+            oldest_minutes = max(sync_minutes)
+
+    return CompactHealthResponse(
+        overall_status=summary.overall_status,
+        health_score=summary.health_score,
+        stale_count=summary.delayed_count,
+        critical_count=summary.error_count,
+        has_blocking_issues=summary.has_blocking_issues,
+        oldest_sync_minutes=oldest_minutes,
+        last_checked_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.get(
     "/connector/{connector_id}",
     response_model=ConnectorHealthResponse,
 )
@@ -316,6 +403,68 @@ async def get_incidents(
     incidents = service.get_open_incidents(connector_id)
 
     return [_incident_to_response(inc) for inc in incidents]
+
+
+@router.get(
+    "/incidents/active",
+    response_model=ActiveIncidentsResponse,
+)
+async def get_active_incidents(
+    request: Request,
+    service: DQService = Depends(get_dq_service),
+):
+    """
+    Get active incidents for banner display.
+
+    Returns incidents formatted for in-app banner with:
+    - Scope messaging (which connector/data affected)
+    - ETA estimates
+    - Status page link
+
+    Story 9.6 - Incident Communication
+
+    SECURITY: Only returns incidents for the authenticated tenant.
+    """
+    import os
+
+    tenant_ctx = get_tenant_context(request)
+
+    logger.debug(
+        "Active incidents requested for banner",
+        extra={"tenant_id": tenant_ctx.tenant_id},
+    )
+
+    incidents = service.get_open_incidents()
+
+    banner_incidents = []
+    has_critical = False
+    has_blocking = False
+
+    for inc in incidents:
+        scope = service.get_incident_scope(inc)
+        eta = service.get_incident_eta(inc)
+
+        banner_incidents.append(ActiveIncidentBanner(
+            id=inc.id,
+            severity=inc.severity,
+            title=inc.title,
+            message=inc.merchant_message or inc.description or "System issue detected",
+            scope=scope,
+            eta=eta,
+            status_page_url=os.environ.get("STATUS_PAGE_URL"),
+            started_at=inc.opened_at.isoformat() if inc.opened_at else "",
+        ))
+
+        if inc.severity == "critical":
+            has_critical = True
+        if inc.is_blocking:
+            has_blocking = True
+
+    return ActiveIncidentsResponse(
+        incidents=banner_incidents,
+        has_critical=has_critical,
+        has_blocking=has_blocking,
+    )
 
 
 @router.post(

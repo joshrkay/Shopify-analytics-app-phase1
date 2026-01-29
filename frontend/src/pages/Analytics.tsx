@@ -20,6 +20,9 @@ import {
 import ShopifyEmbeddedSuperset from '../components/ShopifyEmbeddedSuperset';
 import { getEmbedConfig, checkEmbedHealth } from '../services/embedApi';
 import type { EmbedConfig, EmbedHealthResponse } from '../services/embedApi';
+import { IncidentBanner } from '../components/health/IncidentBanner';
+import { DataFreshnessBadge } from '../components/health/DataFreshnessBadge';
+import { DashboardFreshnessIndicator } from '../components/health/DashboardFreshnessIndicator';
 
 const Analytics: React.FC = () => {
   const [config, setConfig] = useState<EmbedConfig | null>(null);
@@ -116,45 +119,56 @@ const Analytics: React.FC = () => {
   })) || [];
 
   return (
-    <Page
-      title="Analytics"
-      subtitle="View your store performance and insights"
-    >
-      <Layout>
-        {/* Dashboard selector */}
-        {dashboardOptions.length > 1 && (
-          <Layout.Section>
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Select Dashboard
-                </Text>
-                <Select
-                  label="Dashboard"
-                  labelHidden
-                  options={dashboardOptions}
-                  value={selectedDashboard}
-                  onChange={handleDashboardChange}
-                />
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-        )}
+    <>
+      {/* Incident banner at top of page */}
+      <IncidentBanner />
 
-        {/* Embedded dashboard */}
-        <Layout.Section>
-          {selectedDashboard && (
-            <ShopifyEmbeddedSuperset
-              dashboardId={selectedDashboard}
-              height="calc(100vh - 200px)"
-              onLoad={handleDashboardLoad}
-              onError={handleDashboardError}
-              showLoadingSkeleton
-            />
+      <Page
+        title="Analytics"
+        subtitle="View your store performance and insights"
+        titleMetadata={<DataFreshnessBadge />}
+      >
+        <Layout>
+          {/* Data freshness indicator */}
+          <Layout.Section>
+            <DashboardFreshnessIndicator variant="compact" />
+          </Layout.Section>
+
+          {/* Dashboard selector */}
+          {dashboardOptions.length > 1 && (
+            <Layout.Section>
+              <Card>
+                <BlockStack gap="400">
+                  <Text as="h2" variant="headingMd">
+                    Select Dashboard
+                  </Text>
+                  <Select
+                    label="Dashboard"
+                    labelHidden
+                    options={dashboardOptions}
+                    value={selectedDashboard}
+                    onChange={handleDashboardChange}
+                  />
+                </BlockStack>
+              </Card>
+            </Layout.Section>
           )}
-        </Layout.Section>
-      </Layout>
-    </Page>
+
+          {/* Embedded dashboard */}
+          <Layout.Section>
+            {selectedDashboard && (
+              <ShopifyEmbeddedSuperset
+                dashboardId={selectedDashboard}
+                height="calc(100vh - 200px)"
+                onLoad={handleDashboardLoad}
+                onError={handleDashboardError}
+                showLoadingSkeleton
+              />
+            )}
+          </Layout.Section>
+        </Layout>
+      </Page>
+    </>
   );
 };
 

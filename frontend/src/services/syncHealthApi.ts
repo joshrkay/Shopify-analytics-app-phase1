@@ -90,6 +90,41 @@ export interface BackfillRequest {
 }
 
 // =============================================================================
+// Compact Health Types (Story 9.5)
+// =============================================================================
+
+export interface CompactHealth {
+  overall_status: 'healthy' | 'degraded' | 'critical';
+  health_score: number;
+  stale_count: number;
+  critical_count: number;
+  has_blocking_issues: boolean;
+  oldest_sync_minutes: number | null;
+  last_checked_at: string;
+}
+
+// =============================================================================
+// Active Incidents Types (Story 9.6)
+// =============================================================================
+
+export interface ActiveIncidentBanner {
+  id: string;
+  severity: 'warning' | 'high' | 'critical';
+  title: string;
+  message: string;
+  scope: string;
+  eta: string | null;
+  status_page_url: string | null;
+  started_at: string;
+}
+
+export interface ActiveIncidentsResponse {
+  incidents: ActiveIncidentBanner[];
+  has_critical: boolean;
+  has_blocking: boolean;
+}
+
+// =============================================================================
 // API Configuration
 // =============================================================================
 
@@ -226,6 +261,41 @@ export async function getDashboardBlockStatus(): Promise<DashboardBlockStatus> {
     headers: createHeaders(),
   });
   return handleResponse<DashboardBlockStatus>(response);
+}
+
+/**
+ * Get compact health status for frequent polling.
+ *
+ * Designed for header badges and indicators.
+ * Returns minimal data to reduce payload size.
+ *
+ * Story 9.5 - Data Freshness Indicators
+ *
+ * @returns Compact health status
+ */
+export async function getCompactHealth(): Promise<CompactHealth> {
+  const response = await fetch(`${API_BASE_URL}/api/sync-health/compact`, {
+    method: 'GET',
+    headers: createHeaders(),
+  });
+  return handleResponse<CompactHealth>(response);
+}
+
+/**
+ * Get active incidents for banner display.
+ *
+ * Returns incidents with scope and ETA for in-app banners.
+ *
+ * Story 9.6 - Incident Communication
+ *
+ * @returns Active incidents response
+ */
+export async function getActiveIncidents(): Promise<ActiveIncidentsResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/sync-health/incidents/active`, {
+    method: 'GET',
+    headers: createHeaders(),
+  });
+  return handleResponse<ActiveIncidentsResponse>(response);
 }
 
 // =============================================================================

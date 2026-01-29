@@ -1111,3 +1111,46 @@ class DQService:
         ]
 
         return True, messages
+
+    def get_incident_scope(self, incident: DQIncident) -> str:
+        """
+        Generate human-readable scope description for an incident.
+
+        Used for incident banner messaging per Story 9.6.
+
+        Args:
+            incident: The DQ incident
+
+        Returns:
+            Human-readable scope string (e.g., "Meta Ads connector")
+        """
+        # Try to get connector name
+        connector = self.db.query(TenantAirbyteConnection).filter(
+            TenantAirbyteConnection.tenant_id == self.tenant_id,
+            TenantAirbyteConnection.id == incident.connector_id,
+        ).first()
+
+        if connector:
+            return f"{connector.connection_name} connector"
+
+        return "Data pipeline"
+
+    def get_incident_eta(self, incident: DQIncident) -> Optional[str]:
+        """
+        Estimate resolution time based on incident severity.
+
+        Used for incident banner messaging per Story 9.6.
+
+        Args:
+            incident: The DQ incident
+
+        Returns:
+            Human-readable ETA string or None
+        """
+        # Provide ETAs based on severity
+        eta_map = {
+            "warning": "Expected resolution: 1-2 hours",
+            "high": "Expected resolution: 2-4 hours",
+            "critical": "Investigating - updates every 30 minutes",
+        }
+        return eta_map.get(incident.severity)

@@ -25,6 +25,7 @@ import {
 } from '@shopify/polaris';
 import { InsightCard } from '../components/insights/InsightCard';
 import { RecommendationCard } from '../components/recommendations/RecommendationCard';
+import { IncidentBanner } from '../components/health/IncidentBanner';
 import type { Insight, InsightType, InsightSeverity } from '../types/insights';
 import type { Recommendation } from '../types/recommendations';
 import {
@@ -242,10 +243,14 @@ export function InsightsFeed() {
   ];
 
   return (
-    <Page
-      title="AI Insights"
-      subtitle="AI-generated insights about your advertising performance"
-    >
+    <>
+      {/* Incident banner at top of page */}
+      <IncidentBanner />
+
+      <Page
+        title="AI Insights"
+        subtitle="AI-generated insights about your advertising performance"
+      >
       <Layout>
         <Layout.Section>
           <Card>
@@ -376,6 +381,7 @@ export function InsightsFeed() {
         </Modal.Section>
       </Modal>
     </Page>
+    </>
   );
 }
 
