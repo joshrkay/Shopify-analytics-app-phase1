@@ -579,6 +579,83 @@ sources:
             tests:
               - not_null
 
+      - name: _airbyte_raw_tiktok_ads
+        description: Raw TikTok Ads data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
+        columns:
+          - name: _airbyte_ab_id
+            description: Airbyte record ID
+          - name: _airbyte_emitted_at
+            description: Timestamp when record was emitted by Airbyte
+          - name: _airbyte_data
+            description: JSONB column containing the actual ad data
+
+      - name: _airbyte_raw_snapchat_ads
+        description: Raw Snapchat Ads data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
+        columns:
+          - name: _airbyte_ab_id
+            description: Airbyte record ID
+          - name: _airbyte_emitted_at
+            description: Timestamp when record was emitted by Airbyte
+          - name: _airbyte_data
+            description: JSONB column containing the actual ad data
+
+      - name: _airbyte_raw_klaviyo_events
+        description: Raw Klaviyo email event data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
+        columns:
+          - name: _airbyte_ab_id
+            description: Airbyte record ID
+          - name: _airbyte_emitted_at
+            description: Timestamp when record was emitted by Airbyte
+          - name: _airbyte_data
+            description: JSONB column containing the email event data
+
+      - name: _airbyte_raw_shopify_email_activities
+        description: Raw Shopify Email activity data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
+        columns:
+          - name: _airbyte_ab_id
+            description: Airbyte record ID
+          - name: _airbyte_emitted_at
+            description: Timestamp when record was emitted by Airbyte
+          - name: _airbyte_data
+            description: JSONB column containing the email activity data
+
+      - name: _airbyte_raw_attentive_events
+        description: Raw Attentive SMS event data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
+        columns:
+          - name: _airbyte_ab_id
+            description: Airbyte record ID
+          - name: _airbyte_emitted_at
+            description: Timestamp when record was emitted by Airbyte
+          - name: _airbyte_data
+            description: JSONB column containing the SMS event data
+
+      - name: _airbyte_raw_postscript_events
+        description: Raw Postscript SMS event data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
+        columns:
+          - name: _airbyte_ab_id
+            description: Airbyte record ID
+          - name: _airbyte_emitted_at
+            description: Timestamp when record was emitted by Airbyte
+          - name: _airbyte_data
+            description: JSONB column containing the SMS event data
+
+      - name: _airbyte_raw_smsbump_events
+        description: Raw SMSBump event data from Airbyte
+        loaded_at_field: _airbyte_emitted_at
+        columns:
+          - name: _airbyte_ab_id
+            description: Airbyte record ID
+          - name: _airbyte_emitted_at
+            description: Timestamp when record was emitted by Airbyte
+          - name: _airbyte_data
+            description: JSONB column containing the SMS event data
+
   - name: platform
     description: Platform tables for tenant mapping and configuration
     # Schema where platform tables live - configurable via dbt vars

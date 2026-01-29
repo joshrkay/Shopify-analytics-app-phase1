@@ -18,8 +18,17 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+import os
+import httpx
+
 from src.integrations.airbyte.client import AirbyteClient, get_airbyte_client
-from src.integrations.airbyte.models import AirbyteSyncResult, AirbyteJobStatus
+from src.integrations.airbyte.models import (
+    AirbyteSyncResult,
+    AirbyteJobStatus,
+    SourceCreationRequest,
+    ConnectionCreationRequest,
+    ScheduleType,
+)
 from src.integrations.airbyte.exceptions import (
     AirbyteError,
     AirbyteSyncError,
@@ -490,3 +499,401 @@ class ShopifyIngestionService:
             ),
             "last_sync_status": connection_info.last_sync_status,
         }
+
+
+# =============================================================================
+# Token Validation Utilities
+# =============================================================================
+
+@dataclass
+class ShopifyTokenValidationResult:
+    """Result of validating a Shopify access token."""
+
+    valid: bool
+    shop_domain: str
+    shop_name: Optional[str] = None
+    shop_email: Optional[str] = None
+    shop_owner: Optional[str] = None
+    currency: Optional[str] = None
+    country_code: Optional[str] = None
+    timezone: Optional[str] = None
+    scopes: Optional[list] = None
+    error_message: Optional[str] = None
+
+
+SHOPIFY_API_VERSION = "2024-01"
+
+
+async def validate_shopify_token(
+    shop_domain: str,
+    access_token: str,
+) -> ShopifyTokenValidationResult:
+    """
+    Validate a Shopify access token by querying the Shop API.
+
+    This method makes a GraphQL request to Shopify to verify the token
+    is valid and retrieve basic shop information.
+
+    Args:
+        shop_domain: Shopify store domain (e.g., 'mystore.myshopify.com')
+        access_token: Shopify access token to validate
+
+    Returns:
+        ShopifyTokenValidationResult with validation status and shop info
+    """
+    # Normalize shop domain
+    shop_domain = shop_domain.replace("https://", "").replace("http://", "").rstrip("/")
+
+    graphql_url = f"https://{shop_domain}/admin/api/{SHOPIFY_API_VERSION}/graphql.json"
+
+    query = """
+    query {
+        shop {
+            name
+            email
+            myshopifyDomain
+            primaryDomain {
+                url
+            }
+            currencyCode
+            timezoneAbbreviation
+            billingAddress {
+                countryCodeV2
+            }
+        }
+        currentAppInstallation {
+            accessScopes {
+                handle
+            }
+        }
+    }
+    """
+
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(30.0, connect=10.0)
+    ) as client:
+        try:
+            response = await client.post(
+                graphql_url,
+                json={"query": query},
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Shopify-Access-Token": access_token,
+                },
+            )
+
+            if response.status_code == 401:
+                logger.warning(
+                    "Shopify token validation failed: unauthorized",
+                    extra={"shop_domain": shop_domain},
+                )
+                return ShopifyTokenValidationResult(
+                    valid=False,
+                    shop_domain=shop_domain,
+                    error_message="Invalid or expired access token",
+                )
+
+            if response.status_code == 402:
+                logger.warning(
+                    "Shopify token validation failed: store frozen",
+                    extra={"shop_domain": shop_domain},
+                )
+                return ShopifyTokenValidationResult(
+                    valid=False,
+                    shop_domain=shop_domain,
+                    error_message="Store is frozen or payment required",
+                )
+
+            if response.status_code >= 400:
+                logger.warning(
+                    "Shopify token validation failed",
+                    extra={
+                        "shop_domain": shop_domain,
+                        "status_code": response.status_code,
+                    },
+                )
+                return ShopifyTokenValidationResult(
+                    valid=False,
+                    shop_domain=shop_domain,
+                    error_message=f"API error: {response.status_code}",
+                )
+
+            result = response.json()
+
+            # Check for GraphQL errors
+            if "errors" in result:
+                error_msg = str(result["errors"][:200])
+                logger.warning(
+                    "Shopify token validation GraphQL error",
+                    extra={
+                        "shop_domain": shop_domain,
+                        "errors": error_msg,
+                    },
+                )
+                return ShopifyTokenValidationResult(
+                    valid=False,
+                    shop_domain=shop_domain,
+                    error_message=f"GraphQL error: {error_msg}",
+                )
+
+            data = result.get("data", {})
+            shop_data = data.get("shop", {})
+            app_data = data.get("currentAppInstallation", {})
+
+            # Extract scopes
+            scopes = []
+            for scope in app_data.get("accessScopes", []):
+                if scope.get("handle"):
+                    scopes.append(scope["handle"])
+
+            logger.info(
+                "Shopify token validated successfully",
+                extra={
+                    "shop_domain": shop_domain,
+                    "shop_name": shop_data.get("name"),
+                    "scope_count": len(scopes),
+                },
+            )
+
+            return ShopifyTokenValidationResult(
+                valid=True,
+                shop_domain=shop_domain,
+                shop_name=shop_data.get("name"),
+                shop_email=shop_data.get("email"),
+                currency=shop_data.get("currencyCode"),
+                timezone=shop_data.get("timezoneAbbreviation"),
+                country_code=shop_data.get("billingAddress", {}).get("countryCodeV2"),
+                scopes=scopes,
+            )
+
+        except httpx.TimeoutException:
+            logger.error(
+                "Shopify token validation timed out",
+                extra={"shop_domain": shop_domain},
+            )
+            return ShopifyTokenValidationResult(
+                valid=False,
+                shop_domain=shop_domain,
+                error_message="Request timed out",
+            )
+
+        except httpx.RequestError as e:
+            logger.error(
+                "Shopify token validation network error",
+                extra={"shop_domain": shop_domain, "error": str(e)},
+            )
+            return ShopifyTokenValidationResult(
+                valid=False,
+                shop_domain=shop_domain,
+                error_message=f"Network error: {str(e)}",
+            )
+
+
+# =============================================================================
+# Automatic Airbyte Source Setup
+# =============================================================================
+
+@dataclass
+class AutomaticSetupResult:
+    """Result of automatic Shopify Airbyte source setup."""
+
+    success: bool
+    source_id: Optional[str] = None
+    connection_id: Optional[str] = None
+    internal_connection_id: Optional[str] = None
+    error_message: Optional[str] = None
+
+
+async def setup_shopify_airbyte_source(
+    tenant_id: str,
+    shop_domain: str,
+    access_token: str,
+    db_session: Session,
+    destination_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    trigger_initial_sync: bool = True,
+) -> AutomaticSetupResult:
+    """
+    Automatically set up a Shopify Airbyte source and connection.
+
+    This method:
+    1. Creates a new Airbyte source with Shopify credentials
+    2. Creates a connection to the destination
+    3. Registers the connection in our tracking system
+    4. Optionally triggers an initial sync
+
+    Args:
+        tenant_id: Tenant ID from JWT
+        shop_domain: Shopify store domain
+        access_token: Shopify access token (will be encrypted)
+        db_session: Database session
+        destination_id: Airbyte destination ID (defaults to env var)
+        start_date: Optional start date for sync (ISO format)
+        trigger_initial_sync: Whether to trigger initial sync
+
+    Returns:
+        AutomaticSetupResult with setup status and IDs
+    """
+    # Normalize shop domain
+    shop_domain = shop_domain.replace("https://", "").replace("http://", "").rstrip("/")
+
+    # Get destination ID from environment if not provided
+    destination_id = destination_id or os.getenv("AIRBYTE_DESTINATION_ID")
+    if not destination_id:
+        logger.error(
+            "Airbyte destination ID not configured",
+            extra={"tenant_id": tenant_id, "shop_domain": shop_domain},
+        )
+        return AutomaticSetupResult(
+            success=False,
+            error_message="Airbyte destination ID not configured. Set AIRBYTE_DESTINATION_ID environment variable.",
+        )
+
+    # Default start date to 1 year ago if not provided
+    if not start_date:
+        from datetime import datetime, timedelta
+        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+
+    airbyte_client = get_airbyte_client()
+
+    try:
+        # Step 1: Create Airbyte source
+        logger.info(
+            "Creating Shopify Airbyte source",
+            extra={"tenant_id": tenant_id, "shop_domain": shop_domain},
+        )
+
+        source_request = SourceCreationRequest(
+            name=f"Shopify - {shop_domain}",
+            source_type="source-shopify",
+            configuration={
+                "shop": shop_domain,
+                "credentials": {
+                    "auth_method": "api_password",
+                    "api_password": access_token,
+                },
+                "start_date": start_date,
+                "bulk_window_in_days": 30,
+            },
+        )
+
+        source = await airbyte_client.create_source(source_request)
+
+        logger.info(
+            "Shopify Airbyte source created",
+            extra={
+                "tenant_id": tenant_id,
+                "shop_domain": shop_domain,
+                "source_id": source.source_id,
+            },
+        )
+
+        # Step 2: Create Airbyte connection
+        logger.info(
+            "Creating Airbyte connection",
+            extra={
+                "tenant_id": tenant_id,
+                "source_id": source.source_id,
+                "destination_id": destination_id,
+            },
+        )
+
+        connection_request = ConnectionCreationRequest(
+            source_id=source.source_id,
+            destination_id=destination_id,
+            name=f"Shopify - {shop_domain} → Warehouse",
+            schedule_type=ScheduleType.BASIC,  # Will sync on schedule
+        )
+
+        connection = await airbyte_client.create_connection(connection_request)
+
+        logger.info(
+            "Airbyte connection created",
+            extra={
+                "tenant_id": tenant_id,
+                "connection_id": connection.connection_id,
+            },
+        )
+
+        # Step 3: Register in our tracking system
+        airbyte_service = AirbyteService(db_session, tenant_id)
+
+        internal_connection = airbyte_service.register_connection(
+            airbyte_connection_id=connection.connection_id,
+            connection_name=f"{shop_domain} - Shopify",
+            connection_type="source",
+            airbyte_source_id=source.source_id,
+            source_type="source-shopify",
+            configuration={
+                "shop_domain": shop_domain,
+                "start_date": start_date,
+                "streams": ["orders", "customers", "products", "inventory_levels"],
+            },
+            sync_frequency_minutes="60",
+        )
+
+        logger.info(
+            "Connection registered in tracking system",
+            extra={
+                "tenant_id": tenant_id,
+                "internal_connection_id": internal_connection.id,
+            },
+        )
+
+        # Step 4: Optionally trigger initial sync
+        if trigger_initial_sync:
+            logger.info(
+                "Triggering initial sync",
+                extra={
+                    "tenant_id": tenant_id,
+                    "connection_id": connection.connection_id,
+                },
+            )
+
+            job_id = await airbyte_client.trigger_sync(connection.connection_id)
+
+            logger.info(
+                "Initial sync triggered",
+                extra={
+                    "tenant_id": tenant_id,
+                    "job_id": job_id,
+                },
+            )
+
+        return AutomaticSetupResult(
+            success=True,
+            source_id=source.source_id,
+            connection_id=connection.connection_id,
+            internal_connection_id=internal_connection.id,
+        )
+
+    except AirbyteError as e:
+        logger.error(
+            "Failed to set up Shopify Airbyte source",
+            extra={
+                "tenant_id": tenant_id,
+                "shop_domain": shop_domain,
+                "error": str(e),
+            },
+        )
+        return AutomaticSetupResult(
+            success=False,
+            error_message=f"Airbyte API error: {str(e)}",
+        )
+
+    except Exception as e:
+        logger.error(
+            "Unexpected error setting up Shopify Airbyte source",
+            extra={
+                "tenant_id": tenant_id,
+                "shop_domain": shop_domain,
+                "error": str(e),
+            },
+        )
+        return AutomaticSetupResult(
+            success=False,
+            error_message=f"Unexpected error: {str(e)}",
+        )
+
+    finally:
+        await airbyte_client.close()

@@ -31,6 +31,7 @@ from src.api.routes import llm_config
 from src.api.routes import changelog
 from src.api.routes import admin_changelog
 from src.api.routes import what_changed
+from src.api.routes import shopify_ingestion
 from src.api.dq import routes as sync_health
 
 # Configure structured logging
@@ -167,6 +168,10 @@ app.include_router(admin_changelog.router)
 # Include what-changed routes (requires authentication, read-only)
 # Story 9.8 - "What Changed?" Debug Panel
 app.include_router(what_changed.router)
+
+# Include Shopify ingestion routes (requires authentication)
+# Shopify data source setup and sync management
+app.include_router(shopify_ingestion.router)
 
 
 # Global exception handler for tenant isolation errors

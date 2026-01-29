@@ -203,3 +203,99 @@ class AirbyteSyncResult:
     @property
     def is_successful(self) -> bool:
         return self.status == AirbyteJobStatus.SUCCEEDED
+
+
+class SourceType(str, Enum):
+    """Supported Airbyte source types for data ingestion."""
+
+    SHOPIFY = "source-shopify"
+    META_ADS = "source-facebook-marketing"
+    GOOGLE_ADS = "source-google-ads"
+    TIKTOK_ADS = "source-tiktok-marketing"
+    SNAPCHAT_ADS = "source-snapchat-marketing"
+    KLAVIYO = "source-klaviyo"
+    ATTENTIVE = "source-attentive"
+    POSTSCRIPT = "source-postscript"
+    SMSBUMP = "source-smsbump"
+
+
+@dataclass
+class AirbyteSource:
+    """Airbyte source (data source connector)."""
+
+    source_id: str
+    name: str
+    source_type: str
+    workspace_id: str
+    configuration: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AirbyteSource":
+        return cls(
+            source_id=data.get("sourceId", ""),
+            name=data.get("name", ""),
+            source_type=data.get("sourceType", ""),
+            workspace_id=data.get("workspaceId", ""),
+            configuration=data.get("configuration", {}),
+        )
+
+
+@dataclass
+class AirbyteDestination:
+    """Airbyte destination (data destination connector)."""
+
+    destination_id: str
+    name: str
+    destination_type: str
+    workspace_id: str
+    configuration: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AirbyteDestination":
+        return cls(
+            destination_id=data.get("destinationId", ""),
+            name=data.get("name", ""),
+            destination_type=data.get("destinationType", ""),
+            workspace_id=data.get("workspaceId", ""),
+            configuration=data.get("configuration", {}),
+        )
+
+
+@dataclass
+class SourceCreationRequest:
+    """Request to create a new Airbyte source."""
+
+    name: str
+    source_type: str
+    configuration: Dict[str, Any]
+    workspace_id: Optional[str] = None
+
+    def to_dict(self, workspace_id: str) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "sourceType": self.source_type,
+            "workspaceId": workspace_id,
+            "configuration": self.configuration,
+        }
+
+
+@dataclass
+class ConnectionCreationRequest:
+    """Request to create a new Airbyte connection."""
+
+    source_id: str
+    destination_id: str
+    name: str
+    schedule_type: ScheduleType = ScheduleType.MANUAL
+    namespace_definition: str = "destination"
+    status: str = "active"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "sourceId": self.source_id,
+            "destinationId": self.destination_id,
+            "name": self.name,
+            "schedule": {"scheduleType": self.schedule_type.value},
+            "namespaceDefinition": self.namespace_definition,
+            "status": self.status,
+        }

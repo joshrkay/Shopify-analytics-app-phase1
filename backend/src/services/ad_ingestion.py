@@ -41,12 +41,29 @@ class AdPlatform(str, Enum):
     """Supported ad platforms."""
     META_ADS = "meta_ads"
     GOOGLE_ADS = "google_ads"
+    # Social ad platforms
+    TIKTOK_ADS = "tiktok_ads"
+    SNAPCHAT_ADS = "snapchat_ads"
+    # Email marketing platforms
+    KLAVIYO = "klaviyo"
+    SHOPIFY_EMAIL = "shopify_email"
+    # SMS marketing platforms
+    ATTENTIVE = "attentive"
+    POSTSCRIPT = "postscript"
+    SMSBUMP = "smsbump"
 
 
 # Airbyte source type identifiers
 AIRBYTE_SOURCE_TYPES = {
     AdPlatform.META_ADS: "source-facebook-marketing",
     AdPlatform.GOOGLE_ADS: "source-google-ads",
+    AdPlatform.TIKTOK_ADS: "source-tiktok-marketing",
+    AdPlatform.SNAPCHAT_ADS: "source-snapchat-marketing",
+    AdPlatform.KLAVIYO: "source-klaviyo",
+    AdPlatform.SHOPIFY_EMAIL: "source-shopify",  # Uses Shopify source for email data
+    AdPlatform.ATTENTIVE: "source-attentive",
+    AdPlatform.POSTSCRIPT: "source-postscript",
+    AdPlatform.SMSBUMP: "source-smsbump",
 }
 
 
@@ -65,6 +82,20 @@ class AdAccountCredentials:
     client_secret: Optional[str] = None
     developer_token: Optional[str] = None
     customer_id: Optional[str] = None
+    # TikTok-specific fields
+    tiktok_app_id: Optional[str] = None
+    tiktok_app_secret: Optional[str] = None
+    advertiser_id: Optional[str] = None
+    # Snapchat-specific fields
+    snapchat_client_id: Optional[str] = None
+    snapchat_client_secret: Optional[str] = None
+    organization_id: Optional[str] = None
+    # Klaviyo-specific fields
+    api_key: Optional[str] = None  # Klaviyo uses API key auth
+    # SMS platform fields (Attentive, Postscript, SMSBump)
+    sms_api_key: Optional[str] = None
+    sms_api_secret: Optional[str] = None
+    # Shopify Email uses existing Shopify store credentials (no additional fields needed)
 
 
 @dataclass
@@ -181,12 +212,88 @@ class AdIngestionService:
         if not credentials.customer_id:
             raise InvalidCredentialsError("Google Ads requires customer_id")
 
+    def _validate_tiktok_credentials(self, credentials: AdAccountCredentials) -> None:
+        """Validate TikTok Ads credentials are complete."""
+        if not credentials.access_token:
+            raise InvalidCredentialsError("TikTok Ads requires access_token")
+        if not credentials.advertiser_id:
+            raise InvalidCredentialsError("TikTok Ads requires advertiser_id")
+        if not credentials.account_id:
+            raise InvalidCredentialsError("TikTok Ads requires account_id")
+
+    def _validate_snapchat_credentials(self, credentials: AdAccountCredentials) -> None:
+        """Validate Snapchat Ads credentials are complete."""
+        if not credentials.access_token:
+            raise InvalidCredentialsError("Snapchat Ads requires access_token")
+        if not credentials.refresh_token:
+            raise InvalidCredentialsError("Snapchat Ads requires refresh_token")
+        if not credentials.snapchat_client_id:
+            raise InvalidCredentialsError("Snapchat Ads requires snapchat_client_id")
+        if not credentials.snapchat_client_secret:
+            raise InvalidCredentialsError("Snapchat Ads requires snapchat_client_secret")
+        if not credentials.organization_id:
+            raise InvalidCredentialsError("Snapchat Ads requires organization_id")
+        if not credentials.account_id:
+            raise InvalidCredentialsError("Snapchat Ads requires account_id")
+
+    def _validate_klaviyo_credentials(self, credentials: AdAccountCredentials) -> None:
+        """Validate Klaviyo credentials are complete."""
+        if not credentials.api_key:
+            raise InvalidCredentialsError("Klaviyo requires api_key")
+        if not credentials.account_id:
+            raise InvalidCredentialsError("Klaviyo requires account_id")
+
+    def _validate_shopify_email_credentials(self, credentials: AdAccountCredentials) -> None:
+        """Validate Shopify Email credentials are complete."""
+        # Shopify Email uses the existing Shopify store access token
+        if not credentials.access_token:
+            raise InvalidCredentialsError("Shopify Email requires access_token (Shopify store token)")
+        if not credentials.account_id:
+            raise InvalidCredentialsError("Shopify Email requires account_id (shop domain)")
+
+    def _validate_attentive_credentials(self, credentials: AdAccountCredentials) -> None:
+        """Validate Attentive SMS credentials are complete."""
+        if not credentials.sms_api_key:
+            raise InvalidCredentialsError("Attentive requires sms_api_key")
+        if not credentials.account_id:
+            raise InvalidCredentialsError("Attentive requires account_id")
+
+    def _validate_postscript_credentials(self, credentials: AdAccountCredentials) -> None:
+        """Validate Postscript SMS credentials are complete."""
+        if not credentials.sms_api_key:
+            raise InvalidCredentialsError("Postscript requires sms_api_key")
+        if not credentials.sms_api_secret:
+            raise InvalidCredentialsError("Postscript requires sms_api_secret")
+        if not credentials.account_id:
+            raise InvalidCredentialsError("Postscript requires account_id")
+
+    def _validate_smsbump_credentials(self, credentials: AdAccountCredentials) -> None:
+        """Validate SMSBump credentials are complete."""
+        if not credentials.sms_api_key:
+            raise InvalidCredentialsError("SMSBump requires sms_api_key")
+        if not credentials.account_id:
+            raise InvalidCredentialsError("SMSBump requires account_id")
+
     def _validate_credentials(self, credentials: AdAccountCredentials) -> None:
         """Validate credentials based on platform."""
         if credentials.platform == AdPlatform.META_ADS:
             self._validate_meta_credentials(credentials)
         elif credentials.platform == AdPlatform.GOOGLE_ADS:
             self._validate_google_credentials(credentials)
+        elif credentials.platform == AdPlatform.TIKTOK_ADS:
+            self._validate_tiktok_credentials(credentials)
+        elif credentials.platform == AdPlatform.SNAPCHAT_ADS:
+            self._validate_snapchat_credentials(credentials)
+        elif credentials.platform == AdPlatform.KLAVIYO:
+            self._validate_klaviyo_credentials(credentials)
+        elif credentials.platform == AdPlatform.SHOPIFY_EMAIL:
+            self._validate_shopify_email_credentials(credentials)
+        elif credentials.platform == AdPlatform.ATTENTIVE:
+            self._validate_attentive_credentials(credentials)
+        elif credentials.platform == AdPlatform.POSTSCRIPT:
+            self._validate_postscript_credentials(credentials)
+        elif credentials.platform == AdPlatform.SMSBUMP:
+            self._validate_smsbump_credentials(credentials)
         else:
             raise InvalidCredentialsError(f"Unsupported platform: {credentials.platform}")
 
@@ -236,6 +343,34 @@ class AdIngestionService:
                 credentials.developer_token
             )
 
+        # TikTok-specific encrypted fields
+        if credentials.tiktok_app_secret:
+            encrypted["tiktok_app_secret_encrypted"] = await encrypt_secret(
+                credentials.tiktok_app_secret
+            )
+
+        # Snapchat-specific encrypted fields
+        if credentials.snapchat_client_secret:
+            encrypted["snapchat_client_secret_encrypted"] = await encrypt_secret(
+                credentials.snapchat_client_secret
+            )
+
+        # Klaviyo API key
+        if credentials.api_key:
+            encrypted["api_key_encrypted"] = await encrypt_secret(
+                credentials.api_key
+            )
+
+        # SMS platform encrypted fields
+        if credentials.sms_api_key:
+            encrypted["sms_api_key_encrypted"] = await encrypt_secret(
+                credentials.sms_api_key
+            )
+        if credentials.sms_api_secret:
+            encrypted["sms_api_secret_encrypted"] = await encrypt_secret(
+                credentials.sms_api_secret
+            )
+
         # Non-sensitive identifiers (stored unencrypted)
         if credentials.app_id:
             encrypted["app_id"] = credentials.app_id
@@ -243,6 +378,14 @@ class AdIngestionService:
             encrypted["client_id"] = credentials.client_id
         if credentials.customer_id:
             encrypted["customer_id"] = credentials.customer_id
+        if credentials.tiktok_app_id:
+            encrypted["tiktok_app_id"] = credentials.tiktok_app_id
+        if credentials.advertiser_id:
+            encrypted["advertiser_id"] = credentials.advertiser_id
+        if credentials.snapchat_client_id:
+            encrypted["snapchat_client_id"] = credentials.snapchat_client_id
+        if credentials.organization_id:
+            encrypted["organization_id"] = credentials.organization_id
 
         return encrypted
 
@@ -289,6 +432,40 @@ class AdIngestionService:
                 encrypted_config["developer_token_encrypted"]
             )
 
+        # TikTok-specific decryption
+        tiktok_app_secret = None
+        if encrypted_config.get("tiktok_app_secret_encrypted"):
+            tiktok_app_secret = await decrypt_secret(
+                encrypted_config["tiktok_app_secret_encrypted"]
+            )
+
+        # Snapchat-specific decryption
+        snapchat_client_secret = None
+        if encrypted_config.get("snapchat_client_secret_encrypted"):
+            snapchat_client_secret = await decrypt_secret(
+                encrypted_config["snapchat_client_secret_encrypted"]
+            )
+
+        # Klaviyo API key decryption
+        api_key = None
+        if encrypted_config.get("api_key_encrypted"):
+            api_key = await decrypt_secret(
+                encrypted_config["api_key_encrypted"]
+            )
+
+        # SMS platform decryption
+        sms_api_key = None
+        if encrypted_config.get("sms_api_key_encrypted"):
+            sms_api_key = await decrypt_secret(
+                encrypted_config["sms_api_key_encrypted"]
+            )
+
+        sms_api_secret = None
+        if encrypted_config.get("sms_api_secret_encrypted"):
+            sms_api_secret = await decrypt_secret(
+                encrypted_config["sms_api_secret_encrypted"]
+            )
+
         return AdAccountCredentials(
             platform=platform,
             account_id=encrypted_config["account_id"],
@@ -300,6 +477,19 @@ class AdIngestionService:
             client_secret=client_secret,
             developer_token=developer_token,
             customer_id=encrypted_config.get("customer_id"),
+            # TikTok fields
+            tiktok_app_id=encrypted_config.get("tiktok_app_id"),
+            tiktok_app_secret=tiktok_app_secret,
+            advertiser_id=encrypted_config.get("advertiser_id"),
+            # Snapchat fields
+            snapchat_client_id=encrypted_config.get("snapchat_client_id"),
+            snapchat_client_secret=snapchat_client_secret,
+            organization_id=encrypted_config.get("organization_id"),
+            # Klaviyo fields
+            api_key=api_key,
+            # SMS platform fields
+            sms_api_key=sms_api_key,
+            sms_api_secret=sms_api_secret,
         )
 
     async def connect_ad_account(

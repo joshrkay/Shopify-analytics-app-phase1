@@ -31,6 +31,10 @@ from src.integrations.airbyte.models import (
     AirbyteJob,
     AirbyteJobStatus,
     AirbyteSyncResult,
+    AirbyteSource,
+    AirbyteDestination,
+    SourceCreationRequest,
+    ConnectionCreationRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -481,6 +485,221 @@ class AirbyteClient:
             timeout_seconds=timeout_seconds,
             poll_interval_seconds=poll_interval_seconds,
             connection_id=connection_id,
+        )
+
+    # =========================================================================
+    # Source Management Methods
+    # =========================================================================
+
+    async def create_source(
+        self,
+        request: SourceCreationRequest,
+        workspace_id: Optional[str] = None,
+    ) -> AirbyteSource:
+        """
+        Create a new source in Airbyte.
+
+        Args:
+            request: Source creation request with configuration
+            workspace_id: Override workspace ID (uses default if not provided)
+
+        Returns:
+            Created AirbyteSource object
+
+        Raises:
+            AirbyteError: On API errors
+        """
+        ws_id = workspace_id or self.workspace_id
+
+        data = await self._request(
+            "POST",
+            "/sources",
+            json=request.to_dict(ws_id),
+        )
+
+        source = AirbyteSource.from_dict(data)
+
+        logger.info(
+            "Airbyte source created",
+            extra={
+                "source_id": source.source_id,
+                "source_type": source.source_type,
+                "name": source.name,
+            },
+        )
+
+        return source
+
+    async def get_source(self, source_id: str) -> AirbyteSource:
+        """
+        Get a specific source by ID.
+
+        Args:
+            source_id: Source UUID
+
+        Returns:
+            AirbyteSource object
+
+        Raises:
+            AirbyteNotFoundError: If source not found
+            AirbyteError: On other API errors
+        """
+        data = await self._request("GET", f"/sources/{source_id}")
+        return AirbyteSource.from_dict(data)
+
+    async def list_sources(
+        self,
+        workspace_id: Optional[str] = None,
+    ) -> List[AirbyteSource]:
+        """
+        List all sources in the workspace.
+
+        Args:
+            workspace_id: Override workspace ID (uses default if not provided)
+
+        Returns:
+            List of AirbyteSource objects
+
+        Raises:
+            AirbyteError: On API errors
+        """
+        ws_id = workspace_id or self.workspace_id
+
+        data = await self._request(
+            "GET",
+            "/sources",
+            params={"workspaceIds": ws_id},
+        )
+
+        sources = []
+        for source_data in data.get("data", []):
+            sources.append(AirbyteSource.from_dict(source_data))
+
+        return sources
+
+    async def delete_source(self, source_id: str) -> None:
+        """
+        Delete a source.
+
+        Args:
+            source_id: Source UUID to delete
+
+        Raises:
+            AirbyteError: On API errors
+        """
+        await self._request("DELETE", f"/sources/{source_id}")
+
+        logger.info(
+            "Airbyte source deleted",
+            extra={"source_id": source_id},
+        )
+
+    # =========================================================================
+    # Destination Management Methods
+    # =========================================================================
+
+    async def get_destination(self, destination_id: str) -> AirbyteDestination:
+        """
+        Get a specific destination by ID.
+
+        Args:
+            destination_id: Destination UUID
+
+        Returns:
+            AirbyteDestination object
+
+        Raises:
+            AirbyteNotFoundError: If destination not found
+            AirbyteError: On other API errors
+        """
+        data = await self._request("GET", f"/destinations/{destination_id}")
+        return AirbyteDestination.from_dict(data)
+
+    async def list_destinations(
+        self,
+        workspace_id: Optional[str] = None,
+    ) -> List[AirbyteDestination]:
+        """
+        List all destinations in the workspace.
+
+        Args:
+            workspace_id: Override workspace ID (uses default if not provided)
+
+        Returns:
+            List of AirbyteDestination objects
+
+        Raises:
+            AirbyteError: On API errors
+        """
+        ws_id = workspace_id or self.workspace_id
+
+        data = await self._request(
+            "GET",
+            "/destinations",
+            params={"workspaceIds": ws_id},
+        )
+
+        destinations = []
+        for dest_data in data.get("data", []):
+            destinations.append(AirbyteDestination.from_dict(dest_data))
+
+        return destinations
+
+    # =========================================================================
+    # Connection Creation Methods
+    # =========================================================================
+
+    async def create_connection(
+        self,
+        request: ConnectionCreationRequest,
+    ) -> AirbyteConnection:
+        """
+        Create a new connection between source and destination.
+
+        Args:
+            request: Connection creation request
+
+        Returns:
+            Created AirbyteConnection object
+
+        Raises:
+            AirbyteError: On API errors
+        """
+        data = await self._request(
+            "POST",
+            "/connections",
+            json=request.to_dict(),
+        )
+
+        connection = AirbyteConnection.from_dict(data)
+
+        logger.info(
+            "Airbyte connection created",
+            extra={
+                "connection_id": connection.connection_id,
+                "source_id": connection.source_id,
+                "destination_id": connection.destination_id,
+                "name": connection.name,
+            },
+        )
+
+        return connection
+
+    async def delete_connection(self, connection_id: str) -> None:
+        """
+        Delete a connection.
+
+        Args:
+            connection_id: Connection UUID to delete
+
+        Raises:
+            AirbyteError: On API errors
+        """
+        await self._request("DELETE", f"/connections/{connection_id}")
+
+        logger.info(
+            "Airbyte connection deleted",
+            extra={"connection_id": connection_id},
         )
 
 

@@ -9,7 +9,8 @@
         - paid_social: Paid advertising on social platforms (Meta, TikTok, Snap, Pinterest)
         - paid_search: Paid search advertising (Google Search, Bing)
         - paid_shopping: Paid shopping/product ads (Google Shopping, Amazon, Pinterest Shopping)
-        - email: Email marketing (Klaviyo, Mailchimp)
+        - email: Email marketing (Klaviyo, Mailchimp, Shopify Email)
+        - sms: SMS marketing (Attentive, Postscript, SMSBump)
         - organic_social: Organic social media traffic
         - organic_search: Organic search engine traffic
         - direct: Direct traffic (no referrer)
@@ -64,6 +65,14 @@
         -- Klaviyo: All email
         when {{ source }} = 'klaviyo' then 'email'
 
+        -- Shopify Email: All email
+        when {{ source }} = 'shopify_email' then 'email'
+
+        -- SMS Marketing Platforms
+        when {{ source }} = 'attentive' then 'sms'
+        when {{ source }} = 'postscript' then 'sms'
+        when {{ source }} = 'smsbump' then 'sms'
+
         -- GA4: Requires UTM/source analysis
         when {{ source }} = 'ga4' then
             case
@@ -103,5 +112,5 @@
     Returns the list of valid canonical channel values.
     Used for accepted_values tests in schema.yml.
     #}
-    {{ return(['paid_social', 'paid_search', 'paid_shopping', 'email', 'organic_social', 'organic_search', 'direct', 'referral', 'affiliate', 'other']) }}
+    {{ return(['paid_social', 'paid_search', 'paid_shopping', 'email', 'sms', 'organic_social', 'organic_search', 'direct', 'referral', 'affiliate', 'other']) }}
 {% endmacro %}
