@@ -369,7 +369,8 @@ jobs:
             source_type text not null,
             connection_name text,
             status text not null,
-            is_enabled boolean not null
+            is_enabled boolean not null,
+            configuration jsonb default '{}'::jsonb
           );
 
           create table if not exists airbyte_raw._airbyte_raw_shopify_orders (
@@ -395,6 +396,40 @@ jobs:
             _airbyte_emitted_at timestamptz,
             _airbyte_data jsonb
           );
+
+          -- Insert test tenant connection with shop_domain configuration
+          insert into platform.tenant_airbyte_connections
+            (airbyte_connection_id, tenant_id, source_type, connection_name, status, is_enabled, configuration)
+          values
+            ('airbyte-conn-shopify-1', 'tenant-test-123', 'shopify', 'Test Store - Shopify', 'active', true, '{"shop_domain": "test-store.myshopify.com"}'::jsonb),
+            ('airbyte-conn-meta-1', 'tenant-test-123', 'source-facebook-marketing', 'Meta Ads', 'active', true, '{}'::jsonb),
+            ('airbyte-conn-google-1', 'tenant-test-123', 'source-google-ads', 'Google Ads', 'active', true, '{}'::jsonb);
+
+          -- Insert test Shopify orders with shop_url
+          insert into airbyte_raw._airbyte_raw_shopify_orders
+            (_airbyte_ab_id, _airbyte_emitted_at, _airbyte_data)
+          values
+            ('order-1', '2024-01-15 10:00:00+00', '{"id": "gid://shopify/Order/12345", "name": "#1001", "order_number": "1001", "email": "customer1@example.com", "created_at": "2024-01-15T10:00:00Z", "updated_at": "2024-01-15T10:05:00Z", "financial_status": "paid", "fulfillment_status": "fulfilled", "total_price": "99.99", "subtotal_price": "89.99", "total_tax": "10.00", "currency": "USD", "customer": {"id": "gid://shopify/Customer/111"}, "tags": "test,new-customer", "note": "Test order", "shop_url": "https://test-store.myshopify.com"}'::jsonb),
+            ('order-2', '2024-01-16 11:00:00+00', '{"id": "gid://shopify/Order/12346", "name": "#1002", "order_number": "1002", "email": "customer2@example.com", "created_at": "2024-01-16T11:00:00Z", "updated_at": "2024-01-16T11:10:00Z", "financial_status": "paid", "fulfillment_status": "fulfilled", "total_price": "149.50", "subtotal_price": "135.00", "total_tax": "14.50", "currency": "USD", "customer": {"id": "gid://shopify/Customer/222"}, "tags": "vip", "shop_url": "https://test-store.myshopify.com"}'::jsonb);
+
+          -- Insert test Shopify customers with shop_url
+          insert into airbyte_raw._airbyte_raw_shopify_customers
+            (_airbyte_ab_id, _airbyte_emitted_at, _airbyte_data)
+          values
+            ('customer-1', '2024-01-10 09:00:00+00', '{"id": "gid://shopify/Customer/111", "email": "customer1@example.com", "first_name": "John", "last_name": "Doe", "phone": "+1234567890", "created_at": "2024-01-10T09:00:00Z", "updated_at": "2024-01-15T10:00:00Z", "accepts_marketing": "true", "verified_email": "true", "orders_count": "5", "total_spent": "499.99", "currency": "USD", "state": "enabled", "default_address": {"country": "US", "city": "New York"}, "shop_url": "https://test-store.myshopify.com"}'::jsonb),
+            ('customer-2', '2024-01-11 10:00:00+00', '{"id": "gid://shopify/Customer/222", "email": "customer2@example.com", "first_name": "Jane", "last_name": "Smith", "created_at": "2024-01-11T10:00:00Z", "updated_at": "2024-01-16T11:00:00Z", "accepts_marketing": "false", "verified_email": "1", "orders_count": "3", "total_spent": "299.50", "currency": "USD", "state": "enabled", "default_address": {"country": "CA", "city": "Toronto"}, "shop_url": "https://test-store.myshopify.com"}'::jsonb);
+
+          -- Insert test Meta Ads data
+          insert into airbyte_raw._airbyte_raw_meta_ads
+            (_airbyte_ab_id, _airbyte_emitted_at, _airbyte_data)
+          values
+            ('meta-1', '2024-01-15 08:00:00+00', '{"account_id": "act_123456", "campaign_id": "120330000000000001", "adset_id": "120330000000000002", "ad_id": "120330000000000003", "date_start": "2024-01-15", "date_stop": "2024-01-15", "spend": "25.50", "impressions": "5000", "clicks": "150", "conversions": "5.0", "currency": "USD", "campaign_name": "Test Campaign", "adset_name": "Test Adset", "ad_name": "Test Ad", "objective": "CONVERSIONS"}'::jsonb);
+
+          -- Insert test Google Ads data
+          insert into airbyte_raw._airbyte_raw_google_ads
+            (_airbyte_ab_id, _airbyte_emitted_at, _airbyte_data)
+          values
+            ('google-1', '2024-01-15 08:00:00+00', '{"customer_id": "1234567890", "campaign_id": "987654321", "ad_group_id": "111222333", "ad_id": "444555666", "date": "2024-01-15", "cost_micros": "25500000", "impressions": "5000", "clicks": "150", "conversions": "5.0", "conversion_value": "250.00", "currency_code": "USD", "campaign_name": "Test Campaign", "ad_group_name": "Test Ad Group", "ad_type": "SEARCH", "device": "DESKTOP", "network": "SEARCH"}'::jsonb);
           SQL
 
       - name: Run dbt compile
