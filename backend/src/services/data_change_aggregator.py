@@ -25,7 +25,7 @@ from src.models.dq_models import (
 )
 from src.models.airbyte_connection import TenantAirbyteConnection, ConnectionStatus
 from src.models.action_approval_audit import ActionApprovalAudit, AuditAction
-from src.models.action_proposal import ActionProposal, ActionStatus
+from src.models.action_proposal import ActionProposal
 
 
 logger = logging.getLogger(__name__)
