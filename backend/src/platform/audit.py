@@ -40,6 +40,7 @@ JSONType = JSON().with_variant(JSONB(), "postgresql")
 from sqlalchemy.orm import Session
 
 from src.db_base import Base
+from src.monitoring.audit_metrics import get_audit_metrics
 
 logger = logging.getLogger(__name__)
 fallback_logger = logging.getLogger("audit.fallback")
@@ -409,18 +410,30 @@ def write_audit_log_sync(
         db.add(audit_log)
         db.commit()
 
+        action_str = event.action.value if isinstance(event.action, AuditAction) else event.action
+        outcome_str = event.outcome.value if isinstance(event.outcome, AuditOutcome) else event.outcome
+
         logger.info(
             "Audit event recorded",
             extra={
                 "audit_id": audit_log.id,
                 "tenant_id": event.tenant_id,
                 "user_id": event.user_id,
-                "action": event.action.value if isinstance(event.action, AuditAction) else event.action,
+                "action": action_str,
                 "correlation_id": event.correlation_id,
                 "source": event.source,
-                "outcome": event.outcome.value if isinstance(event.outcome, AuditOutcome) else event.outcome,
+                "outcome": outcome_str,
             }
         )
+
+        # Record metric for monitoring
+        get_audit_metrics().record_event(
+            action=action_str,
+            outcome=outcome_str,
+            tenant_id=event.tenant_id,
+            source=event.source,
+        )
+
         return audit_log
 
     except Exception as e:
@@ -454,6 +467,12 @@ def _write_fallback_log(event: AuditEvent, audit_id: str, error_reason: str) -> 
     fallback_logger.error(
         "Audit log fallback",
         extra={"audit_entry": json.dumps(fallback_entry)},
+    )
+
+    # Record failure metric for monitoring/alerting
+    get_audit_metrics().record_failure(
+        error_type=type(Exception(error_reason)).__name__,
+        tenant_id=event.tenant_id,
     )
 
 
