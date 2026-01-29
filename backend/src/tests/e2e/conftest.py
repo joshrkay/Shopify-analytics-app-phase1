@@ -193,12 +193,11 @@ def mock_openrouter() -> MockOpenRouterServer:
 
 
 @pytest.fixture
-def webhook_simulator(mock_frontegg) -> ShopifyWebhookSimulator:
-    """Create webhook simulator for sending signed webhooks."""
-    base_url = os.getenv("TEST_API_BASE_URL", "http://localhost:8000")
+def webhook_simulator(client) -> ShopifyWebhookSimulator:
+    """Create webhook simulator for sending signed webhooks via test client."""
     return ShopifyWebhookSimulator(
         api_secret=TEST_WEBHOOK_SECRET,
-        base_url=base_url
+        test_client=client
     )
 
 
