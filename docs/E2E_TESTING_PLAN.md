@@ -4,6 +4,25 @@
 
 This document outlines a comprehensive end-to-end (E2E) testing strategy for the Shopify Analytics Platform. The plan focuses on **API-driven test data flow** rather than direct database seeding, ensuring that all data passes through the same pathways as production data.
 
+## Test Data Coverage Summary
+
+| Channel | Data Type | Record Count | Status |
+|---------|-----------|--------------|--------|
+| **Shopify** | Purchases | 30 | ✅ |
+| **Shopify** | Refunds | 25 | ✅ |
+| **Shopify** | Cancellations | 20 | ✅ |
+| **Shopify** | Customers | 50 | ✅ |
+| **Meta Ads** | Campaign Records | 30 | ✅ |
+| **Google Ads** | Campaign Records | 30 | ✅ |
+| **TikTok Ads** | Campaign Records | 25 | ✅ |
+| **Snapchat Ads** | Campaign Records | 25 | ✅ |
+| **Klaviyo** | Email Campaigns | 30 | ✅ |
+| **Klaviyo** | Email Events | 50 | ✅ |
+| **Attentive** | SMS Events | 30 | ✅ |
+| **SMSBump** | SMS Events | 30 | ✅ |
+| **Postscript** | SMS Events | 30 | ✅ |
+| **Total** | All Records | **455** | ✅ |
+
 ## Table of Contents
 
 1. [Testing Philosophy](#testing-philosophy)
