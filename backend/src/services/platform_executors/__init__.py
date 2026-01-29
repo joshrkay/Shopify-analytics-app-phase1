@@ -7,7 +7,7 @@ advertising and e-commerce platforms.
 Supported Platforms:
 - Meta (Facebook/Instagram) Ads
 - Google Ads
-- Shopify (planned)
+- Shopify
 
 Each executor implements the BasePlatformExecutor interface and handles:
 - API authentication
@@ -35,6 +35,10 @@ from src.services.platform_executors.google_executor import (
     GoogleAdsExecutor,
     GoogleAdsCredentials,
 )
+from src.services.platform_executors.shopify_executor import (
+    ShopifyExecutor,
+    ShopifyCredentials,
+)
 
 __all__ = [
     # Base
@@ -50,4 +54,7 @@ __all__ = [
     # Google
     "GoogleAdsExecutor",
     "GoogleAdsCredentials",
+    # Shopify
+    "ShopifyExecutor",
+    "ShopifyCredentials",
 ]
