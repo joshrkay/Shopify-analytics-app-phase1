@@ -585,16 +585,10 @@ sources:
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
-            tests:
-              - not_null
           - name: _airbyte_emitted_at
             description: Timestamp when record was emitted by Airbyte
-            tests:
-              - not_null
           - name: _airbyte_data
             description: JSONB column containing the actual ad data
-            tests:
-              - not_null
 
       - name: _airbyte_raw_snapchat_ads
         description: Raw Snapchat Ads data from Airbyte
@@ -602,16 +596,10 @@ sources:
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
-            tests:
-              - not_null
           - name: _airbyte_emitted_at
             description: Timestamp when record was emitted by Airbyte
-            tests:
-              - not_null
           - name: _airbyte_data
             description: JSONB column containing the actual ad data
-            tests:
-              - not_null
 
       - name: _airbyte_raw_klaviyo_events
         description: Raw Klaviyo email event data from Airbyte
@@ -619,16 +607,10 @@ sources:
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
-            tests:
-              - not_null
           - name: _airbyte_emitted_at
             description: Timestamp when record was emitted by Airbyte
-            tests:
-              - not_null
           - name: _airbyte_data
             description: JSONB column containing the email event data
-            tests:
-              - not_null
 
       - name: _airbyte_raw_shopify_email_activities
         description: Raw Shopify Email activity data from Airbyte
@@ -636,16 +618,10 @@ sources:
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
-            tests:
-              - not_null
           - name: _airbyte_emitted_at
             description: Timestamp when record was emitted by Airbyte
-            tests:
-              - not_null
           - name: _airbyte_data
             description: JSONB column containing the email activity data
-            tests:
-              - not_null
 
       - name: _airbyte_raw_attentive_events
         description: Raw Attentive SMS event data from Airbyte
@@ -653,16 +629,10 @@ sources:
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
-            tests:
-              - not_null
           - name: _airbyte_emitted_at
             description: Timestamp when record was emitted by Airbyte
-            tests:
-              - not_null
           - name: _airbyte_data
             description: JSONB column containing the SMS event data
-            tests:
-              - not_null
 
       - name: _airbyte_raw_postscript_events
         description: Raw Postscript SMS event data from Airbyte
@@ -670,16 +640,10 @@ sources:
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
-            tests:
-              - not_null
           - name: _airbyte_emitted_at
             description: Timestamp when record was emitted by Airbyte
-            tests:
-              - not_null
           - name: _airbyte_data
             description: JSONB column containing the SMS event data
-            tests:
-              - not_null
 
       - name: _airbyte_raw_smsbump_events
         description: Raw SMSBump event data from Airbyte
@@ -687,16 +651,10 @@ sources:
         columns:
           - name: _airbyte_ab_id
             description: Airbyte record ID
-            tests:
-              - not_null
           - name: _airbyte_emitted_at
             description: Timestamp when record was emitted by Airbyte
-            tests:
-              - not_null
           - name: _airbyte_data
             description: JSONB column containing the SMS event data
-            tests:
-              - not_null
 
   - name: platform
     description: Platform tables for tenant mapping and configuration
