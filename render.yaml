@@ -4,6 +4,39 @@
 
 services:
   # ============================================
+  # FRONTEND (React + Vite Static Site)
+  # ============================================
+  - type: web
+    name: shopify-analytics-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    branch: main
+    autoDeploy: true
+    region: oregon
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: shopify-analytics-api
+          property: host
+      - key: VITE_FRONTEGG_BASE_URL
+        sync: false
+      - key: VITE_FRONTEGG_CLIENT_ID
+        sync: false
+
+  # ============================================
   # WEB API SERVICE (FastAPI)
   # ============================================
   - type: web
