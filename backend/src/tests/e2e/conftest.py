@@ -27,6 +27,13 @@ from httpx import AsyncClient
 os.environ["ENV"] = "test"
 os.environ["SHOPIFY_API_SECRET"] = "test-webhook-secret-for-hmac"
 os.environ["SHOPIFY_BILLING_TEST_MODE"] = "true"
+os.environ.setdefault("FRONTEGG_CLIENT_ID", "test-client-id")
+os.environ.setdefault("FRONTEGG_CLIENT_SECRET", "test-client-secret")
+os.environ.setdefault("FRONTEGG_BASE_URL", "https://api.frontegg.com")
+os.environ.setdefault("ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
+os.environ.setdefault("AIRBYTE_API_TOKEN", "test-airbyte-token")
+os.environ.setdefault("AIRBYTE_WORKSPACE_ID", "test-workspace-id")
+os.environ.setdefault("OPENROUTER_API_KEY", "test-openrouter-key")
 
 # Import mocks
 from .mocks import (
@@ -186,12 +193,11 @@ def mock_openrouter() -> MockOpenRouterServer:
 
 
 @pytest.fixture
-def webhook_simulator(mock_frontegg) -> ShopifyWebhookSimulator:
-    """Create webhook simulator for sending signed webhooks."""
-    base_url = os.getenv("TEST_API_BASE_URL", "http://localhost:8000")
+def webhook_simulator(client) -> ShopifyWebhookSimulator:
+    """Create webhook simulator for sending signed webhooks via test client."""
     return ShopifyWebhookSimulator(
         api_secret=TEST_WEBHOOK_SECRET,
-        base_url=base_url
+        test_client=client
     )
 
 
@@ -261,6 +267,21 @@ def admin_token(mock_frontegg, test_tenant_id) -> str:
 # FastAPI Test Client Fixtures
 # =============================================================================
 
+class MockJWKSClient:
+    """Mock JWKS client that uses the mock Frontegg server's keys."""
+
+    def __init__(self, mock_frontegg_server):
+        self._mock = mock_frontegg_server
+        self.client_id = os.getenv("FRONTEGG_CLIENT_ID", "test-client-id")
+
+    def get_signing_key(self, token):
+        """Return mock signing key using the mock server's public key."""
+        class MockSigningKey:
+            def __init__(self, public_key):
+                self.key = public_key
+        return MockSigningKey(self._mock._public_key)
+
+
 @pytest.fixture
 def test_app(db_session, mock_frontegg, mock_shopify, mock_airbyte, mock_openrouter):
     """
@@ -268,6 +289,7 @@ def test_app(db_session, mock_frontegg, mock_shopify, mock_airbyte, mock_openrou
     """
     from main import app
     from src.api.routes.webhooks_shopify import get_db_session
+    from src.platform.tenant_context import TenantContextMiddleware
 
     original_overrides = app.dependency_overrides.copy()
 
@@ -283,7 +305,12 @@ def test_app(db_session, mock_frontegg, mock_shopify, mock_airbyte, mock_openrou
     app.state.mock_airbyte = mock_airbyte
     app.state.mock_openrouter = mock_openrouter
 
-    yield app
+    # Create mock JWKS client that uses mock_frontegg's keys
+    mock_jwks_client = MockJWKSClient(mock_frontegg)
+
+    # Patch the TenantContextMiddleware to use our mock JWKS client
+    with patch.object(TenantContextMiddleware, '_get_jwks_client', return_value=mock_jwks_client):
+        yield app
 
     app.dependency_overrides = original_overrides
 

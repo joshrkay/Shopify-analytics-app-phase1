@@ -119,8 +119,8 @@ class MockFronteggServer:
             "allowed_tenants": allowed_tenants or [tenant_id],
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(hours=expires_in_hours)).timestamp()),
-            "iss": "https://test.frontegg.com",
-            "aud": "test-app",
+            "iss": "https://api.frontegg.com",
+            "aud": "test-client-id",
         }
 
         # Add custom claims
@@ -202,7 +202,8 @@ class MockFronteggServer:
             "entitlements": [],
             "iat": int((now - timedelta(hours=2)).timestamp()),
             "exp": int((now - timedelta(hours=1)).timestamp()),  # Already expired
-            "iss": "https://test.frontegg.com",
+            "iss": "https://api.frontegg.com",
+            "aud": "test-client-id",
         }
 
         private_key_pem = self._private_key.private_bytes(

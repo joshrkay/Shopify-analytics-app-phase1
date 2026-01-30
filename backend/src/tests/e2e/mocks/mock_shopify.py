@@ -205,10 +205,18 @@ class ShopifyWebhookSimulator:
     Simulates Shopify webhook delivery with proper HMAC signing.
 
     Usage:
+        # With test client (for E2E tests)
+        simulator = ShopifyWebhookSimulator(
+            api_secret="test-secret",
+            test_client=test_client  # FastAPI TestClient
+        )
+
+        # Or with real HTTP client (for integration tests)
         simulator = ShopifyWebhookSimulator(
             api_secret="test-secret",
             base_url="http://localhost:8000"
         )
+
         response = simulator.send_webhook(
             topic="orders/create",
             payload=order_data,
@@ -216,9 +224,10 @@ class ShopifyWebhookSimulator:
         )
     """
 
-    def __init__(self, api_secret: str, base_url: str):
+    def __init__(self, api_secret: str, base_url: str = None, test_client=None):
         self.api_secret = api_secret
-        self.base_url = base_url.rstrip("/")
+        self.base_url = base_url.rstrip("/") if base_url else "http://test"
+        self._test_client = test_client
 
     def compute_hmac(self, body: bytes) -> str:
         """Compute Shopify HMAC-SHA256 signature."""
@@ -260,6 +269,15 @@ class ShopifyWebhookSimulator:
             "X-Shopify-Api-Version": "2024-01",
         }
 
+        # Use test client if available (for E2E tests)
+        if self._test_client is not None:
+            return self._test_client.post(
+                "/api/webhooks/shopify",
+                content=body,
+                headers=headers,
+            )
+
+        # Fall back to real HTTP client
         with httpx.Client() as client:
             return client.post(
                 f"{self.base_url}/api/webhooks/shopify",
