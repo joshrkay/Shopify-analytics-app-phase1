@@ -16,6 +16,7 @@ from typing import Optional, List
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.repositories.airbyte_connections import (
@@ -121,6 +122,151 @@ class AirbyteService:
             sync_frequency_minutes=connection.sync_frequency_minutes,
         )
 
+    def _normalize_shop_domain(self, shop_domain: str) -> str:
+        """
+        Normalize shop_domain using EXACT same logic as DBT and database constraint.
+
+        This ensures validation uses identical normalization to prevent false negatives.
+
+        Normalization steps:
+        1. Convert to lowercase
+        2. Strip leading https:// or http://
+        3. Strip trailing /
+
+        Args:
+            shop_domain: Raw shop domain (may include protocol, trailing slash, mixed case)
+
+        Returns:
+            Normalized shop domain (e.g., "store.myshopify.com")
+
+        Examples:
+            "https://Store.myshopify.com/" -> "store.myshopify.com"
+            "HTTP://store.myshopify.com" -> "store.myshopify.com"
+            "store.myshopify.com" -> "store.myshopify.com"
+        """
+        if not shop_domain:
+            return ""
+
+        normalized = shop_domain.lower().strip()
+
+        # Remove protocol
+        if normalized.startswith('https://'):
+            normalized = normalized[8:]
+        elif normalized.startswith('http://'):
+            normalized = normalized[7:]
+
+        # Remove trailing slash
+        normalized = normalized.rstrip('/')
+
+        return normalized
+
+    def _validate_shop_domain_unique(self, shop_domain: str, source_type: str) -> None:
+        """
+        Validate that shop_domain is not already connected to another tenant.
+
+        CRITICAL SECURITY: Prevents data leakage via DBT JOIN on duplicate shop_domains.
+
+        Background:
+        - DBT derives tenant_id by JOINing Airbyte data on shop_domain
+        - If two tenants have same shop_domain, JOIN returns duplicate rows
+        - This causes cross-tenant data leakage
+
+        This validation provides early detection and user-friendly error messages
+        before the database constraint rejects the insert.
+
+        Args:
+            shop_domain: Shop domain to validate (will be normalized)
+            source_type: Source type (validation only applies to Shopify)
+
+        Raises:
+            DuplicateConnectionError: If shop_domain already connected to different tenant
+
+        Logs:
+            ERROR: When duplicate detected for different tenant (security event)
+            WARNING: When tenant tries to reconnect already-connected shop
+        """
+        # Only validate for Shopify sources
+        if source_type not in ('shopify', 'source-shopify'):
+            return
+
+        # Normalize using same logic as DBT and database constraint
+        normalized_shop_domain = self._normalize_shop_domain(shop_domain)
+
+        if not normalized_shop_domain:
+            # Empty shop_domain - will fail later validation
+            return
+
+        # Check for existing connection with same shop_domain
+        # Uses EXACT same normalization as database constraint
+        query = text("""
+            SELECT
+                tenant_id,
+                connection_name,
+                airbyte_connection_id,
+                id
+            FROM platform.tenant_airbyte_connections
+            WHERE lower(
+                    trim(
+                        trailing '/' from
+                        regexp_replace(
+                            coalesce(configuration->>'shop_domain', ''),
+                            '^https?://',
+                            '',
+                            'i'
+                        )
+                    )
+                ) = :shop_domain
+              AND source_type IN ('shopify', 'source-shopify')
+              AND status = 'active'
+              AND is_enabled = true
+            LIMIT 1
+        """)
+
+        result = self.db.execute(query, {"shop_domain": normalized_shop_domain}).fetchone()
+
+        if result:
+            existing_tenant_id = result[0]
+            existing_name = result[1]
+            existing_airbyte_id = result[2]
+            existing_connection_id = result[3]
+
+            if existing_tenant_id != self.tenant_id:
+                # CRITICAL: Different tenant owns this shop_domain
+                logger.error(
+                    "SECURITY: Duplicate shop_domain attempted by different tenant",
+                    extra={
+                        "event": "duplicate_shop_domain_blocked",
+                        "attempted_tenant_id": self.tenant_id,
+                        "existing_tenant_id": existing_tenant_id,
+                        "shop_domain": normalized_shop_domain,
+                        "existing_connection_name": existing_name,
+                        "existing_airbyte_connection_id": existing_airbyte_id,
+                        "severity": "critical",
+                    }
+                )
+
+                raise DuplicateConnectionError(
+                    f"This Shopify store ({shop_domain}) is already connected to another account. "
+                    f"Each store can only be connected once across all accounts. "
+                    f"If you believe this is an error, please contact support."
+                )
+
+            # Same tenant attempting duplicate connection
+            logger.warning(
+                "Tenant attempting to reconnect already-connected shop",
+                extra={
+                    "tenant_id": self.tenant_id,
+                    "shop_domain": normalized_shop_domain,
+                    "existing_connection_name": existing_name,
+                    "existing_connection_id": existing_connection_id,
+                }
+            )
+
+            raise DuplicateConnectionError(
+                f"This Shopify store is already connected as '{existing_name}'. "
+                f"Please disconnect the existing connection first before creating a new one."
+            )
+
     def register_connection(
         self,
         airbyte_connection_id: str,
@@ -156,8 +302,16 @@ class AirbyteService:
             ConnectionInfo for the registered connection
 
         Raises:
-            DuplicateConnectionError: If connection already registered
+            DuplicateConnectionError: If connection already registered or shop_domain duplicate
         """
+        # CRITICAL: Validate shop_domain uniqueness BEFORE creating connection
+        # This prevents data leakage via DBT JOIN on duplicate shop_domains
+        if configuration and 'shop_domain' in configuration:
+            self._validate_shop_domain_unique(
+                shop_domain=configuration['shop_domain'],
+                source_type=source_type or ''
+            )
+
         # Parse connection type
         conn_type = ConnectionType.SOURCE
         if connection_type.lower() == "destination":

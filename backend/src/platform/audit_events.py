@@ -126,6 +126,112 @@ AUDITABLE_EVENTS: Final[dict[str, list[str]]] = {
     ],
 
     # =========================================================================
+    # OAUTH & EXTERNAL CREDENTIALS
+    # =========================================================================
+    # Track OAuth flows and credential management for external platforms
+    # (Facebook Ads, Google Ads, Shopify, etc.)
+    #
+    # CRITICAL: These events are essential for:
+    # - Detecting duplicate shop_domain attempts (data leakage prevention)
+    # - Debugging OAuth failures
+    # - Compliance audits
+    # - Security monitoring
+
+    "oauth.flow_started": [
+        "user_id",
+        "tenant_id",
+        "provider",              # Enum: facebook, google, shopify, tiktok, snapchat
+        "state_token",           # OAuth state for CSRF protection (hashed)
+        "redirect_uri",
+        "scopes_requested",      # List of OAuth scopes
+    ],
+
+    "oauth.callback_received": [
+        "user_id",
+        "tenant_id",
+        "provider",
+        "state_token",           # Hashed state token
+        "code_received",         # Boolean: was auth code present
+        "error",                 # OAuth error code if any (e.g., access_denied)
+    ],
+
+    "oauth.token_exchanged": [
+        "user_id",
+        "tenant_id",
+        "provider",
+        "account_id",            # Provider-specific account ID (e.g., shop_domain, ad_account_id)
+        "scopes_granted",        # Actual scopes granted (may differ from requested)
+        "has_refresh_token",     # Boolean
+        "token_expires_at",      # When access token expires
+    ],
+
+    "oauth.connection_created": [
+        "user_id",
+        "tenant_id",
+        "provider",
+        "connection_id",         # Internal connection ID
+        "airbyte_connection_id", # Airbyte connection ID
+        "account_id",            # e.g., shop_domain for Shopify
+        "source_type",           # Airbyte source type
+    ],
+
+    "oauth.connection_failed": [
+        "user_id",
+        "tenant_id",
+        "provider",
+        "failure_reason",        # Enum: token_exchange_failed, airbyte_creation_failed, validation_failed
+        "error_message",
+        "account_id",            # If known
+    ],
+
+    "oauth.duplicate_shop_detected": [
+        "user_id",               # User attempting duplicate connection
+        "tenant_id",             # Tenant attempting duplicate
+        "shop_domain",           # The shop_domain that's duplicated (normalized)
+        "existing_tenant_id",    # CRITICAL: Which tenant already has this shop
+        "existing_connection_id", # Existing connection ID
+        "action_taken",          # Enum: blocked, allowed (for future agency cases)
+    ],
+
+    "oauth.connection_disconnected": [
+        "user_id",
+        "tenant_id",
+        "provider",
+        "connection_id",
+        "account_id",
+        "reason",                # Enum: user_request, token_revoked, admin_action
+    ],
+
+    "credentials.refreshed": [
+        "tenant_id",
+        "provider",
+        "connection_id",
+        "account_id",
+        "success",               # Boolean
+        "token_age_days",        # Age of token before refresh
+        "new_expires_at",
+    ],
+
+    "credentials.refresh_failed": [
+        "tenant_id",
+        "provider",
+        "connection_id",
+        "account_id",
+        "failure_reason",        # Enum: token_revoked, network_error, invalid_refresh_token
+        "retry_count",
+        "will_retry",            # Boolean
+    ],
+
+    "credentials.revoked_by_provider": [
+        "tenant_id",
+        "provider",
+        "connection_id",
+        "account_id",
+        "revocation_reason",     # From provider webhook if available
+        "detected_at",           # When revocation was detected
+    ],
+
+    # =========================================================================
     # ROLE & PERMISSION CHANGES
     # =========================================================================
     # All permission changes must be audited for SOC2 compliance and
@@ -760,6 +866,18 @@ EVENT_CATEGORIES: Final[dict[str, list[str]]] = {
         "auth.api_token_created",
         "auth.api_token_revoked",
     ],
+    "oauth": [
+        "oauth.flow_started",
+        "oauth.callback_received",
+        "oauth.token_exchanged",
+        "oauth.connection_created",
+        "oauth.connection_failed",
+        "oauth.duplicate_shop_detected",
+        "oauth.connection_disconnected",
+        "credentials.refreshed",
+        "credentials.refresh_failed",
+        "credentials.revoked_by_provider",
+    ],
     "authorization": [
         "role.assigned",
         "role.revoked",
@@ -880,6 +998,18 @@ EVENT_SEVERITY: Final[dict[str, str]] = {
     "dashboard.exported": "low",
     "explore.query_executed": "low",
     "cache.cleared": "low",
+
+    # OAuth and credential events
+    "oauth.duplicate_shop_detected": "critical",  # Data leakage prevention
+    "oauth.connection_failed": "high",
+    "credentials.refresh_failed": "high",
+    "credentials.revoked_by_provider": "high",
+    "oauth.flow_started": "low",
+    "oauth.callback_received": "low",
+    "oauth.token_exchanged": "medium",
+    "oauth.connection_created": "medium",
+    "oauth.connection_disconnected": "medium",
+    "credentials.refreshed": "low",
 
     # AI Safety events
     "ai.safety.rate_limit_hit": "medium",
