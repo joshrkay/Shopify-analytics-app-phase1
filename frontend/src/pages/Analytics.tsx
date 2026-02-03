@@ -25,6 +25,11 @@ import { DataFreshnessBadge } from '../components/health/DataFreshnessBadge';
 import { DashboardFreshnessIndicator } from '../components/health/DashboardFreshnessIndicator';
 import { FeatureUpdateBanner } from '../components/changelog/FeatureUpdateBanner';
 import { useNavigate } from 'react-router-dom';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import {
+  PageErrorFallback,
+  ComponentErrorFallback,
+} from '../components/ErrorFallback';
 
 const Analytics: React.FC = () => {
   const navigate = useNavigate();
@@ -122,63 +127,84 @@ const Analytics: React.FC = () => {
   })) || [];
 
   return (
-    <>
-      {/* Incident banner at top of page */}
-      <IncidentBanner />
+    <ErrorBoundary
+      fallbackRender={({ error, errorInfo, resetErrorBoundary }) => (
+        <PageErrorFallback
+          error={error}
+          errorInfo={errorInfo}
+          resetErrorBoundary={resetErrorBoundary}
+          pageName="Analytics"
+        />
+      )}
+    >
+      <>
+        {/* Incident banner at top of page */}
+        <IncidentBanner />
 
-      {/* Feature update banner for dashboard area */}
-      <FeatureUpdateBanner
-        featureArea="dashboard"
-        maxItems={3}
-        onViewAll={() => navigate('/whats-new')}
-      />
+        {/* Feature update banner for dashboard area */}
+        <FeatureUpdateBanner
+          featureArea="dashboard"
+          maxItems={3}
+          onViewAll={() => navigate('/whats-new')}
+        />
 
-      <Page
-        title="Analytics"
-        subtitle="View your store performance and insights"
-        titleMetadata={<DataFreshnessBadge />}
-      >
-        <Layout>
-          {/* Data freshness indicator */}
-          <Layout.Section>
-            <DashboardFreshnessIndicator variant="compact" />
-          </Layout.Section>
-
-          {/* Dashboard selector */}
-          {dashboardOptions.length > 1 && (
+        <Page
+          title="Analytics"
+          subtitle="View your store performance and insights"
+          titleMetadata={<DataFreshnessBadge />}
+        >
+          <Layout>
+            {/* Data freshness indicator */}
             <Layout.Section>
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingMd">
-                    Select Dashboard
-                  </Text>
-                  <Select
-                    label="Dashboard"
-                    labelHidden
-                    options={dashboardOptions}
-                    value={selectedDashboard}
-                    onChange={handleDashboardChange}
-                  />
-                </BlockStack>
-              </Card>
+              <DashboardFreshnessIndicator variant="compact" />
             </Layout.Section>
-          )}
 
-          {/* Embedded dashboard */}
-          <Layout.Section>
-            {selectedDashboard && (
-              <ShopifyEmbeddedSuperset
-                dashboardId={selectedDashboard}
-                height="calc(100vh - 200px)"
-                onLoad={handleDashboardLoad}
-                onError={handleDashboardError}
-                showLoadingSkeleton
-              />
+            {/* Dashboard selector */}
+            {dashboardOptions.length > 1 && (
+              <Layout.Section>
+                <Card>
+                  <BlockStack gap="400">
+                    <Text as="h2" variant="headingMd">
+                      Select Dashboard
+                    </Text>
+                    <Select
+                      label="Dashboard"
+                      labelHidden
+                      options={dashboardOptions}
+                      value={selectedDashboard}
+                      onChange={handleDashboardChange}
+                    />
+                  </BlockStack>
+                </Card>
+              </Layout.Section>
             )}
-          </Layout.Section>
-        </Layout>
-      </Page>
-    </>
+
+            {/* Embedded dashboard with component-level error boundary */}
+            <Layout.Section>
+              {selectedDashboard && (
+                <ErrorBoundary
+                  fallbackRender={({ error, resetErrorBoundary }) => (
+                    <ComponentErrorFallback
+                      error={error}
+                      resetErrorBoundary={resetErrorBoundary}
+                      componentName="Analytics Dashboard"
+                    />
+                  )}
+                >
+                  <ShopifyEmbeddedSuperset
+                    dashboardId={selectedDashboard}
+                    height="calc(100vh - 200px)"
+                    onLoad={handleDashboardLoad}
+                    onError={handleDashboardError}
+                    showLoadingSkeleton
+                  />
+                </ErrorBoundary>
+              )}
+            </Layout.Section>
+          </Layout>
+        </Page>
+      </>
+    </ErrorBoundary>
   );
 };
 

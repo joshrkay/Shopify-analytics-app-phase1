@@ -28,6 +28,8 @@ import { InsightCard } from '../components/insights/InsightCard';
 import { RecommendationCard } from '../components/recommendations/RecommendationCard';
 import { IncidentBanner } from '../components/health/IncidentBanner';
 import { FeatureUpdateBanner } from '../components/changelog/FeatureUpdateBanner';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { PageErrorFallback } from '../components/ErrorFallback';
 import type { Insight, InsightType, InsightSeverity } from '../types/insights';
 import type { Recommendation } from '../types/recommendations';
 import {
@@ -247,21 +249,31 @@ export function InsightsFeed() {
   ];
 
   return (
-    <>
-      {/* Incident banner at top of page */}
-      <IncidentBanner />
+    <ErrorBoundary
+      fallbackRender={({ error, errorInfo, resetErrorBoundary }) => (
+        <PageErrorFallback
+          error={error}
+          errorInfo={errorInfo}
+          resetErrorBoundary={resetErrorBoundary}
+          pageName="AI Insights"
+        />
+      )}
+    >
+      <>
+        {/* Incident banner at top of page */}
+        <IncidentBanner />
 
-      {/* Feature update banner for insights area */}
-      <FeatureUpdateBanner
-        featureArea="insights"
-        maxItems={3}
-        onViewAll={() => navigate('/whats-new')}
-      />
+        {/* Feature update banner for insights area */}
+        <FeatureUpdateBanner
+          featureArea="insights"
+          maxItems={3}
+          onViewAll={() => navigate('/whats-new')}
+        />
 
-      <Page
-        title="AI Insights"
-        subtitle="AI-generated insights about your advertising performance"
-      >
+        <Page
+          title="AI Insights"
+          subtitle="AI-generated insights about your advertising performance"
+        >
       <Layout>
         <Layout.Section>
           <Card>
@@ -391,8 +403,9 @@ export function InsightsFeed() {
           )}
         </Modal.Section>
       </Modal>
-    </Page>
-    </>
+      </Page>
+      </>
+    </ErrorBoundary>
   );
 }
 
