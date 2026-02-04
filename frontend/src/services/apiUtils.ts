@@ -2,10 +2,14 @@
  * Shared API Utilities
  *
  * Common functions for API service modules:
- * - Authentication token handling
+ * - Authentication token handling (supports Clerk)
  * - HTTP headers creation
  * - Response handling with error extraction
  * - Query string building
+ *
+ * Token Management:
+ * - Uses Clerk's getToken() when available
+ * - Falls back to localStorage for backwards compatibility
  */
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -19,8 +23,49 @@ export interface ApiError extends Error {
 }
 
 /**
- * Get the current JWT token from localStorage.
- * Checks both possible token keys for compatibility.
+ * Token provider function type.
+ * Can be async (for Clerk's getToken) or sync (for localStorage).
+ */
+type TokenProvider = () => Promise<string | null> | string | null;
+
+/**
+ * Global token provider.
+ * Set this to Clerk's getToken function from a React component.
+ */
+let tokenProvider: TokenProvider | null = null;
+
+/**
+ * Set the token provider function.
+ * Call this from a React component with Clerk's getToken.
+ *
+ * @example
+ * // In a component:
+ * const { getToken } = useAuth();
+ * useEffect(() => {
+ *   setTokenProvider(() => getToken());
+ * }, [getToken]);
+ */
+export function setTokenProvider(provider: TokenProvider): void {
+  tokenProvider = provider;
+}
+
+/**
+ * Get the current JWT token.
+ * Uses the token provider if set, otherwise falls back to localStorage.
+ */
+export async function getAuthTokenAsync(): Promise<string | null> {
+  if (tokenProvider) {
+    const token = await tokenProvider();
+    if (token) return token;
+  }
+  // Fallback to localStorage
+  return localStorage.getItem('jwt_token') || localStorage.getItem('auth_token');
+}
+
+/**
+ * Get the current JWT token synchronously.
+ * Only checks localStorage - use getAuthTokenAsync for Clerk tokens.
+ * @deprecated Use getAuthTokenAsync for Clerk support
  */
 export function getAuthToken(): string | null {
   return localStorage.getItem('jwt_token') || localStorage.getItem('auth_token');
@@ -28,13 +73,37 @@ export function getAuthToken(): string | null {
 
 /**
  * Set the JWT token in localStorage.
+ * Used for backwards compatibility and token caching.
  */
 export function setAuthToken(token: string): void {
   localStorage.setItem('jwt_token', token);
 }
 
 /**
- * Create headers with authentication.
+ * Clear the JWT token from localStorage.
+ */
+export function clearAuthToken(): void {
+  localStorage.removeItem('jwt_token');
+  localStorage.removeItem('auth_token');
+}
+
+/**
+ * Create headers with authentication (async version for Clerk).
+ */
+export async function createHeadersAsync(): Promise<HeadersInit> {
+  const token = await getAuthTokenAsync();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+/**
+ * Create headers with authentication (sync version).
+ * Uses localStorage token - for backwards compatibility.
  */
 export function createHeaders(): HeadersInit {
   const token = getAuthToken();
