@@ -25,7 +25,12 @@ from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from src.audit.identity_events import IdentityAuditEmitter
+from src.platform.audit import (
+    AuditAction,
+    AuditEvent,
+    AuditOutcome,
+    write_audit_log_sync,
+)
 from src.models.organization import Organization
 from src.models.tenant import Tenant, TenantStatus
 from src.models.user import User
@@ -40,7 +45,26 @@ class ClerkSyncService:
 
     Handles user, organization, tenant, and membership synchronization.
     Used by webhook handlers and lazy sync in auth middleware.
+
+    Also emits identity audit events for compliance tracking:
+    - identity.user_first_seen: First time a Clerk user is seen
+    - identity.user_linked_to_tenant: User membership created
+    - identity.role_assigned: Role granted to a user
+    - identity.role_revoked: Role removed from a user
+    - identity.tenant_created: New tenant created
+    - identity.tenant_deactivated: Tenant deactivated
     """
+
+    # Valid sources for user events
+    _SOURCES_USER = frozenset({"webhook", "lazy_sync"})
+    # Valid sources for role events
+    _SOURCES_ROLE = frozenset({"clerk_webhook", "agency_grant", "admin_grant"})
+    # Valid sources for tenant events
+    _SOURCES_TENANT = frozenset({"clerk_webhook", "admin_action"})
+    # Valid reasons for role revocation
+    _REASONS_REVOKE = frozenset({"membership_deleted", "admin_action", "user_deleted"})
+    # Valid reasons for tenant deactivation
+    _REASONS_DEACTIVATE = frozenset({"org_deleted", "admin_action", "billing"})
 
     def __init__(self, session: Session, correlation_id: Optional[str] = None):
         """
@@ -52,17 +76,6 @@ class ClerkSyncService:
         """
         self.session = session
         self.correlation_id = correlation_id or str(uuid.uuid4())
-        self._audit_emitter: Optional[IdentityAuditEmitter] = None
-
-    @property
-    def audit_emitter(self) -> IdentityAuditEmitter:
-        """Lazy-loaded audit emitter instance."""
-        if self._audit_emitter is None:
-            self._audit_emitter = IdentityAuditEmitter(
-                db=self.session,
-                correlation_id=self.correlation_id,
-            )
-        return self._audit_emitter
 
     # =========================================================================
     # User Sync Methods
@@ -138,7 +151,7 @@ class ClerkSyncService:
 
         # Emit audit event for new users only
         if is_new_user:
-            self.audit_emitter.emit_user_first_seen(
+            self._emit_user_first_seen(
                 clerk_user_id=clerk_user_id,
                 source=source,
             )
@@ -402,7 +415,7 @@ class ClerkSyncService:
 
         # Emit audit event for new tenants only
         if is_new_tenant:
-            self.audit_emitter.emit_tenant_created(
+            self._emit_tenant_created(
                 tenant_id=tenant.id,
                 clerk_org_id=clerk_org_id,
                 billing_tier=billing_tier,
@@ -451,7 +464,7 @@ class ClerkSyncService:
         tenant.status = TenantStatus.DEACTIVATED
 
         # Emit audit event for tenant deactivation
-        self.audit_emitter.emit_tenant_deactivated(
+        self._emit_tenant_deactivated(
             tenant_id=tenant.id,
             clerk_org_id=clerk_org_id,
             reason=reason,
@@ -535,7 +548,7 @@ class ClerkSyncService:
 
             # Emit role_assigned for reactivation
             if was_reactivated:
-                self.audit_emitter.emit_role_assigned(
+                self._emit_role_assigned(
                     clerk_user_id=clerk_user_id,
                     tenant_id=tenant.id,
                     role=app_role,
@@ -565,14 +578,14 @@ class ClerkSyncService:
         # Emit audit events for new membership
         if is_new_membership:
             # Emit user_linked_to_tenant
-            self.audit_emitter.emit_user_linked_to_tenant(
+            self._emit_user_linked_to_tenant(
                 clerk_user_id=clerk_user_id,
                 tenant_id=tenant.id,
                 role=app_role,
                 source=source,
             )
             # Emit role_assigned
-            self.audit_emitter.emit_role_assigned(
+            self._emit_role_assigned(
                 clerk_user_id=clerk_user_id,
                 tenant_id=tenant.id,
                 role=app_role,
@@ -625,7 +638,7 @@ class ClerkSyncService:
             role_assignment.is_active = False
 
             # Emit role_revoked for each deactivated role
-            self.audit_emitter.emit_role_revoked(
+            self._emit_role_revoked(
                 clerk_user_id=clerk_user_id,
                 tenant_id=tenant.id,
                 previous_role=role_assignment.role,
@@ -689,7 +702,7 @@ class ClerkSyncService:
             existing.is_active = False
 
             # Emit role_revoked for old role
-            self.audit_emitter.emit_role_revoked(
+            self._emit_role_revoked(
                 clerk_user_id=clerk_user_id,
                 tenant_id=tenant.id,
                 previous_role=old_app_role,
@@ -751,3 +764,297 @@ class ClerkSyncService:
         }
 
         return role_mapping.get(role, "MERCHANT_VIEWER")
+
+    # =========================================================================
+    # Identity Audit Event Methods
+    # =========================================================================
+
+    def _emit_user_first_seen(
+        self,
+        clerk_user_id: str,
+        source: str,
+        tenant_id: Optional[str] = None,
+    ) -> None:
+        """
+        Emit audit event when a Clerk user is first seen in the system.
+
+        Args:
+            clerk_user_id: Clerk user identifier (NO email/PII)
+            source: How the user was discovered ("webhook" or "lazy_sync")
+            tenant_id: Optional tenant context
+        """
+        if source not in self._SOURCES_USER:
+            raise ValueError(f"Invalid source '{source}'. Must be one of: {self._SOURCES_USER}")
+
+        effective_tenant_id = tenant_id or "system"
+
+        event = AuditEvent(
+            tenant_id=effective_tenant_id,
+            action=AuditAction.IDENTITY_USER_FIRST_SEEN,
+            user_id=clerk_user_id,
+            resource_type="user",
+            resource_id=clerk_user_id,
+            metadata={
+                "clerk_user_id": clerk_user_id,
+                "source": source,
+            },
+            correlation_id=self.correlation_id,
+            source="webhook" if source == "webhook" else "api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+
+        write_audit_log_sync(self.session, event)
+
+        logger.info(
+            "Emitted identity.user_first_seen audit event",
+            extra={
+                "clerk_user_id": clerk_user_id,
+                "source": source,
+                "correlation_id": self.correlation_id,
+            }
+        )
+
+    def _emit_user_linked_to_tenant(
+        self,
+        clerk_user_id: str,
+        tenant_id: str,
+        role: str,
+        source: str,
+    ) -> None:
+        """
+        Emit audit event when a user is linked to a tenant (membership created).
+
+        Args:
+            clerk_user_id: Clerk user identifier (NO email/PII)
+            tenant_id: Tenant the user is being linked to
+            role: Role being assigned
+            source: How the link was created
+        """
+        if source not in self._SOURCES_ROLE:
+            raise ValueError(f"Invalid source '{source}'. Must be one of: {self._SOURCES_ROLE}")
+
+        event = AuditEvent(
+            tenant_id=tenant_id,
+            action=AuditAction.IDENTITY_USER_LINKED_TO_TENANT,
+            user_id=clerk_user_id,
+            resource_type="membership",
+            resource_id=f"{clerk_user_id}:{tenant_id}",
+            metadata={
+                "clerk_user_id": clerk_user_id,
+                "tenant_id": tenant_id,
+                "role": role,
+                "source": source,
+            },
+            correlation_id=self.correlation_id,
+            source="webhook" if source == "clerk_webhook" else "api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+
+        write_audit_log_sync(self.session, event)
+
+        logger.info(
+            "Emitted identity.user_linked_to_tenant audit event",
+            extra={
+                "clerk_user_id": clerk_user_id,
+                "tenant_id": tenant_id,
+                "role": role,
+                "correlation_id": self.correlation_id,
+            }
+        )
+
+    def _emit_role_assigned(
+        self,
+        clerk_user_id: str,
+        tenant_id: str,
+        role: str,
+        assigned_by: str,
+        source: str,
+    ) -> None:
+        """
+        Emit audit event when a role is assigned to a user.
+
+        Args:
+            clerk_user_id: User receiving the role (NO email/PII)
+            tenant_id: Tenant context for the role
+            role: Role being assigned (e.g., "MERCHANT_ADMIN")
+            assigned_by: clerk_user_id of assigner, or "system" for automated
+            source: How the role was assigned
+        """
+        if source not in self._SOURCES_ROLE:
+            raise ValueError(f"Invalid source '{source}'. Must be one of: {self._SOURCES_ROLE}")
+
+        event = AuditEvent(
+            tenant_id=tenant_id,
+            action=AuditAction.IDENTITY_ROLE_ASSIGNED,
+            user_id=clerk_user_id,
+            resource_type="role",
+            resource_id=f"{clerk_user_id}:{tenant_id}:{role}",
+            metadata={
+                "clerk_user_id": clerk_user_id,
+                "tenant_id": tenant_id,
+                "role": role,
+                "assigned_by": assigned_by,
+                "source": source,
+            },
+            correlation_id=self.correlation_id,
+            source="webhook" if source == "clerk_webhook" else "api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+
+        write_audit_log_sync(self.session, event)
+
+        logger.info(
+            "Emitted identity.role_assigned audit event",
+            extra={
+                "clerk_user_id": clerk_user_id,
+                "tenant_id": tenant_id,
+                "role": role,
+                "assigned_by": assigned_by,
+                "correlation_id": self.correlation_id,
+            }
+        )
+
+    def _emit_role_revoked(
+        self,
+        clerk_user_id: str,
+        tenant_id: str,
+        previous_role: str,
+        revoked_by: str,
+        reason: str,
+    ) -> None:
+        """
+        Emit audit event when a role is revoked from a user.
+
+        Args:
+            clerk_user_id: User losing the role (NO email/PII)
+            tenant_id: Tenant context for the role
+            previous_role: Role being revoked
+            revoked_by: clerk_user_id of revoker, or "system" for automated
+            reason: Why the role was revoked
+        """
+        if reason not in self._REASONS_REVOKE:
+            raise ValueError(f"Invalid reason '{reason}'. Must be one of: {self._REASONS_REVOKE}")
+
+        event = AuditEvent(
+            tenant_id=tenant_id,
+            action=AuditAction.IDENTITY_ROLE_REVOKED,
+            user_id=clerk_user_id,
+            resource_type="role",
+            resource_id=f"{clerk_user_id}:{tenant_id}:{previous_role}",
+            metadata={
+                "clerk_user_id": clerk_user_id,
+                "tenant_id": tenant_id,
+                "previous_role": previous_role,
+                "revoked_by": revoked_by,
+                "reason": reason,
+            },
+            correlation_id=self.correlation_id,
+            source="webhook" if reason == "membership_deleted" else "api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+
+        write_audit_log_sync(self.session, event)
+
+        logger.info(
+            "Emitted identity.role_revoked audit event",
+            extra={
+                "clerk_user_id": clerk_user_id,
+                "tenant_id": tenant_id,
+                "previous_role": previous_role,
+                "revoked_by": revoked_by,
+                "correlation_id": self.correlation_id,
+            }
+        )
+
+    def _emit_tenant_created(
+        self,
+        tenant_id: str,
+        clerk_org_id: str,
+        billing_tier: str,
+        source: str,
+    ) -> None:
+        """
+        Emit audit event when a new tenant is created.
+
+        Args:
+            tenant_id: ID of the created tenant
+            clerk_org_id: Clerk organization ID
+            billing_tier: Initial billing tier (e.g., "free", "growth")
+            source: How the tenant was created
+        """
+        if source not in self._SOURCES_TENANT:
+            raise ValueError(f"Invalid source '{source}'. Must be one of: {self._SOURCES_TENANT}")
+
+        event = AuditEvent(
+            tenant_id=tenant_id,
+            action=AuditAction.IDENTITY_TENANT_CREATED,
+            user_id=None,
+            resource_type="tenant",
+            resource_id=tenant_id,
+            metadata={
+                "tenant_id": tenant_id,
+                "clerk_org_id": clerk_org_id,
+                "billing_tier": billing_tier,
+                "source": source,
+            },
+            correlation_id=self.correlation_id,
+            source="webhook" if source == "clerk_webhook" else "system",
+            outcome=AuditOutcome.SUCCESS,
+        )
+
+        write_audit_log_sync(self.session, event)
+
+        logger.info(
+            "Emitted identity.tenant_created audit event",
+            extra={
+                "tenant_id": tenant_id,
+                "clerk_org_id": clerk_org_id,
+                "billing_tier": billing_tier,
+                "correlation_id": self.correlation_id,
+            }
+        )
+
+    def _emit_tenant_deactivated(
+        self,
+        tenant_id: str,
+        clerk_org_id: str,
+        reason: str,
+    ) -> None:
+        """
+        Emit audit event when a tenant is deactivated.
+
+        Args:
+            tenant_id: ID of the deactivated tenant
+            clerk_org_id: Clerk organization ID
+            reason: Why the tenant was deactivated
+        """
+        if reason not in self._REASONS_DEACTIVATE:
+            raise ValueError(f"Invalid reason '{reason}'. Must be one of: {self._REASONS_DEACTIVATE}")
+
+        event = AuditEvent(
+            tenant_id=tenant_id,
+            action=AuditAction.IDENTITY_TENANT_DEACTIVATED,
+            user_id=None,
+            resource_type="tenant",
+            resource_id=tenant_id,
+            metadata={
+                "tenant_id": tenant_id,
+                "clerk_org_id": clerk_org_id,
+                "reason": reason,
+            },
+            correlation_id=self.correlation_id,
+            source="webhook" if reason == "org_deleted" else "system",
+            outcome=AuditOutcome.SUCCESS,
+        )
+
+        write_audit_log_sync(self.session, event)
+
+        logger.info(
+            "Emitted identity.tenant_deactivated audit event",
+            extra={
+                "tenant_id": tenant_id,
+                "clerk_org_id": clerk_org_id,
+                "reason": reason,
+                "correlation_id": self.correlation_id,
+            }
+        )

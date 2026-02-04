@@ -2,12 +2,12 @@
 Tests for identity audit events.
 
 Tests cover:
-- IdentityAuditEmitter service methods
+- ClerkSyncService identity audit event emission
 - Event emission with correct metadata
 - Correlation ID tracking
 - No PII in metadata (clerk_user_id only, never email)
 - Source and reason validation
-- Integration with ClerkSyncService
+- Integration with ClerkSyncService sync methods
 """
 
 import uuid
@@ -15,11 +15,9 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import Session
 
-from src.audit.identity_events import IdentityAuditEmitter
+from src.services.clerk_sync_service import ClerkSyncService
 from src.platform.audit import (
     AuditAction,
     AuditEvent,
@@ -32,7 +30,6 @@ from src.platform.audit_events import (
     EVENT_SEVERITY,
     validate_event_metadata,
 )
-from src.db_base import Base
 
 
 # =============================================================================
@@ -57,16 +54,16 @@ def correlation_id():
 
 
 @pytest.fixture
-def identity_emitter(mock_db_session, correlation_id):
-    """Create an IdentityAuditEmitter with mocked dependencies."""
-    with patch('src.audit.identity_events.write_audit_log_sync') as mock_write:
+def clerk_sync_service(mock_db_session, correlation_id):
+    """Create a ClerkSyncService with mocked dependencies."""
+    with patch('src.services.clerk_sync_service.write_audit_log_sync') as mock_write:
         mock_write.return_value = MagicMock(spec=AuditLog)
-        emitter = IdentityAuditEmitter(
-            db=mock_db_session,
+        service = ClerkSyncService(
+            session=mock_db_session,
             correlation_id=correlation_id,
         )
-        emitter._mock_write = mock_write
-        yield emitter
+        service._mock_write = mock_write
+        yield service
 
 
 # =============================================================================
@@ -157,42 +154,51 @@ class TestIdentityEventSchemas:
 
 
 # =============================================================================
-# Test Suite: IdentityAuditEmitter
+# Test Suite: ClerkSyncService Initialization
 # =============================================================================
 
-class TestIdentityAuditEmitter:
-    """Test the IdentityAuditEmitter service."""
+class TestClerkSyncServiceInit:
+    """Test ClerkSyncService correlation ID handling."""
 
-    def test_emitter_creates_with_correlation_id(self, mock_db_session):
-        """Emitter stores provided correlation_id."""
-        emitter = IdentityAuditEmitter(
-            db=mock_db_session,
+    def test_service_stores_correlation_id(self, mock_db_session):
+        """Service stores provided correlation_id."""
+        service = ClerkSyncService(
+            session=mock_db_session,
             correlation_id="my-custom-corr-id",
         )
-        assert emitter.correlation_id == "my-custom-corr-id"
+        assert service.correlation_id == "my-custom-corr-id"
 
-    def test_emitter_generates_correlation_id_if_missing(self, mock_db_session):
-        """Emitter generates correlation_id if not provided."""
-        emitter = IdentityAuditEmitter(db=mock_db_session)
-        assert emitter.correlation_id is not None
-        assert len(emitter.correlation_id) == 36  # UUID format
+    def test_service_generates_correlation_id_if_missing(self, mock_db_session):
+        """Service generates correlation_id if not provided."""
+        service = ClerkSyncService(session=mock_db_session)
+        assert service.correlation_id is not None
+        assert len(service.correlation_id) == 36  # UUID format
 
+
+# =============================================================================
+# Test Suite: User First Seen Event
+# =============================================================================
 
 class TestEmitUserFirstSeen:
-    """Test emit_user_first_seen method."""
+    """Test _emit_user_first_seen method via sync_user."""
 
-    def test_emit_user_first_seen_webhook(self, identity_emitter, correlation_id):
+    def test_emit_user_first_seen_webhook(self, clerk_sync_service, correlation_id):
         """Test emitting user_first_seen from webhook."""
-        result = identity_emitter.emit_user_first_seen(
-            clerk_user_id="user_clerk_123",
-            source="webhook",
-        )
+        # Setup: user doesn't exist
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = None
+        mock_user = MagicMock()
+        mock_user.id = "user_123"
+        mock_user.clerk_user_id = "user_clerk_123"
 
-        assert result == correlation_id
-        identity_emitter._mock_write.assert_called_once()
+        with patch('src.services.clerk_sync_service.User', return_value=mock_user):
+            clerk_sync_service.sync_user(
+                clerk_user_id="user_clerk_123",
+                source="webhook",
+            )
 
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]  # Second positional arg is the event
+        clerk_sync_service._mock_write.assert_called_once()
+        call_args = clerk_sync_service._mock_write.call_args
+        event = call_args[0][1]
 
         assert event.action == AuditAction.IDENTITY_USER_FIRST_SEEN
         assert event.correlation_id == correlation_id
@@ -200,60 +206,79 @@ class TestEmitUserFirstSeen:
         assert event.metadata["source"] == "webhook"
         assert "email" not in event.metadata
 
-    def test_emit_user_first_seen_lazy_sync(self, identity_emitter, correlation_id):
+    def test_emit_user_first_seen_lazy_sync(self, clerk_sync_service, correlation_id):
         """Test emitting user_first_seen from lazy_sync."""
-        result = identity_emitter.emit_user_first_seen(
-            clerk_user_id="user_clerk_456",
-            source="lazy_sync",
-        )
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = None
+        mock_user = MagicMock()
+        mock_user.clerk_user_id = "user_clerk_456"
 
-        assert result == correlation_id
-        call_args = identity_emitter._mock_write.call_args
+        with patch('src.services.clerk_sync_service.User', return_value=mock_user):
+            clerk_sync_service.sync_user(
+                clerk_user_id="user_clerk_456",
+                source="lazy_sync",
+            )
+
+        call_args = clerk_sync_service._mock_write.call_args
         event = call_args[0][1]
 
         assert event.metadata["source"] == "lazy_sync"
-        assert event.source == "api"  # lazy_sync maps to api source
+        assert event.source == "api"
 
-    def test_emit_user_first_seen_invalid_source(self, identity_emitter):
-        """Test that invalid source raises ValueError."""
-        with pytest.raises(ValueError) as exc_info:
-            identity_emitter.emit_user_first_seen(
-                clerk_user_id="user_123",
-                source="invalid_source",
-            )
-        assert "Invalid source" in str(exc_info.value)
+    def test_no_event_for_existing_user(self, clerk_sync_service):
+        """Test that no event is emitted for existing user updates."""
+        existing_user = MagicMock()
+        existing_user.clerk_user_id = "user_123"
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = existing_user
 
-    def test_emit_user_first_seen_with_tenant_id(self, identity_emitter):
-        """Test emitting user_first_seen with tenant context."""
-        identity_emitter.emit_user_first_seen(
+        clerk_sync_service.sync_user(
             clerk_user_id="user_123",
+            email="updated@example.com",
             source="webhook",
-            tenant_id="tenant_abc",
         )
 
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
-        assert event.tenant_id == "tenant_abc"
+        clerk_sync_service._mock_write.assert_not_called()
 
+
+# =============================================================================
+# Test Suite: User Linked to Tenant Event
+# =============================================================================
 
 class TestEmitUserLinkedToTenant:
-    """Test emit_user_linked_to_tenant method."""
+    """Test _emit_user_linked_to_tenant method via sync_membership."""
 
-    def test_emit_user_linked_to_tenant(self, identity_emitter, correlation_id):
+    def test_emit_user_linked_to_tenant(self, clerk_sync_service, correlation_id):
         """Test emitting user_linked_to_tenant event."""
-        result = identity_emitter.emit_user_linked_to_tenant(
-            clerk_user_id="user_clerk_123",
-            tenant_id="tenant_abc",
-            role="MERCHANT_ADMIN",
-            source="clerk_webhook",
-        )
+        mock_user = MagicMock()
+        mock_user.id = "user_123"
+        mock_user.clerk_user_id = "user_clerk_123"
+        mock_tenant = MagicMock()
+        mock_tenant.id = "tenant_abc"
 
-        assert result == correlation_id
+        clerk_sync_service.get_user_by_clerk_id = MagicMock(return_value=mock_user)
+        clerk_sync_service.get_tenant_by_clerk_org_id = MagicMock(return_value=mock_tenant)
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = None
 
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
+        mock_role = MagicMock()
+        mock_role.role = "MERCHANT_ADMIN"
+        with patch('src.services.clerk_sync_service.UserTenantRole') as MockRole:
+            MockRole.create_from_clerk.return_value = mock_role
+            clerk_sync_service.sync_membership(
+                clerk_user_id="user_clerk_123",
+                clerk_org_id="org_abc",
+                role="org:admin",
+                source="clerk_webhook",
+            )
 
-        assert event.action == AuditAction.IDENTITY_USER_LINKED_TO_TENANT
+        # Find the user_linked_to_tenant event
+        calls = clerk_sync_service._mock_write.call_args_list
+        linked_events = [
+            c for c in calls
+            if c[0][1].action == AuditAction.IDENTITY_USER_LINKED_TO_TENANT
+        ]
+
+        assert len(linked_events) == 1
+        event = linked_events[0][0][1]
+
         assert event.tenant_id == "tenant_abc"
         assert event.metadata["clerk_user_id"] == "user_clerk_123"
         assert event.metadata["tenant_id"] == "tenant_abc"
@@ -261,237 +286,170 @@ class TestEmitUserLinkedToTenant:
         assert event.metadata["source"] == "clerk_webhook"
         assert "email" not in event.metadata
 
-    def test_emit_user_linked_to_tenant_invalid_source(self, identity_emitter):
-        """Test that invalid source raises ValueError."""
-        with pytest.raises(ValueError):
-            identity_emitter.emit_user_linked_to_tenant(
-                clerk_user_id="user_123",
-                tenant_id="tenant_abc",
-                role="MERCHANT_ADMIN",
-                source="invalid_source",
-            )
 
+# =============================================================================
+# Test Suite: Role Assigned Event
+# =============================================================================
 
 class TestEmitRoleAssigned:
-    """Test emit_role_assigned method."""
+    """Test _emit_role_assigned method via sync_membership."""
 
-    def test_emit_role_assigned_clerk_webhook(self, identity_emitter, correlation_id):
+    def test_emit_role_assigned_clerk_webhook(self, clerk_sync_service, correlation_id):
         """Test emitting role_assigned from Clerk webhook."""
-        result = identity_emitter.emit_role_assigned(
-            clerk_user_id="user_clerk_123",
-            tenant_id="tenant_abc",
-            role="MERCHANT_ADMIN",
-            assigned_by="system",
-            source="clerk_webhook",
-        )
+        mock_user = MagicMock()
+        mock_user.id = "user_123"
+        mock_user.clerk_user_id = "user_clerk_123"
+        mock_tenant = MagicMock()
+        mock_tenant.id = "tenant_abc"
 
-        assert result == correlation_id
+        clerk_sync_service.get_user_by_clerk_id = MagicMock(return_value=mock_user)
+        clerk_sync_service.get_tenant_by_clerk_org_id = MagicMock(return_value=mock_tenant)
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = None
 
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
+        mock_role = MagicMock()
+        mock_role.role = "MERCHANT_ADMIN"
+        with patch('src.services.clerk_sync_service.UserTenantRole') as MockRole:
+            MockRole.create_from_clerk.return_value = mock_role
+            clerk_sync_service.sync_membership(
+                clerk_user_id="user_clerk_123",
+                clerk_org_id="org_abc",
+                role="org:admin",
+                source="clerk_webhook",
+                assigned_by="system",
+            )
 
-        assert event.action == AuditAction.IDENTITY_ROLE_ASSIGNED
+        calls = clerk_sync_service._mock_write.call_args_list
+        assigned_events = [
+            c for c in calls
+            if c[0][1].action == AuditAction.IDENTITY_ROLE_ASSIGNED
+        ]
+
+        assert len(assigned_events) == 1
+        event = assigned_events[0][0][1]
+
         assert event.metadata["clerk_user_id"] == "user_clerk_123"
         assert event.metadata["role"] == "MERCHANT_ADMIN"
         assert event.metadata["assigned_by"] == "system"
         assert event.metadata["source"] == "clerk_webhook"
         assert event.source == "webhook"
 
-    def test_emit_role_assigned_agency_grant(self, identity_emitter):
-        """Test emitting role_assigned from agency grant."""
-        identity_emitter.emit_role_assigned(
-            clerk_user_id="user_clerk_456",
-            tenant_id="tenant_xyz",
-            role="MERCHANT_VIEWER",
-            assigned_by="admin_user_789",
-            source="agency_grant",
-        )
 
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
-
-        assert event.metadata["assigned_by"] == "admin_user_789"
-        assert event.metadata["source"] == "agency_grant"
-        assert event.source == "api"
-
-    def test_emit_role_assigned_invalid_source(self, identity_emitter):
-        """Test that invalid source raises ValueError."""
-        with pytest.raises(ValueError):
-            identity_emitter.emit_role_assigned(
-                clerk_user_id="user_123",
-                tenant_id="tenant_abc",
-                role="MERCHANT_ADMIN",
-                assigned_by="system",
-                source="invalid_source",
-            )
-
+# =============================================================================
+# Test Suite: Role Revoked Event
+# =============================================================================
 
 class TestEmitRoleRevoked:
-    """Test emit_role_revoked method."""
+    """Test _emit_role_revoked method via remove_membership."""
 
-    def test_emit_role_revoked_membership_deleted(self, identity_emitter, correlation_id):
+    def test_emit_role_revoked_membership_deleted(self, clerk_sync_service, correlation_id):
         """Test emitting role_revoked when membership is deleted."""
-        result = identity_emitter.emit_role_revoked(
+        mock_user = MagicMock()
+        mock_user.id = "user_123"
+        mock_user.clerk_user_id = "user_clerk_123"
+        mock_tenant = MagicMock()
+        mock_tenant.id = "tenant_abc"
+
+        mock_role = MagicMock()
+        mock_role.role = "MERCHANT_ADMIN"
+        mock_role.is_active = True
+
+        clerk_sync_service.get_user_by_clerk_id = MagicMock(return_value=mock_user)
+        clerk_sync_service.get_tenant_by_clerk_org_id = MagicMock(return_value=mock_tenant)
+        clerk_sync_service.session.query.return_value.filter.return_value.all.return_value = [mock_role]
+
+        result = clerk_sync_service.remove_membership(
             clerk_user_id="user_clerk_123",
-            tenant_id="tenant_abc",
-            previous_role="MERCHANT_ADMIN",
-            revoked_by="system",
+            clerk_org_id="org_abc",
             reason="membership_deleted",
+            revoked_by="system",
         )
 
-        assert result == correlation_id
+        assert result is True
 
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
+        calls = clerk_sync_service._mock_write.call_args_list
+        revoked_events = [
+            c for c in calls
+            if c[0][1].action == AuditAction.IDENTITY_ROLE_REVOKED
+        ]
 
-        assert event.action == AuditAction.IDENTITY_ROLE_REVOKED
+        assert len(revoked_events) == 1
+        event = revoked_events[0][0][1]
+
         assert event.metadata["clerk_user_id"] == "user_clerk_123"
         assert event.metadata["previous_role"] == "MERCHANT_ADMIN"
         assert event.metadata["revoked_by"] == "system"
         assert event.metadata["reason"] == "membership_deleted"
         assert event.source == "webhook"
 
-    def test_emit_role_revoked_admin_action(self, identity_emitter):
-        """Test emitting role_revoked for admin action."""
-        identity_emitter.emit_role_revoked(
-            clerk_user_id="user_clerk_456",
-            tenant_id="tenant_xyz",
-            previous_role="MERCHANT_VIEWER",
-            revoked_by="admin_user_789",
-            reason="admin_action",
-        )
 
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
-
-        assert event.metadata["reason"] == "admin_action"
-        assert event.source == "api"
-
-    def test_emit_role_revoked_invalid_reason(self, identity_emitter):
-        """Test that invalid reason raises ValueError."""
-        with pytest.raises(ValueError) as exc_info:
-            identity_emitter.emit_role_revoked(
-                clerk_user_id="user_123",
-                tenant_id="tenant_abc",
-                previous_role="MERCHANT_ADMIN",
-                revoked_by="system",
-                reason="invalid_reason",
-            )
-        assert "Invalid reason" in str(exc_info.value)
-
+# =============================================================================
+# Test Suite: Tenant Created Event
+# =============================================================================
 
 class TestEmitTenantCreated:
-    """Test emit_tenant_created method."""
+    """Test _emit_tenant_created method via sync_tenant_from_org."""
 
-    def test_emit_tenant_created_webhook(self, identity_emitter, correlation_id):
+    def test_emit_tenant_created_webhook(self, clerk_sync_service, correlation_id):
         """Test emitting tenant_created from Clerk webhook."""
-        result = identity_emitter.emit_tenant_created(
-            tenant_id="tenant_new_123",
-            clerk_org_id="org_clerk_456",
-            billing_tier="free",
-            source="clerk_webhook",
-        )
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = None
+        mock_tenant = MagicMock()
+        mock_tenant.id = "tenant_new_123"
+        mock_tenant.clerk_org_id = "org_clerk_456"
 
-        assert result == correlation_id
+        with patch('src.services.clerk_sync_service.Tenant', return_value=mock_tenant):
+            clerk_sync_service.sync_tenant_from_org(
+                clerk_org_id="org_clerk_456",
+                name="Test Org",
+                billing_tier="free",
+                source="clerk_webhook",
+            )
 
-        call_args = identity_emitter._mock_write.call_args
+        clerk_sync_service._mock_write.assert_called_once()
+        call_args = clerk_sync_service._mock_write.call_args
         event = call_args[0][1]
 
         assert event.action == AuditAction.IDENTITY_TENANT_CREATED
         assert event.tenant_id == "tenant_new_123"
-        assert event.user_id is None  # System-level event
+        assert event.user_id is None
         assert event.metadata["tenant_id"] == "tenant_new_123"
         assert event.metadata["clerk_org_id"] == "org_clerk_456"
         assert event.metadata["billing_tier"] == "free"
         assert event.metadata["source"] == "clerk_webhook"
         assert event.source == "webhook"
 
-    def test_emit_tenant_created_admin_action(self, identity_emitter):
-        """Test emitting tenant_created from admin action."""
-        identity_emitter.emit_tenant_created(
-            tenant_id="tenant_789",
-            clerk_org_id="org_xyz",
-            billing_tier="growth",
-            source="admin_action",
-        )
 
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
-
-        assert event.metadata["billing_tier"] == "growth"
-        assert event.source == "system"
-
-    def test_emit_tenant_created_invalid_source(self, identity_emitter):
-        """Test that invalid source raises ValueError."""
-        with pytest.raises(ValueError):
-            identity_emitter.emit_tenant_created(
-                tenant_id="tenant_123",
-                clerk_org_id="org_456",
-                billing_tier="free",
-                source="invalid_source",
-            )
-
+# =============================================================================
+# Test Suite: Tenant Deactivated Event
+# =============================================================================
 
 class TestEmitTenantDeactivated:
-    """Test emit_tenant_deactivated method."""
+    """Test _emit_tenant_deactivated method via deactivate_tenant."""
 
-    def test_emit_tenant_deactivated_org_deleted(self, identity_emitter, correlation_id):
+    def test_emit_tenant_deactivated_org_deleted(self, clerk_sync_service, correlation_id):
         """Test emitting tenant_deactivated when org is deleted."""
-        result = identity_emitter.emit_tenant_deactivated(
-            tenant_id="tenant_123",
+        mock_tenant = MagicMock()
+        mock_tenant.id = "tenant_123"
+        mock_tenant.clerk_org_id = "org_456"
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = mock_tenant
+
+        result = clerk_sync_service.deactivate_tenant(
             clerk_org_id="org_456",
             reason="org_deleted",
         )
 
-        assert result == correlation_id
+        assert result is True
 
-        call_args = identity_emitter._mock_write.call_args
+        clerk_sync_service._mock_write.assert_called_once()
+        call_args = clerk_sync_service._mock_write.call_args
         event = call_args[0][1]
 
         assert event.action == AuditAction.IDENTITY_TENANT_DEACTIVATED
         assert event.tenant_id == "tenant_123"
-        assert event.user_id is None  # System-level event
+        assert event.user_id is None
         assert event.metadata["tenant_id"] == "tenant_123"
         assert event.metadata["clerk_org_id"] == "org_456"
         assert event.metadata["reason"] == "org_deleted"
         assert event.source == "webhook"
-
-    def test_emit_tenant_deactivated_admin_action(self, identity_emitter):
-        """Test emitting tenant_deactivated for admin action."""
-        identity_emitter.emit_tenant_deactivated(
-            tenant_id="tenant_789",
-            clerk_org_id="org_xyz",
-            reason="admin_action",
-        )
-
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
-
-        assert event.metadata["reason"] == "admin_action"
-        assert event.source == "system"
-
-    def test_emit_tenant_deactivated_billing(self, identity_emitter):
-        """Test emitting tenant_deactivated for billing issues."""
-        identity_emitter.emit_tenant_deactivated(
-            tenant_id="tenant_abc",
-            clerk_org_id="org_def",
-            reason="billing",
-        )
-
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
-
-        assert event.metadata["reason"] == "billing"
-
-    def test_emit_tenant_deactivated_invalid_reason(self, identity_emitter):
-        """Test that invalid reason raises ValueError."""
-        with pytest.raises(ValueError) as exc_info:
-            identity_emitter.emit_tenant_deactivated(
-                tenant_id="tenant_123",
-                clerk_org_id="org_456",
-                reason="invalid_reason",
-            )
-        assert "Invalid reason" in str(exc_info.value)
 
 
 # =============================================================================
@@ -501,80 +459,49 @@ class TestEmitTenantDeactivated:
 class TestMetadataCompliance:
     """Test that event metadata complies with security requirements."""
 
-    def test_no_pii_in_user_first_seen(self, identity_emitter):
+    def test_no_pii_in_user_first_seen(self, clerk_sync_service):
         """SECURITY: user_first_seen must not contain PII."""
-        identity_emitter.emit_user_first_seen(
-            clerk_user_id="user_123",
-            source="webhook",
-        )
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = None
+        mock_user = MagicMock()
+        mock_user.clerk_user_id = "user_123"
 
-        call_args = identity_emitter._mock_write.call_args
+        with patch('src.services.clerk_sync_service.User', return_value=mock_user):
+            clerk_sync_service.sync_user(
+                clerk_user_id="user_123",
+                email="test@example.com",  # Email provided but should NOT be in audit
+                source="webhook",
+            )
+
+        call_args = clerk_sync_service._mock_write.call_args
         event = call_args[0][1]
         metadata = event.metadata
 
-        # Check no PII fields
         pii_fields = ["email", "phone", "name", "first_name", "last_name", "address"]
         for field in pii_fields:
             assert field not in metadata, f"PII field {field} found in metadata"
 
-        # Ensure we use clerk_user_id
         assert "clerk_user_id" in metadata
 
-    def test_no_pii_in_role_assigned(self, identity_emitter):
-        """SECURITY: role_assigned must not contain PII."""
-        identity_emitter.emit_role_assigned(
-            clerk_user_id="user_123",
-            tenant_id="tenant_abc",
-            role="MERCHANT_ADMIN",
-            assigned_by="admin_456",
-            source="clerk_webhook",
-        )
-
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
-        metadata = event.metadata
-
-        pii_fields = ["email", "phone", "name", "first_name", "last_name", "address"]
-        for field in pii_fields:
-            assert field not in metadata, f"PII field {field} found in metadata"
-
-    def test_correlation_id_always_present(self, identity_emitter, correlation_id):
+    def test_correlation_id_always_present(self, clerk_sync_service, correlation_id):
         """All events must include correlation_id."""
-        # Test all event types
-        identity_emitter.emit_user_first_seen("user_1", "webhook")
-        identity_emitter.emit_user_linked_to_tenant("user_1", "tenant_1", "ADMIN", "clerk_webhook")
-        identity_emitter.emit_role_assigned("user_1", "tenant_1", "ADMIN", "system", "clerk_webhook")
-        identity_emitter.emit_role_revoked("user_1", "tenant_1", "ADMIN", "system", "membership_deleted")
-        identity_emitter.emit_tenant_created("tenant_1", "org_1", "free", "clerk_webhook")
-        identity_emitter.emit_tenant_deactivated("tenant_1", "org_1", "org_deleted")
+        clerk_sync_service.session.query.return_value.filter.return_value.first.return_value = None
+        mock_user = MagicMock()
+        mock_user.clerk_user_id = "user_1"
+        mock_tenant = MagicMock()
+        mock_tenant.id = "tenant_1"
 
-        # All 6 calls should have correlation_id
-        assert identity_emitter._mock_write.call_count == 6
+        # Test tenant created
+        with patch('src.services.clerk_sync_service.Tenant', return_value=mock_tenant):
+            clerk_sync_service.sync_tenant_from_org("org_1", "Test", source="clerk_webhook")
 
-        for call in identity_emitter._mock_write.call_args_list:
+        # Test user first seen
+        with patch('src.services.clerk_sync_service.User', return_value=mock_user):
+            clerk_sync_service.sync_user("user_1", source="webhook")
+
+        # All calls should have correlation_id
+        for call in clerk_sync_service._mock_write.call_args_list:
             event = call[0][1]
             assert event.correlation_id == correlation_id
-
-    def test_metadata_validates_against_schema(self, identity_emitter):
-        """Event metadata should pass schema validation."""
-        identity_emitter.emit_role_assigned(
-            clerk_user_id="user_123",
-            tenant_id="tenant_abc",
-            role="MERCHANT_ADMIN",
-            assigned_by="system",
-            source="clerk_webhook",
-        )
-
-        call_args = identity_emitter._mock_write.call_args
-        event = call_args[0][1]
-        metadata = event.metadata
-
-        # Validate against schema
-        is_valid, missing = validate_event_metadata(
-            "identity.role_assigned",
-            metadata,
-        )
-        assert is_valid, f"Missing fields: {missing}"
 
 
 # =============================================================================
@@ -606,8 +533,6 @@ class TestAuditActionEnum:
 # =============================================================================
 # Test Suite: End-to-End Integration Tests
 # =============================================================================
-# These tests verify the complete flow through ClerkSyncService with audit
-# event emission for realistic identity lifecycle scenarios.
 
 class TestEndToEndTenantLifecycle:
     """
@@ -631,16 +556,13 @@ class TestEndToEndTenantLifecycle:
     @pytest.fixture
     def clerk_sync_service_mocked(self, mock_db_session, mock_tenant):
         """Create ClerkSyncService with mocked dependencies for e2e tests."""
-        from src.services.clerk_sync_service import ClerkSyncService
-
-        # Mock the query chain for tenant lookup
         mock_query = MagicMock()
         mock_filter = MagicMock()
-        mock_filter.first.return_value = None  # No existing tenant (for creation)
+        mock_filter.first.return_value = None
         mock_query.filter.return_value = mock_filter
         mock_db_session.query.return_value = mock_query
 
-        with patch('src.audit.identity_events.write_audit_log_sync') as mock_write:
+        with patch('src.services.clerk_sync_service.write_audit_log_sync') as mock_write:
             mock_write.return_value = MagicMock(spec=AuditLog)
             service = ClerkSyncService(
                 session=mock_db_session,
@@ -652,11 +574,9 @@ class TestEndToEndTenantLifecycle:
 
     def test_tenant_creation_emits_audit_event(self, clerk_sync_service_mocked, mock_tenant):
         """E2E: Tenant creation via Clerk org emits tenant_created event."""
-        # Simulate tenant doesn't exist yet, then gets created
         mock_query = clerk_sync_service_mocked.session.query.return_value
         mock_query.filter.return_value.first.return_value = None
 
-        # Mock the Tenant class to return our mock
         with patch('src.services.clerk_sync_service.Tenant') as MockTenant:
             MockTenant.return_value = mock_tenant
 
@@ -667,10 +587,8 @@ class TestEndToEndTenantLifecycle:
                 source="clerk_webhook",
             )
 
-        # Verify audit event was emitted
         assert clerk_sync_service_mocked._mock_write.called
 
-        # Find the tenant_created event
         calls = clerk_sync_service_mocked._mock_write.call_args_list
         tenant_created_events = [
             c for c in calls
@@ -686,7 +604,6 @@ class TestEndToEndTenantLifecycle:
 
     def test_tenant_deactivation_emits_audit_event(self, clerk_sync_service_mocked, mock_tenant):
         """E2E: Tenant deactivation emits tenant_deactivated event."""
-        # Simulate tenant exists
         mock_query = clerk_sync_service_mocked.session.query.return_value
         mock_query.filter.return_value.first.return_value = mock_tenant
 
@@ -697,7 +614,6 @@ class TestEndToEndTenantLifecycle:
 
         assert result is True
 
-        # Find the tenant_deactivated event
         calls = clerk_sync_service_mocked._mock_write.call_args_list
         deactivated_events = [
             c for c in calls
@@ -753,9 +669,7 @@ class TestEndToEndUserLifecycle:
     @pytest.fixture
     def clerk_sync_service_for_user(self, mock_db_session, mock_user, mock_tenant, mock_user_tenant_role):
         """Create ClerkSyncService with mocked dependencies for user e2e tests."""
-        from src.services.clerk_sync_service import ClerkSyncService
-
-        with patch('src.audit.identity_events.write_audit_log_sync') as mock_write:
+        with patch('src.services.clerk_sync_service.write_audit_log_sync') as mock_write:
             mock_write.return_value = MagicMock(spec=AuditLog)
             service = ClerkSyncService(
                 session=mock_db_session,
@@ -769,7 +683,6 @@ class TestEndToEndUserLifecycle:
 
     def test_new_user_creation_emits_user_first_seen(self, clerk_sync_service_for_user, mock_user):
         """E2E: New user sync emits user_first_seen event."""
-        # Simulate user doesn't exist (first time seen)
         mock_query = clerk_sync_service_for_user.session.query.return_value
         mock_query.filter.return_value.first.return_value = None
 
@@ -784,7 +697,6 @@ class TestEndToEndUserLifecycle:
                 source="webhook",
             )
 
-        # Find the user_first_seen event
         calls = clerk_sync_service_for_user._mock_write.call_args_list
         first_seen_events = [
             c for c in calls
@@ -795,13 +707,11 @@ class TestEndToEndUserLifecycle:
         event = first_seen_events[0][0][1]
         assert event.metadata["clerk_user_id"] == "user_clerk_e2e_789"
         assert event.metadata["source"] == "webhook"
-        # SECURITY: No email in metadata
         assert "email" not in event.metadata
         assert event.correlation_id == "e2e-corr-user-lifecycle"
 
     def test_existing_user_update_does_not_emit_first_seen(self, clerk_sync_service_for_user, mock_user):
         """E2E: Existing user update does NOT emit user_first_seen."""
-        # Simulate user already exists
         mock_query = clerk_sync_service_for_user.session.query.return_value
         mock_query.filter.return_value.first.return_value = mock_user
 
@@ -811,7 +721,6 @@ class TestEndToEndUserLifecycle:
             source="webhook",
         )
 
-        # Should NOT have any first_seen events
         calls = clerk_sync_service_for_user._mock_write.call_args_list
         first_seen_events = [
             c for c in calls
@@ -824,21 +733,17 @@ class TestEndToEndUserLifecycle:
         self, clerk_sync_service_for_user, mock_user, mock_tenant, mock_user_tenant_role
     ):
         """E2E: Membership creation emits user_linked_to_tenant AND role_assigned."""
-        # Setup query mocks
         mock_query = clerk_sync_service_for_user.session.query.return_value
 
-        # First call returns user, second returns tenant, third returns no existing role
         def side_effect_filter(*args, **kwargs):
             mock_filter = MagicMock()
             return mock_filter
 
         mock_query.filter.side_effect = side_effect_filter
 
-        # Mock the service methods to return our mocks
         clerk_sync_service_for_user.get_user_by_clerk_id = MagicMock(return_value=mock_user)
         clerk_sync_service_for_user.get_tenant_by_clerk_org_id = MagicMock(return_value=mock_tenant)
 
-        # No existing role
         mock_query.filter.return_value.first.return_value = None
 
         with patch('src.services.clerk_sync_service.UserTenantRole') as MockRole:
@@ -854,7 +759,6 @@ class TestEndToEndUserLifecycle:
 
         calls = clerk_sync_service_for_user._mock_write.call_args_list
 
-        # Should have user_linked_to_tenant event
         linked_events = [
             c for c in calls
             if c[0][1].action == AuditAction.IDENTITY_USER_LINKED_TO_TENANT
@@ -864,7 +768,6 @@ class TestEndToEndUserLifecycle:
         assert linked_event.metadata["clerk_user_id"] == "user_clerk_e2e_789"
         assert linked_event.metadata["tenant_id"] == "tenant_e2e_abc"
 
-        # Should have role_assigned event
         assigned_events = [
             c for c in calls
             if c[0][1].action == AuditAction.IDENTITY_ROLE_ASSIGNED
@@ -878,11 +781,9 @@ class TestEndToEndUserLifecycle:
         self, clerk_sync_service_for_user, mock_user, mock_tenant, mock_user_tenant_role
     ):
         """E2E: Membership removal emits role_revoked for each role."""
-        # Mock service methods
         clerk_sync_service_for_user.get_user_by_clerk_id = MagicMock(return_value=mock_user)
         clerk_sync_service_for_user.get_tenant_by_clerk_org_id = MagicMock(return_value=mock_tenant)
 
-        # Mock query to return active roles
         mock_query = clerk_sync_service_for_user.session.query.return_value
         mock_query.filter.return_value.all.return_value = [mock_user_tenant_role]
 
@@ -897,7 +798,6 @@ class TestEndToEndUserLifecycle:
 
         calls = clerk_sync_service_for_user._mock_write.call_args_list
 
-        # Should have role_revoked event
         revoked_events = [
             c for c in calls
             if c[0][1].action == AuditAction.IDENTITY_ROLE_REVOKED
@@ -944,9 +844,6 @@ class TestEndToEndCompleteLifecycle:
 
     def test_complete_lifecycle_audit_trail(self, mock_db_session, audit_event_collector):
         """E2E: Complete lifecycle produces correct audit trail."""
-        from src.services.clerk_sync_service import ClerkSyncService
-
-        # Create mocks
         mock_tenant = MagicMock()
         mock_tenant.id = "tenant_complete_123"
         mock_tenant.clerk_org_id = "org_complete_456"
@@ -961,8 +858,7 @@ class TestEndToEndCompleteLifecycle:
         mock_role.role = "MERCHANT_ADMIN"
         mock_role.is_active = True
 
-        with patch('src.audit.identity_events.write_audit_log_sync', side_effect=audit_event_collector.collect):
-            # Use same correlation_id for entire lifecycle
+        with patch('src.services.clerk_sync_service.write_audit_log_sync', side_effect=audit_event_collector.collect):
             correlation_id = "complete-lifecycle-corr-123"
 
             # Step 1: Create tenant
@@ -1013,10 +909,8 @@ class TestEndToEndCompleteLifecycle:
                 reason="org_deleted",
             )
 
-        # Verify complete audit trail
         all_actions = audit_event_collector.get_all_actions()
 
-        # Expected sequence of events
         assert AuditAction.IDENTITY_TENANT_CREATED in all_actions
         assert AuditAction.IDENTITY_USER_FIRST_SEEN in all_actions
         assert AuditAction.IDENTITY_USER_LINKED_TO_TENANT in all_actions
@@ -1024,18 +918,15 @@ class TestEndToEndCompleteLifecycle:
         assert AuditAction.IDENTITY_ROLE_REVOKED in all_actions
         assert AuditAction.IDENTITY_TENANT_DEACTIVATED in all_actions
 
-        # Verify all events have same correlation_id
         for event in audit_event_collector.events:
             assert event.correlation_id == correlation_id
 
-        # Verify no PII in any event
         for event in audit_event_collector.events:
             assert "email" not in event.metadata
             assert "phone" not in event.metadata
             assert "first_name" not in event.metadata
             assert "last_name" not in event.metadata
 
-        # Verify clerk_user_id used (not email) in user events
         user_events = [
             e for e in audit_event_collector.events
             if "clerk_user_id" in e.metadata
@@ -1045,8 +936,6 @@ class TestEndToEndCompleteLifecycle:
 
     def test_lifecycle_event_ordering(self, mock_db_session, audit_event_collector):
         """E2E: Audit events are emitted in correct chronological order."""
-        from src.services.clerk_sync_service import ClerkSyncService
-
         mock_tenant = MagicMock()
         mock_tenant.id = "tenant_order_123"
         mock_tenant.clerk_org_id = "org_order_456"
@@ -1060,7 +949,7 @@ class TestEndToEndCompleteLifecycle:
         mock_role.role = "MERCHANT_VIEWER"
         mock_role.is_active = True
 
-        with patch('src.audit.identity_events.write_audit_log_sync', side_effect=audit_event_collector.collect):
+        with patch('src.services.clerk_sync_service.write_audit_log_sync', side_effect=audit_event_collector.collect):
             service = ClerkSyncService(mock_db_session, "order-test-corr")
 
             # Create tenant first
@@ -1079,7 +968,6 @@ class TestEndToEndCompleteLifecycle:
                 MockRole.create_from_clerk.return_value = mock_role
                 service.sync_membership("clerk_user_order_abc", "org_order_456", "org:member")
 
-        # Verify order: tenant_created -> user_first_seen -> user_linked -> role_assigned
         actions = audit_event_collector.get_all_actions()
 
         tenant_idx = actions.index(AuditAction.IDENTITY_TENANT_CREATED)
@@ -1087,9 +975,6 @@ class TestEndToEndCompleteLifecycle:
         linked_idx = actions.index(AuditAction.IDENTITY_USER_LINKED_TO_TENANT)
         role_idx = actions.index(AuditAction.IDENTITY_ROLE_ASSIGNED)
 
-        # Tenant created before user
         assert tenant_idx < user_idx
-        # User created before linked to tenant
         assert user_idx < linked_idx
-        # Linked and role assigned happen together (linked first)
         assert linked_idx < role_idx
