@@ -18,12 +18,14 @@ SECURITY:
 """
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
+from src.audit.identity_events import IdentityAuditEmitter
 from src.models.organization import Organization
 from src.models.tenant import Tenant, TenantStatus
 from src.models.user import User
@@ -40,14 +42,27 @@ class ClerkSyncService:
     Used by webhook handlers and lazy sync in auth middleware.
     """
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, correlation_id: Optional[str] = None):
         """
         Initialize sync service with database session.
 
         Args:
             session: SQLAlchemy session for database operations
+            correlation_id: Optional correlation ID for audit event tracing
         """
         self.session = session
+        self.correlation_id = correlation_id or str(uuid.uuid4())
+        self._audit_emitter: Optional[IdentityAuditEmitter] = None
+
+    @property
+    def audit_emitter(self) -> IdentityAuditEmitter:
+        """Lazy-loaded audit emitter instance."""
+        if self._audit_emitter is None:
+            self._audit_emitter = IdentityAuditEmitter(
+                db=self.session,
+                correlation_id=self.correlation_id,
+            )
+        return self._audit_emitter
 
     # =========================================================================
     # User Sync Methods
@@ -61,6 +76,7 @@ class ClerkSyncService:
         last_name: Optional[str] = None,
         avatar_url: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        source: str = "webhook",
     ) -> User:
         """
         Create or update a User from Clerk data.
@@ -72,6 +88,7 @@ class ClerkSyncService:
             last_name: User last name
             avatar_url: Profile image URL
             metadata: Additional metadata from Clerk
+            source: How the user was synced ("webhook" or "lazy_sync")
 
         Returns:
             Created or updated User instance
@@ -79,6 +96,8 @@ class ClerkSyncService:
         user = self.session.query(User).filter(
             User.clerk_user_id == clerk_user_id
         ).first()
+
+        is_new_user = user is None
 
         if user:
             # Update existing user
@@ -117,6 +136,13 @@ class ClerkSyncService:
                 extra={"clerk_user_id": clerk_user_id, "email": email}
             )
 
+        # Emit audit event for new users only
+        if is_new_user:
+            self.audit_emitter.emit_user_first_seen(
+                clerk_user_id=clerk_user_id,
+                source=source,
+            )
+
         return user
 
     def get_or_create_user(
@@ -152,6 +178,7 @@ class ClerkSyncService:
             email=email,
             first_name=first_name,
             last_name=last_name,
+            source="lazy_sync",
         )
 
     def get_user_by_clerk_id(self, clerk_user_id: str) -> Optional[User]:
@@ -313,6 +340,7 @@ class ClerkSyncService:
         billing_tier: str = "free",
         organization_id: Optional[str] = None,
         settings: Optional[Dict[str, Any]] = None,
+        source: str = "clerk_webhook",
     ) -> Tenant:
         """
         Create or update a Tenant from Clerk Organization data.
@@ -327,6 +355,7 @@ class ClerkSyncService:
             billing_tier: Billing tier (free, growth, enterprise)
             organization_id: Optional parent Organization ID
             settings: Tenant settings
+            source: How the tenant was created ("clerk_webhook" or "admin_action")
 
         Returns:
             Created or updated Tenant
@@ -334,6 +363,8 @@ class ClerkSyncService:
         tenant = self.session.query(Tenant).filter(
             Tenant.clerk_org_id == clerk_org_id
         ).first()
+
+        is_new_tenant = tenant is None
 
         if tenant:
             # Update existing tenant
@@ -361,10 +392,21 @@ class ClerkSyncService:
                 status=TenantStatus.ACTIVE,
             )
             self.session.add(tenant)
+            # Flush to get the tenant.id for audit event
+            self.session.flush()
 
             logger.info(
                 "Created tenant from Clerk org",
                 extra={"clerk_org_id": clerk_org_id, "name": name}
+            )
+
+        # Emit audit event for new tenants only
+        if is_new_tenant:
+            self.audit_emitter.emit_tenant_created(
+                tenant_id=tenant.id,
+                clerk_org_id=clerk_org_id,
+                billing_tier=billing_tier,
+                source=source,
             )
 
         return tenant
@@ -383,12 +425,17 @@ class ClerkSyncService:
             Tenant.clerk_org_id == clerk_org_id
         ).first()
 
-    def deactivate_tenant(self, clerk_org_id: str) -> bool:
+    def deactivate_tenant(
+        self,
+        clerk_org_id: str,
+        reason: str = "org_deleted",
+    ) -> bool:
         """
         Deactivate a tenant.
 
         Args:
             clerk_org_id: Clerk organization ID
+            reason: Why the tenant was deactivated ("org_deleted", "admin_action", "billing")
 
         Returns:
             True if deactivated, False if not found
@@ -402,6 +449,13 @@ class ClerkSyncService:
             return False
 
         tenant.status = TenantStatus.DEACTIVATED
+
+        # Emit audit event for tenant deactivation
+        self.audit_emitter.emit_tenant_deactivated(
+            tenant_id=tenant.id,
+            clerk_org_id=clerk_org_id,
+            reason=reason,
+        )
 
         logger.info(
             "Deactivated tenant",
@@ -418,6 +472,8 @@ class ClerkSyncService:
         clerk_user_id: str,
         clerk_org_id: str,
         role: str,
+        source: str = "clerk_webhook",
+        assigned_by: str = "system",
     ) -> Optional[UserTenantRole]:
         """
         Create or update a user's membership in a tenant.
@@ -428,6 +484,8 @@ class ClerkSyncService:
             clerk_user_id: Clerk user ID
             clerk_org_id: Clerk organization ID
             role: Role name (will be mapped to application role)
+            source: How the membership was created ("clerk_webhook", "agency_grant", "admin_grant")
+            assigned_by: clerk_user_id of assigner, or "system" for automated
 
         Returns:
             Created or updated UserTenantRole, None if user/tenant not found
@@ -460,6 +518,9 @@ class ClerkSyncService:
             UserTenantRole.role == app_role,
         ).first()
 
+        is_new_membership = existing_role is None
+        was_reactivated = existing_role is not None and not existing_role.is_active
+
         if existing_role:
             # Reactivate if previously deactivated
             existing_role.is_active = True
@@ -471,6 +532,17 @@ class ClerkSyncService:
                     "role": app_role,
                 }
             )
+
+            # Emit role_assigned for reactivation
+            if was_reactivated:
+                self.audit_emitter.emit_role_assigned(
+                    clerk_user_id=clerk_user_id,
+                    tenant_id=tenant.id,
+                    role=app_role,
+                    assigned_by=assigned_by,
+                    source=source,
+                )
+
             return existing_role
 
         # Create new role assignment
@@ -489,12 +561,33 @@ class ClerkSyncService:
                 "role": app_role,
             }
         )
+
+        # Emit audit events for new membership
+        if is_new_membership:
+            # Emit user_linked_to_tenant
+            self.audit_emitter.emit_user_linked_to_tenant(
+                clerk_user_id=clerk_user_id,
+                tenant_id=tenant.id,
+                role=app_role,
+                source=source,
+            )
+            # Emit role_assigned
+            self.audit_emitter.emit_role_assigned(
+                clerk_user_id=clerk_user_id,
+                tenant_id=tenant.id,
+                role=app_role,
+                assigned_by=assigned_by,
+                source=source,
+            )
+
         return user_role
 
     def remove_membership(
         self,
         clerk_user_id: str,
         clerk_org_id: str,
+        reason: str = "membership_deleted",
+        revoked_by: str = "system",
     ) -> bool:
         """
         Remove a user's membership from a tenant.
@@ -504,6 +597,8 @@ class ClerkSyncService:
         Args:
             clerk_user_id: Clerk user ID
             clerk_org_id: Clerk organization ID
+            reason: Why the membership was removed ("membership_deleted", "admin_action", "user_deleted")
+            revoked_by: clerk_user_id of revoker, or "system" for automated
 
         Returns:
             True if membership removed, False if not found
@@ -520,13 +615,23 @@ class ClerkSyncService:
         roles = self.session.query(UserTenantRole).filter(
             UserTenantRole.user_id == user.id,
             UserTenantRole.tenant_id == tenant.id,
+            UserTenantRole.is_active == True,  # noqa: E712 - SQLAlchemy needs ==
         ).all()
 
         if not roles:
             return False
 
-        for role in roles:
-            role.is_active = False
+        for role_assignment in roles:
+            role_assignment.is_active = False
+
+            # Emit role_revoked for each deactivated role
+            self.audit_emitter.emit_role_revoked(
+                clerk_user_id=clerk_user_id,
+                tenant_id=tenant.id,
+                previous_role=role_assignment.role,
+                revoked_by=revoked_by,
+                reason=reason,
+            )
 
         logger.info(
             "Removed membership",
@@ -544,6 +649,8 @@ class ClerkSyncService:
         clerk_org_id: str,
         old_role: str,
         new_role: str,
+        source: str = "clerk_webhook",
+        changed_by: str = "system",
     ) -> Optional[UserTenantRole]:
         """
         Update a user's role in a tenant.
@@ -553,6 +660,8 @@ class ClerkSyncService:
             clerk_org_id: Clerk organization ID
             old_role: Previous role
             new_role: New role
+            source: How the change was initiated ("clerk_webhook", "agency_grant", "admin_grant")
+            changed_by: clerk_user_id of who made the change, or "system" for automated
 
         Returns:
             Updated UserTenantRole, None if not found
@@ -575,12 +684,27 @@ class ClerkSyncService:
             UserTenantRole.role == old_app_role,
         ).first()
 
-        if existing:
+        if existing and existing.is_active:
             # Deactivate old role
             existing.is_active = False
 
-        # Create or reactivate new role
-        return self.sync_membership(clerk_user_id, clerk_org_id, new_role)
+            # Emit role_revoked for old role
+            self.audit_emitter.emit_role_revoked(
+                clerk_user_id=clerk_user_id,
+                tenant_id=tenant.id,
+                previous_role=old_app_role,
+                revoked_by=changed_by,
+                reason="admin_action",
+            )
+
+        # Create or reactivate new role (this will emit role_assigned)
+        return self.sync_membership(
+            clerk_user_id,
+            clerk_org_id,
+            new_role,
+            source=source,
+            assigned_by=changed_by,
+        )
 
     def get_user_tenants(self, clerk_user_id: str) -> List[Tenant]:
         """

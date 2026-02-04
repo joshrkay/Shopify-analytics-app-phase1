@@ -847,6 +847,53 @@ AUDITABLE_EVENTS: Final[dict[str, list[str]]] = {
         "error_code",
         "error_message",
     ],
+
+    # =========================================================================
+    # IDENTITY LIFECYCLE EVENTS
+    # =========================================================================
+    # Track identity changes from Clerk authentication provider.
+    # CRITICAL: Never store email or other PII - use clerk_user_id only.
+
+    "identity.user_first_seen": [
+        "clerk_user_id",       # Clerk user identifier (no email/PII)
+        "source",              # Enum: webhook, lazy_sync
+    ],
+
+    "identity.user_linked_to_tenant": [
+        "clerk_user_id",       # Clerk user identifier (no email/PII)
+        "tenant_id",           # Tenant being linked to
+        "role",                # Role being assigned
+        "source",              # Enum: clerk_webhook, agency_grant
+    ],
+
+    "identity.role_assigned": [
+        "clerk_user_id",       # User receiving the role
+        "tenant_id",           # Tenant context
+        "role",                # Role being assigned
+        "assigned_by",         # clerk_user_id of assigner (or "system")
+        "source",              # Enum: clerk_webhook, agency_grant, admin_grant
+    ],
+
+    "identity.role_revoked": [
+        "clerk_user_id",       # User losing the role
+        "tenant_id",           # Tenant context
+        "previous_role",       # Role being revoked
+        "revoked_by",          # clerk_user_id of revoker (or "system")
+        "reason",              # Enum: membership_deleted, admin_action, user_deleted
+    ],
+
+    "identity.tenant_created": [
+        "tenant_id",           # Created tenant ID
+        "clerk_org_id",        # Clerk organization ID
+        "billing_tier",        # Initial billing tier
+        "source",              # Enum: clerk_webhook, admin_action
+    ],
+
+    "identity.tenant_deactivated": [
+        "tenant_id",           # Deactivated tenant ID
+        "clerk_org_id",        # Clerk organization ID
+        "reason",              # Enum: org_deleted, admin_action, billing
+    ],
 }
 
 
@@ -962,6 +1009,14 @@ EVENT_CATEGORIES: Final[dict[str, list[str]]] = {
         "ai.rollback.succeeded",
         "ai.rollback.failed",
     ],
+    "identity": [
+        "identity.user_first_seen",
+        "identity.user_linked_to_tenant",
+        "identity.role_assigned",
+        "identity.role_revoked",
+        "identity.tenant_created",
+        "identity.tenant_deactivated",
+    ],
 }
 
 
@@ -1029,6 +1084,14 @@ EVENT_SEVERITY: Final[dict[str, str]] = {
     "ai.rollback.requested": "high",
     "ai.rollback.succeeded": "medium",
     "ai.rollback.failed": "critical",
+
+    # Identity lifecycle events
+    "identity.user_first_seen": "low",
+    "identity.user_linked_to_tenant": "medium",
+    "identity.role_assigned": "medium",
+    "identity.role_revoked": "medium",
+    "identity.tenant_created": "medium",
+    "identity.tenant_deactivated": "high",
 }
 
 

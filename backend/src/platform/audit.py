@@ -169,6 +169,14 @@ class AuditAction(str, Enum):
     AUDIT_RETENTION_COMPLETED = "audit.retention.completed"
     AUDIT_RETENTION_FAILED = "audit.retention.failed"
 
+    # Identity events
+    IDENTITY_USER_FIRST_SEEN = "identity.user_first_seen"
+    IDENTITY_USER_LINKED_TO_TENANT = "identity.user_linked_to_tenant"
+    IDENTITY_ROLE_ASSIGNED = "identity.role_assigned"
+    IDENTITY_ROLE_REVOKED = "identity.role_revoked"
+    IDENTITY_TENANT_CREATED = "identity.tenant_created"
+    IDENTITY_TENANT_DEACTIVATED = "identity.tenant_deactivated"
+
 
 class AuditOutcome(str, Enum):
     """Outcome of the audited action."""
