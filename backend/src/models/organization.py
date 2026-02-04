@@ -94,10 +94,9 @@ class Organization(Base, TimestampMixin):
         cascade="save-update, merge"
     )
 
-    # Indexes
+    # Additional indexes (is_active already has index=True on column)
     __table_args__ = (
         Index("ix_organizations_name", "name"),
-        Index("ix_organizations_active", "is_active"),
     )
 
     def __repr__(self) -> str:

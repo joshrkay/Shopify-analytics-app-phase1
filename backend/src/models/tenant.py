@@ -134,10 +134,9 @@ class Tenant(Base, TimestampMixin):
         cascade="all, delete-orphan"
     )
 
-    # Indexes
+    # Composite indexes (simple column indexes defined via index=True above)
     __table_args__ = (
         Index("ix_tenants_org_status", "organization_id", "status"),
-        Index("ix_tenants_billing_tier", "billing_tier"),
     )
 
     def __repr__(self) -> str:

@@ -132,15 +132,12 @@ class UserTenantRole(Base, TimestampMixin):
         lazy="joined"
     )
 
-    # Constraints and Indexes
+    # Constraints and Indexes (single-column indexes defined via index=True above)
     __table_args__ = (
         # Prevent duplicate (user, tenant, role) combinations
         UniqueConstraint("user_id", "tenant_id", "role", name="uq_user_tenant_role"),
-        # Efficient tenant-user lookups
+        # Composite indexes for efficient lookups
         Index("ix_user_tenant_roles_tenant_user", "tenant_id", "user_id"),
-        # Efficient role-based queries
-        Index("ix_user_tenant_roles_role", "role"),
-        # Active assignments per tenant
         Index("ix_user_tenant_roles_tenant_active", "tenant_id", "is_active"),
     )
 
