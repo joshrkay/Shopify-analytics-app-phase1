@@ -99,9 +99,9 @@ export function WhatChangedPanel({
 
   const tabs = [
     { id: 'overview', content: 'Overview', panelID: 'overview-panel' },
-    { id: 'syncs', content: `Syncs (${syncs.length})`, panelID: 'syncs-panel' },
-    { id: 'ai-actions', content: `AI Actions (${aiActions.length})`, panelID: 'ai-actions-panel' },
-    { id: 'connectors', content: `Connectors (${connectorChanges.length})`, panelID: 'connectors-panel' },
+    { id: 'syncs', content: `Syncs (${syncs?.length ?? 0})`, panelID: 'syncs-panel' },
+    { id: 'ai-actions', content: `AI Actions (${aiActions?.length ?? 0})`, panelID: 'ai-actions-panel' },
+    { id: 'connectors', content: `Connectors (${connectorChanges?.length ?? 0})`, panelID: 'connectors-panel' },
   ];
 
   const renderOverview = () => {
@@ -199,7 +199,7 @@ export function WhatChangedPanel({
   };
 
   const renderSyncs = () => {
-    if (syncs.length === 0) {
+    if (!syncs || syncs.length === 0) {
       return (
         <Text as="p" variant="bodyMd" tone="subdued">
           No sync activity in the last {days} days.
@@ -250,7 +250,7 @@ export function WhatChangedPanel({
   };
 
   const renderAIActions = () => {
-    if (aiActions.length === 0) {
+    if (!aiActions || aiActions.length === 0) {
       return (
         <Text as="p" variant="bodyMd" tone="subdued">
           No AI action activity in the last {days} days.
@@ -295,7 +295,7 @@ export function WhatChangedPanel({
   };
 
   const renderConnectorChanges = () => {
-    if (connectorChanges.length === 0) {
+    if (!connectorChanges || connectorChanges.length === 0) {
       return (
         <Text as="p" variant="bodyMd" tone="subdued">
           No connector status changes in the last {days} days.

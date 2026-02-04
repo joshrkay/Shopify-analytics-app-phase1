@@ -119,9 +119,9 @@ describe('WhatChangedButton', () => {
     vi.clearAllMocks();
     (hasCriticalIssues as any).mockResolvedValue(false);
     (getSummary as any).mockResolvedValue(mockSummary);
-    (getRecentSyncs as any).mockResolvedValue(mockRecentSyncs);
-    (getAIActions as any).mockResolvedValue(mockAIActions);
-    (getConnectorStatusChanges as any).mockResolvedValue([]);
+    (getRecentSyncs as any).mockResolvedValue({ syncs: mockRecentSyncs });
+    (getAIActions as any).mockResolvedValue({ actions: mockAIActions });
+    (getConnectorStatusChanges as any).mockResolvedValue({ changes: [] });
   });
 
   it('renders inline variant with label', async () => {
@@ -205,9 +205,9 @@ describe('WhatChangedPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (getSummary as any).mockResolvedValue(mockSummary);
-    (getRecentSyncs as any).mockResolvedValue(mockRecentSyncs);
-    (getAIActions as any).mockResolvedValue(mockAIActions);
-    (getConnectorStatusChanges as any).mockResolvedValue([]);
+    (getRecentSyncs as any).mockResolvedValue({ syncs: mockRecentSyncs });
+    (getAIActions as any).mockResolvedValue({ actions: mockAIActions });
+    (getConnectorStatusChanges as any).mockResolvedValue({ changes: [] });
   });
 
   it('renders when open', async () => {
@@ -292,9 +292,9 @@ describe('WhatChangedPanel Tabs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (getSummary as any).mockResolvedValue(mockSummary);
-    (getRecentSyncs as any).mockResolvedValue(mockRecentSyncs);
-    (getAIActions as any).mockResolvedValue(mockAIActions);
-    (getConnectorStatusChanges as any).mockResolvedValue(mockConnectorChanges);
+    (getRecentSyncs as any).mockResolvedValue({ syncs: mockRecentSyncs });
+    (getAIActions as any).mockResolvedValue({ actions: mockAIActions });
+    (getConnectorStatusChanges as any).mockResolvedValue({ changes: mockConnectorChanges });
   });
 
   it('has overview, syncs, AI actions, and connectors tabs', async () => {
@@ -399,9 +399,9 @@ describe('WhatChangedPanel Empty States', () => {
       recent_syncs_count: 0,
       recent_ai_actions_count: 0,
     });
-    (getRecentSyncs as any).mockResolvedValue([]);
-    (getAIActions as any).mockResolvedValue([]);
-    (getConnectorStatusChanges as any).mockResolvedValue([]);
+    (getRecentSyncs as any).mockResolvedValue({ syncs: [] });
+    (getAIActions as any).mockResolvedValue({ actions: [] });
+    (getConnectorStatusChanges as any).mockResolvedValue({ changes: [] });
   });
 
   it('shows empty state for syncs tab when no syncs', async () => {
@@ -458,9 +458,9 @@ describe('WhatChangedPanel Refresh', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (getSummary as any).mockResolvedValue(mockSummary);
-    (getRecentSyncs as any).mockResolvedValue(mockRecentSyncs);
-    (getAIActions as any).mockResolvedValue(mockAIActions);
-    (getConnectorStatusChanges as any).mockResolvedValue([]);
+    (getRecentSyncs as any).mockResolvedValue({ syncs: mockRecentSyncs });
+    (getAIActions as any).mockResolvedValue({ actions: mockAIActions });
+    (getConnectorStatusChanges as any).mockResolvedValue({ changes: [] });
   });
 
   it('fetches data when panel opens', async () => {
