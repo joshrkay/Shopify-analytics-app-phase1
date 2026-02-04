@@ -530,6 +530,105 @@ AUDITABLE_EVENTS: Final[dict[str, list[str]]] = {
     ],
 
     # =========================================================================
+    # METRIC VERSION GOVERNANCE (Story 2.2)
+    # =========================================================================
+    # Track all metric version lifecycle events for audit and compliance.
+    # These events support the versioned metric framework where:
+    #   - Metrics must support multiple versions (v1, v2, ...)
+    #   - Exactly one version may be marked as current
+    #   - Dashboards must explicitly reference metric versions
+    #   - Deprecated metrics remain queryable until sunset
+    #   - No auto-migration of dashboards
+
+    "metric.version_created": [
+        "metric_name",           # Name of the metric (e.g., roas, cac)
+        "version",               # Version identifier (e.g., v1, v2)
+        "definition",            # Formula definition
+        "dbt_model",             # Associated dbt model
+        "created_by",            # User who created the version
+        "breaking_change",       # Boolean: whether this is a breaking change
+        "approval_ticket",       # Ticket ID for approval tracking
+    ],
+
+    "metric.version_status_changed": [
+        "metric_name",
+        "version",
+        "previous_status",       # draft, active, deprecated, sunset, retired
+        "new_status",
+        "changed_by",
+        "reason",                # Reason for status change
+        "sunset_date",           # If transitioning to deprecated
+    ],
+
+    "metric.version_approval_requested": [
+        "metric_name",
+        "version",
+        "requested_by",
+        "approval_ticket",
+        "breaking_change",
+        "affected_dashboard_count",
+    ],
+
+    "metric.version_approval_granted": [
+        "metric_name",
+        "version",
+        "approved_by",
+        "approval_notes",
+        "approval_ticket",
+    ],
+
+    "metric.version_approval_rejected": [
+        "metric_name",
+        "version",
+        "rejected_by",
+        "rejection_reason",
+        "approval_ticket",
+    ],
+
+    "metric.version_sunset_scheduled": [
+        "metric_name",
+        "version",
+        "sunset_date",
+        "scheduled_by",
+        "affected_dashboard_count",
+        "migration_guide_url",
+    ],
+
+    "metric.dashboard_version_pinned": [
+        "dashboard_id",
+        "metric_name",
+        "pinned_version",
+        "pinned_by",
+        "auto_upgrade",          # Boolean: whether auto-upgrade is enabled
+    ],
+
+    "metric.dashboard_version_unpinned": [
+        "dashboard_id",
+        "metric_name",
+        "unpinned_version",
+        "unpinned_by",
+        "reason",
+    ],
+
+    "metric.deprecated_query_logged": [
+        "tenant_id",
+        "metric_name",
+        "version",
+        "dashboard_id",
+        "days_until_sunset",
+        "warning_level",         # INFO, WARN, BLOCK
+    ],
+
+    "metric.rollback_executed": [
+        "metric_name",
+        "from_version",
+        "to_version",
+        "rolled_back_by",
+        "reason",
+        "affected_dashboard_count",
+    ],
+
+    # =========================================================================
     # DATASET SYNC & CACHE OPERATIONS
     # =========================================================================
     # Track data pipeline operations for debugging and monitoring.
@@ -1030,6 +1129,18 @@ EVENT_CATEGORIES: Final[dict[str, list[str]]] = {
         "metric.deprecated",
         "metric.deleted",
     ],
+    "metric_versioning": [
+        "metric.version_created",
+        "metric.version_status_changed",
+        "metric.version_approval_requested",
+        "metric.version_approval_granted",
+        "metric.version_approval_rejected",
+        "metric.version_sunset_scheduled",
+        "metric.dashboard_version_pinned",
+        "metric.dashboard_version_unpinned",
+        "metric.deprecated_query_logged",
+        "metric.rollback_executed",
+    ],
     "operations": [
         "dataset.synced",
         "dataset.sync_failed",
@@ -1177,6 +1288,18 @@ EVENT_SEVERITY: Final[dict[str, str]] = {
     "identity.access_revoked_enforced": "high",
     "identity.role_change_enforced": "medium",
     "billing.role_revoked_due_to_downgrade": "high",
+
+    # Metric versioning events
+    "metric.version_created": "medium",
+    "metric.version_status_changed": "high",
+    "metric.version_approval_requested": "medium",
+    "metric.version_approval_granted": "high",
+    "metric.version_approval_rejected": "high",
+    "metric.version_sunset_scheduled": "high",
+    "metric.dashboard_version_pinned": "medium",
+    "metric.dashboard_version_unpinned": "medium",
+    "metric.deprecated_query_logged": "low",
+    "metric.rollback_executed": "critical",
 }
 
 
