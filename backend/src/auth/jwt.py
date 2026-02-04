@@ -87,8 +87,8 @@ class ClerkJWTClaims(BaseModel):
     )
 
     # Verification metadata (added by verifier)
-    _verified_at: Optional[str] = Field(None, alias="_verified_at")
-    _token_type: Optional[str] = Field(None, alias="_token_type")
+    verified_at: Optional[str] = Field(None, description="Timestamp when token was verified")
+    token_type: Optional[str] = Field(None, description="Type of token (e.g., clerk_jwt)")
 
     class Config:
         extra = "allow"  # Allow additional claims

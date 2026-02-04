@@ -218,8 +218,8 @@ class ClerkJWTVerifier:
                     )
 
             # Add verification metadata
-            claims["_verified_at"] = datetime.now(timezone.utc).isoformat()
-            claims["_token_type"] = "clerk_jwt"
+            claims["verified_at"] = datetime.now(timezone.utc).isoformat()
+            claims["token_type"] = "clerk_jwt"
 
             logger.debug(
                 "Token verified successfully",
