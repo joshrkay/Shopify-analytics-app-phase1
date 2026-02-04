@@ -1,0 +1,52 @@
+# Dashboard Metric Binding Configuration (Source of Truth)
+# Defines which dashboards consume which metric versions
+#
+# Rules:
+# - "current" means the dashboard tracks the governed alias (metric_<name>_current)
+# - Pinned versions (e.g., "v1") mean the dashboard is locked to that specific version
+# - Only Super Admin or Analytics Admin can change bindings
+# - All changes require a reason and emit audit events
+#
+# See: config/governance/metrics_versions.yaml for version definitions
+# See: config/governance/change_approvals.yaml for approval workflows
+
+dashboards:
+  merchant_overview:
+    description: "Primary merchant analytics dashboard"
+    metrics:
+      roas: current
+      cac: current
+      revenue: current
+      aov: current
+
+  revenue_trend:
+    description: "Revenue trend analysis dashboard"
+    metrics:
+      revenue: current
+      aov: current
+
+  campaign_performance:
+    description: "Campaign performance and ROAS dashboard"
+    metrics:
+      roas: current
+      cac: current
+
+# Binding governance rules
+governance:
+  # Who can repoint dashboard metric bindings
+  repoint_roles:
+    - super_admin
+    - analytics_admin
+
+  # Repoint requirements
+  require_reason: true
+  emit_audit_event: true
+
+  # Communication requirements
+  notify_affected_tenants: true
+  banner_on_affected_dashboards: true
+  banner_duration_days: 7
+
+  # Safety
+  block_if_version_sunset: true
+  validate_version_exists: true

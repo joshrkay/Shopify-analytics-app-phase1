@@ -60,17 +60,35 @@ metrics:
     current_version: "v1"
 
     v1:
-      dbt_model: "mart_campaign_performance"
-      definition: "revenue / ad_spend"
+      dbt_model: "metric_roas_v1"
+      definition: "attributed_revenue / ad_spend (last-click attribution)"
       status: "active"
       released_date: "2025-06-01"
-      description: "Return on ad spend ratio"
+      description: "Platform-attributed ROAS using last-click attribution"
 
-    # No migration needed - only one version exists
+    v2:
+      dbt_model: "metric_roas_v2"
+      definition: "(attributed + organic revenue) / ad_spend (blended)"
+      status: "active"
+      released_date: "2026-02-01"
+      description: "Blended ROAS including all revenue, not just attributed"
+
+    # MIGRATION STRATEGY for ROAS metric
+    # v2 is a BREAKING change: includes organic revenue, producing higher ROAS values
+    # Dashboards currently on v1 stay on v1 until explicitly repointed
     migration:
       auto_migrate: false
-      affected_dashboards: []
+      breaking_change: true
+      affected_dashboards:
+        - name: "merchant_overview"
+          usage: "uses roas in campaign performance card"
+        - name: "campaign_performance"
+          usage: "primary ROAS display"
       affected_merchants: []
+      communication:
+        - channel: "dashboard_banner"
+          message: "ROAS v2 is available. v2 uses blended revenue (attributed + organic) which produces higher values than v1."
+          show_days_before: 30
 
   conversion_rate:
     current_version: "v1"

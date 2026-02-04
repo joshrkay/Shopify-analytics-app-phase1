@@ -1,0 +1,163 @@
+version: 2
+
+models:
+  - name: metric_roas_v1
+    description: |
+      ## ROAS Metric - Version 1 (IMMUTABLE)
+
+      Versioned, immutable view of ROAS. DO NOT EDIT - create a new version instead.
+
+      ### Definition
+      - Gross ROAS = Attributed Gross Revenue / Ad Spend
+      - Net ROAS = Attributed Net Revenue / Ad Spend
+      - Revenue: Only platform-attributed orders (last-click attribution)
+      - Spend: Meta Ads + Google Ads
+
+      ### Version History
+      - v1: Released 2025-06-01 (active)
+      - v2: Released 2026-02-01 (active) - blended ROAS including organic
+
+    config:
+      tags: ['metrics', 'roas', 'versioned', 'immutable']
+
+    columns:
+      - name: id
+        description: Unique row identifier
+        tests:
+          - unique
+          - not_null
+
+      - name: tenant_id
+        description: Tenant identifier for multi-tenant isolation
+        tests:
+          - not_null
+
+      - name: metric_version
+        description: Version tag (always 'v1' for this model)
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['v1']
+
+      - name: gross_roas
+        description: Gross Revenue / Ad Spend (attributed only)
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+      - name: net_roas
+        description: Net Revenue / Ad Spend (attributed only, after refunds)
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+  - name: metric_roas_v2
+    description: |
+      ## ROAS Metric - Version 2 (IMMUTABLE)
+
+      Versioned, immutable view of blended ROAS. DO NOT EDIT - create a new version instead.
+
+      ### Definition
+      - Gross ROAS = Total Gross Revenue / Total Ad Spend
+      - Net ROAS = Total Net Revenue / Total Ad Spend
+      - Revenue: ALL revenue (attributed + organic), not just platform-attributed
+      - Spend: Meta Ads + Google Ads (aggregated across platforms)
+
+      ### Breaking Change from v1
+      v1 uses only attributed revenue (last-click). v2 includes ALL revenue
+      for a blended view. This produces HIGHER ROAS values than v1.
+
+      ### Version History
+      - v1: Released 2025-06-01 (active) - attributed-only ROAS
+      - v2: Released 2026-02-01 (active) - blended ROAS
+
+    config:
+      tags: ['metrics', 'roas', 'versioned', 'immutable']
+
+    columns:
+      - name: id
+        description: Unique row identifier
+        tests:
+          - unique
+          - not_null
+
+      - name: tenant_id
+        description: Tenant identifier for multi-tenant isolation
+        tests:
+          - not_null
+
+      - name: metric_version
+        description: Version tag (always 'v2' for this model)
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['v2']
+
+      - name: gross_roas
+        description: Total Gross Revenue / Total Ad Spend (blended)
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+      - name: net_roas
+        description: Total Net Revenue / Total Ad Spend (blended, after refunds)
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+  - name: metric_roas_current
+    description: |
+      ## ROAS Metric - Current Alias (GOVERNED)
+
+      This view always points to the latest **approved** ROAS version.
+      Dashboards binding to "current" use this view.
+
+      ### Current Target
+      Points to: `metric_roas_v1` (approved 2025-06-01)
+
+      ### Upgrade Process
+      1. Submit change request via `config/governance/change_requests.yaml`
+      2. Get approval from Product Manager + Analytics Tech Lead
+      3. Update this alias SQL to point to new version
+      4. Run pre-deploy validation
+      5. Communicate to affected dashboards/tenants
+
+      ### Governance
+      - Only Super Admin or Analytics Admin can approve repoints
+      - All changes audited via `dashboard_metric_bindings` table
+      - Rollback available within 15 minutes
+
+    config:
+      tags: ['metrics', 'roas', 'alias', 'governed']
+
+    columns:
+      - name: id
+        description: Unique row identifier (from underlying version)
+        tests:
+          - unique
+          - not_null
+
+      - name: tenant_id
+        description: Tenant identifier for multi-tenant isolation
+        tests:
+          - not_null
+
+      - name: gross_roas
+        description: ROAS as defined by the current approved version
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+      - name: net_roas
+        description: Net ROAS as defined by the current approved version
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"

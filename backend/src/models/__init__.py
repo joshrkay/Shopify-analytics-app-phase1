@@ -84,6 +84,7 @@ from src.models.data_change_event import (
     DataChangeEventType,
     AFFECTED_METRICS,
 )
+from src.models.dashboard_metric_binding import DashboardMetricBinding
 
 __all__ = [
     "TimestampMixin",
@@ -184,4 +185,6 @@ __all__ = [
     "DataChangeEvent",
     "DataChangeEventType",
     "AFFECTED_METRICS",
+    # Dashboard Metric Binding models (Story 2.3)
+    "DashboardMetricBinding",
 ]

@@ -124,6 +124,14 @@ DEFAULT_MODELS_TO_SYNC = [
     'fact_campaign_performance',
 ]
 
+# Versioned metric datasets (Story 2.3)
+# Each metric version gets its own dataset; dashboards reference datasets, not formulas
+VERSIONED_METRIC_MODELS = [
+    'metric_roas_v1',
+    'metric_roas_v2',
+    'metric_roas_current',
+]
+
 
 # Sync job entry point
 if __name__ == '__main__':
@@ -140,9 +148,11 @@ if __name__ == '__main__':
 
     syncer = SupersetDatasetSync(superset_url, api_token)
 
+    all_models = DEFAULT_MODELS_TO_SYNC + VERSIONED_METRIC_MODELS
+
     try:
-        syncer.sync_all_datasets(manifest_path, db_id, DEFAULT_MODELS_TO_SYNC)
-        is_valid = syncer.validate_sync(manifest_path, DEFAULT_MODELS_TO_SYNC)
+        syncer.sync_all_datasets(manifest_path, db_id, all_models)
+        is_valid = syncer.validate_sync(manifest_path, all_models)
 
         if is_valid:
             logger.info("All datasets synced and validated successfully")

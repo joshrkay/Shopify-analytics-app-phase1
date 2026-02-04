@@ -3,12 +3,19 @@ Root test configuration and fixtures.
 
 Provides database fixtures that can be used by all tests.
 E2E tests have additional fixtures in e2e/conftest.py.
+
+Story 2.3 shared fixtures:
+- temp_config_dir: Temporary directory for YAML config files
+- make_yaml_config: Factory for writing YAML configs to temp dir
 """
 
 import os
+import tempfile
 import uuid
 import pytest
+import yaml
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import create_engine, event, text
@@ -68,6 +75,7 @@ def db_engine():
     # Import and create all tables
     from src.db_base import Base
     from src.models import user, tenant, organization, user_tenant_roles, tenant_invite
+    from src.models import dashboard_metric_binding  # noqa: F401 - Story 2.3
 
     Base.metadata.create_all(bind=engine)
 
@@ -122,3 +130,31 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "e2e: mark test as end-to-end test")
     config.addinivalue_line("markers", "security: mark test as security-focused")
     config.addinivalue_line("markers", "slow: mark test as slow-running")
+
+
+# =============================================================================
+# Story 2.3 - Shared Config Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def temp_config_dir():
+    """Create a temporary directory for YAML config files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)
+
+
+@pytest.fixture
+def make_yaml_config(temp_config_dir):
+    """
+    Factory fixture that writes a YAML config file and returns its path.
+
+    Usage:
+        config_path = make_yaml_config("consumers.yaml", {"dashboards": {...}})
+    """
+    def _make(filename: str, config: dict) -> Path:
+        config_path = temp_config_dir / filename
+        with open(config_path, "w") as f:
+            yaml.dump(config, f)
+        return config_path
+    return _make

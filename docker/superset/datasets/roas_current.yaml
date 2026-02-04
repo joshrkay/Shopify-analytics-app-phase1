@@ -1,0 +1,173 @@
+# Superset Dataset: ROAS Current (Governed Alias)
+# Bound to dbt view: metric_roas_current
+#
+# This dataset tracks the governed "current" alias.
+# Dashboards using "ROAS (Current)" always get the approved version
+# without needing to know which specific version is active.
+#
+# Current target: metric_roas_v1 (as of 2025-06-01)
+#
+# IMPORTANT:
+# - No calculated metrics in Superset - all calculations live in dbt
+# - RLS enforced via tenant_id
+# - When the alias is repointed, all dashboards using this dataset
+#   automatically get the new version's data
+
+dataset:
+  table_name: metric_roas_current
+  schema: metrics
+  description: |
+    ROAS (Current) - Governed alias for the approved ROAS version.
+    Points to the latest approved metric version.
+    Dashboards using this dataset automatically track version upgrades
+    without manual repointing.
+    Current target: metric_roas_v1 (attributed ROAS).
+
+  dbt_model: metric_roas_current
+  metric_version: current
+  version_status: governed_alias
+
+  columns:
+    - column_name: id
+      type: VARCHAR
+      description: Unique row identifier
+      filterable: false
+      groupby: false
+
+    - column_name: tenant_id
+      type: VARCHAR
+      description: Tenant identifier (RLS enforced)
+      filterable: false
+      groupby: false
+      is_rls_column: true
+
+    - column_name: platform
+      type: VARCHAR
+      description: Ad platform
+      filterable: true
+      groupby: true
+
+    - column_name: period_type
+      type: VARCHAR
+      description: Aggregation period (daily, weekly, monthly, all_time)
+      filterable: true
+      groupby: true
+
+    - column_name: period_start
+      type: TIMESTAMP
+      description: Start of the aggregation period
+      filterable: true
+      groupby: true
+      is_dttm: true
+
+    - column_name: currency
+      type: VARCHAR
+      description: Currency code
+      filterable: true
+      groupby: true
+
+    - column_name: campaign_id
+      type: VARCHAR
+      description: Campaign identifier
+      filterable: true
+      groupby: true
+
+    - column_name: order_count
+      type: INTEGER
+      description: Number of orders
+      filterable: false
+      groupby: false
+
+    - column_name: total_spend
+      type: NUMERIC
+      description: Total ad spend
+      filterable: false
+      groupby: false
+
+    - column_name: total_gross_revenue
+      type: NUMERIC
+      description: Total gross revenue
+      filterable: false
+      groupby: false
+
+    - column_name: total_net_revenue
+      type: NUMERIC
+      description: Total net revenue
+      filterable: false
+      groupby: false
+
+    - column_name: gross_roas
+      type: NUMERIC
+      description: Gross ROAS as defined by the current approved version
+      filterable: false
+      groupby: false
+
+    - column_name: net_roas
+      type: NUMERIC
+      description: Net ROAS as defined by the current approved version
+      filterable: false
+      groupby: false
+
+    - column_name: avg_order_value_gross
+      type: NUMERIC
+      description: Average gross order value
+      filterable: false
+      groupby: false
+
+    - column_name: avg_order_value_net
+      type: NUMERIC
+      description: Average net order value
+      filterable: false
+      groupby: false
+
+    - column_name: metric_version
+      type: VARCHAR
+      description: Version tag from the underlying metric view
+      filterable: true
+      groupby: false
+
+  metrics:
+    - metric_name: total_gross_roas
+      expression: AVG(gross_roas)
+      description: Average Gross ROAS
+
+    - metric_name: total_net_roas
+      expression: AVG(net_roas)
+      description: Average Net ROAS
+
+    - metric_name: sum_spend
+      expression: SUM(total_spend)
+      description: Total ad spend
+
+    - metric_name: sum_gross_revenue
+      expression: SUM(total_gross_revenue)
+      description: Total gross revenue
+
+    - metric_name: sum_net_revenue
+      expression: SUM(total_net_revenue)
+      description: Total net revenue
+
+    - metric_name: total_orders
+      expression: SUM(order_count)
+      description: Total order count
+
+  rls:
+    enabled: true
+    clause: "tenant_id = '{{ current_user.tenant_id }}'"
+
+  guardrails:
+    max_date_range_days: 90
+    query_timeout_seconds: 20
+    row_limit: 50000
+    cache_ttl_minutes: 30
+
+  visualizations_allowed:
+    - line
+    - bar
+    - table
+    - number
+
+  visualizations_disallowed:
+    - scatter
+    - geo_map
+    - box_plot

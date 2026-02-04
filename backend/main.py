@@ -37,6 +37,7 @@ from src.api.routes import ad_platform_ingestion
 from src.api.routes import webhooks_clerk
 from src.api.routes import tenant_members
 from src.api.routes import user_tenants
+from src.api.routes import dashboard_bindings
 from src.api.dq import routes as sync_health
 
 # Configure structured logging
@@ -196,6 +197,10 @@ app.include_router(tenant_members.router)
 # Include user tenants routes (requires authentication)
 # Epic 1.1 - Get tenants accessible by current user
 app.include_router(user_tenants.router)
+
+# Include dashboard metric binding routes (requires authentication)
+# Story 2.3 - Metric → Dashboard Binding, Consumption & Safety
+app.include_router(dashboard_bindings.router)
 
 
 # Global exception handler for tenant isolation errors

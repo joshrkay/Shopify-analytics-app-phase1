@@ -1,0 +1,170 @@
+# Superset Dataset: ROAS v2 (Blended)
+# Bound to dbt view: metric_roas_v2
+#
+# This dataset exposes the immutable v2 ROAS metric for dashboards
+# that use the blended (attributed + organic) calculation.
+#
+# IMPORTANT:
+# - No calculated metrics in Superset - all calculations live in dbt
+# - RLS enforced via tenant_id
+# - v2 ROAS values are HIGHER than v1 because organic revenue is included
+# - Columns are read-only pass-throughs from the dbt view
+
+dataset:
+  table_name: metric_roas_v2
+  schema: metrics
+  description: |
+    ROAS v2 - Blended Return on Ad Spend.
+    Gross ROAS = Total Gross Revenue / Total Ad Spend (all revenue, not just attributed).
+    Net ROAS = Total Net Revenue / Total Ad Spend (all revenue, not just attributed).
+    Includes both attributed AND organic revenue for a blended view.
+    BREAKING from v1: produces higher ROAS values.
+
+  dbt_model: metric_roas_v2
+  metric_version: v2
+  version_status: active
+
+  columns:
+    - column_name: id
+      type: VARCHAR
+      description: Unique row identifier
+      filterable: false
+      groupby: false
+
+    - column_name: tenant_id
+      type: VARCHAR
+      description: Tenant identifier (RLS enforced)
+      filterable: false
+      groupby: false
+      is_rls_column: true
+
+    - column_name: platform
+      type: VARCHAR
+      description: Always 'all' for blended ROAS (aggregated across platforms)
+      filterable: true
+      groupby: true
+
+    - column_name: period_type
+      type: VARCHAR
+      description: Aggregation period (daily, weekly, monthly, all_time)
+      filterable: true
+      groupby: true
+
+    - column_name: period_start
+      type: TIMESTAMP
+      description: Start of the aggregation period
+      filterable: true
+      groupby: true
+      is_dttm: true
+
+    - column_name: currency
+      type: VARCHAR
+      description: Currency code
+      filterable: true
+      groupby: true
+
+    - column_name: campaign_id
+      type: VARCHAR
+      description: Always null for blended ROAS
+      filterable: false
+      groupby: false
+
+    - column_name: order_count
+      type: INTEGER
+      description: Number of all orders (attributed + organic)
+      filterable: false
+      groupby: false
+
+    - column_name: total_spend
+      type: NUMERIC
+      description: Total ad spend across platforms
+      filterable: false
+      groupby: false
+
+    - column_name: total_gross_revenue
+      type: NUMERIC
+      description: Total gross revenue from all orders
+      filterable: false
+      groupby: false
+
+    - column_name: total_net_revenue
+      type: NUMERIC
+      description: Total net revenue from all orders (after refunds)
+      filterable: false
+      groupby: false
+
+    - column_name: gross_roas
+      type: NUMERIC
+      description: Blended Gross ROAS (all gross revenue / ad spend)
+      filterable: false
+      groupby: false
+
+    - column_name: net_roas
+      type: NUMERIC
+      description: Blended Net ROAS (all net revenue / ad spend)
+      filterable: false
+      groupby: false
+
+    - column_name: avg_order_value_gross
+      type: NUMERIC
+      description: Average gross order value
+      filterable: false
+      groupby: false
+
+    - column_name: avg_order_value_net
+      type: NUMERIC
+      description: Average net order value
+      filterable: false
+      groupby: false
+
+    - column_name: metric_version
+      type: VARCHAR
+      description: Always 'v2' for this dataset
+      filterable: true
+      groupby: false
+
+  metrics:
+    - metric_name: total_gross_roas
+      expression: AVG(gross_roas)
+      description: Average Blended Gross ROAS across rows
+
+    - metric_name: total_net_roas
+      expression: AVG(net_roas)
+      description: Average Blended Net ROAS across rows
+
+    - metric_name: sum_spend
+      expression: SUM(total_spend)
+      description: Total ad spend
+
+    - metric_name: sum_gross_revenue
+      expression: SUM(total_gross_revenue)
+      description: Total gross revenue (all orders)
+
+    - metric_name: sum_net_revenue
+      expression: SUM(total_net_revenue)
+      description: Total net revenue (all orders)
+
+    - metric_name: total_orders
+      expression: SUM(order_count)
+      description: Total order count (all orders)
+
+  rls:
+    enabled: true
+    clause: "tenant_id = '{{ current_user.tenant_id }}'"
+
+  guardrails:
+    max_date_range_days: 90
+    query_timeout_seconds: 20
+    row_limit: 50000
+    cache_ttl_minutes: 30
+
+  visualizations_allowed:
+    - line
+    - bar
+    - table
+    - number
+
+  visualizations_disallowed:
+    - scatter
+    - geo_map
+    - box_plot
