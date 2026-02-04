@@ -5,7 +5,7 @@ IMPORTANT: This is the single source of truth for all permissions.
 All permission checks MUST reference these constants.
 UI permission gating is UX only - server-side enforcement is security.
 
-Roles are defined in Frontegg and mapped here.
+Roles are defined in Clerk and mapped here.
 
 Role Hierarchy:
 - Merchant roles: MERCHANT_ADMIN > MERCHANT_VIEWER (single tenant access)
@@ -22,9 +22,9 @@ from typing import FrozenSet
 
 class Role(str, Enum):
     """
-    User roles from Frontegg.
+    User roles from Clerk.
 
-    Keep in sync with Frontegg role configuration.
+    Keep in sync with Clerk organization role configuration.
 
     Role Categories:
     - Merchant roles: Single-tenant access for store owners/staff

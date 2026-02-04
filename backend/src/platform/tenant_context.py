@@ -185,7 +185,7 @@ class TenantContext:
         tenant_id: str,
         user_id: str,
         roles: list[str],
-        org_id: str,  # Original Frontegg org_id for reference
+        org_id: str,  # Clerk org_id for reference
         allowed_tenants: Optional[list[str]] = None,
         billing_tier: Optional[str] = None,
     ):
@@ -300,10 +300,6 @@ class ClerkJWKSClient:
         except Exception as e:
             logger.error("Unexpected error getting signing key", extra={"error": str(e)})
             raise
-
-
-# Backwards compatibility alias
-FronteggJWKSClient = ClerkJWKSClient
 
 
 class TenantContextMiddleware:

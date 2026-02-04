@@ -5,7 +5,7 @@ CRITICAL SECURITY REQUIREMENTS:
 - RBAC MUST be enforced server-side for every protected endpoint
 - UI permission gating is NOT security; treat it as UX only
 - All permission checks MUST be centralized in this module
-- Uses Frontegg for authentication and roles
+- Uses Clerk for authentication and roles
 
 Usage:
     from src.platform.rbac import require_permission, require_any_permission, require_role
