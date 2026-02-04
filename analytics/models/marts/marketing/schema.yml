@@ -1,0 +1,327 @@
+version: 2
+
+models:
+  - name: fct_marketing_metrics
+    description: |
+      ## Canonical ROAS and CAC Metrics (v1)
+
+      This model provides canonical, versioned ROAS and CAC metrics with full
+      drill-down support for the reporting layer.
+
+      ### Metric Definitions (v1)
+
+      | Metric | Formula | Description |
+      |--------|---------|-------------|
+      | **ROAS** | `SUM(revenue) / SUM(spend)` | Return on Ad Spend |
+      | **CAC** | `SUM(spend) / COUNT(new_customers)` | Customer Acquisition Cost |
+
+      ### Drill-Down Hierarchy
+
+      Supports drill-down from high-level to granular:
+      - **channel**: Aggregate by marketing channel (paid_social, paid_search, etc.)
+      - **campaign**: Drill into specific campaign performance
+      - **adset**: Granular ad set level (ad_group for Google, adset for Meta)
+
+      Use `hierarchy_level` column to filter:
+      ```sql
+      -- Channel-level ROAS
+      SELECT * FROM fct_marketing_metrics WHERE hierarchy_level = 'channel'
+
+      -- Campaign drill-down
+      SELECT * FROM fct_marketing_metrics WHERE hierarchy_level = 'campaign'
+
+      -- Ad set granularity
+      SELECT * FROM fct_marketing_metrics WHERE hierarchy_level = 'adset'
+      ```
+
+      ### Metric Versioning
+
+      All metrics include a `metric_version` column (currently 'v1').
+      This enables:
+      - Breaking changes without affecting existing reports
+      - A/B testing metric formula changes
+      - Audit trail of metric evolution
+
+      ### Data Reconciliation
+
+      These metrics reconcile exactly with raw fact tables:
+      - **ROAS**: Matches `fact_orders.revenue_net / fact_ad_spend.spend`
+      - **CAC**: Matches `fact_ad_spend.spend / COUNT(first-time customers)`
+
+      No dashboard-side calculations required.
+
+      ### Tenant Isolation
+
+      All calculations are tenant-scoped. Every row has a non-null `tenant_id`.
+
+      ### Edge Cases
+
+      | Scenario | ROAS Behavior | CAC Behavior |
+      |----------|---------------|--------------|
+      | Zero spend | Returns 0 | N/A (no spend) |
+      | Zero customers | N/A | Returns 0 |
+      | NULL values | Treated as 0 | Treated as 0 |
+      | Negative spend | Filtered out | Filtered out |
+
+      ### Usage Examples
+
+      ```sql
+      -- Monthly ROAS by channel
+      SELECT
+        period_start,
+        channel,
+        roas,
+        total_spend,
+        total_revenue
+      FROM fct_marketing_metrics
+      WHERE tenant_id = 'your_tenant'
+        AND period_type = 'monthly'
+        AND hierarchy_level = 'channel'
+        AND metric_version = 'v1'
+      ORDER BY period_start DESC;
+
+      -- CAC trend over time
+      SELECT
+        period_start,
+        cac,
+        new_customers,
+        total_spend
+      FROM fct_marketing_metrics
+      WHERE tenant_id = 'your_tenant'
+        AND period_type = 'weekly'
+        AND hierarchy_level = 'channel'
+        AND cac > 0  -- Only periods with new customers
+      ORDER BY period_start DESC;
+
+      -- Campaign-level ROAS comparison
+      SELECT
+        campaign_id,
+        channel,
+        roas,
+        total_spend,
+        total_revenue
+      FROM fct_marketing_metrics
+      WHERE tenant_id = 'your_tenant'
+        AND period_type = 'last_30_days'
+        AND hierarchy_level = 'campaign'
+      ORDER BY roas DESC;
+      ```
+
+    config:
+      tags: ['marts', 'marketing', 'metrics', 'roas', 'cac']
+
+    columns:
+      - name: id
+        description: Unique identifier for each metric row (MD5 hash of composite key)
+        tests:
+          - unique
+          - not_null
+
+      - name: metric_version
+        description: |
+          Version identifier for the metric calculation formula.
+          Current version: 'v1'
+          - v1: ROAS = SUM(revenue) / SUM(spend), CAC = SUM(spend) / COUNT(new_customers)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['v1']
+
+      - name: tenant_id
+        description: Tenant identifier (CRITICAL for multi-tenant isolation)
+        tests:
+          - not_null
+          - relationships:
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
+              config:
+                where: "tenant_id is not null"
+
+      - name: period_type
+        description: Time period granularity for aggregation
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['daily', 'weekly', 'monthly', 'all_time']
+
+      - name: period_start
+        description: Start date of the period
+        tests:
+          - not_null:
+              config:
+                where: "period_type != 'all_time'"
+
+      - name: period_end
+        description: End date of the period
+
+      - name: currency
+        description: ISO 4217 currency code (metrics calculated per currency)
+        tests:
+          - not_null
+
+      - name: hierarchy_level
+        description: |
+          Drill-down hierarchy level:
+          - 'channel': Highest level (paid_social, paid_search, etc.)
+          - 'campaign': Campaign-level detail
+          - 'adset': Most granular (ad_group/adset level)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['channel', 'campaign', 'adset']
+
+      - name: channel
+        description: Marketing channel (paid_social, paid_search, email, etc.)
+        tests:
+          - not_null
+
+      - name: campaign_id
+        description: Campaign identifier (null at channel hierarchy_level)
+
+      - name: adset_id
+        description: Ad set/ad group identifier (null at channel and campaign hierarchy_levels)
+
+      - name: total_spend
+        description: Total advertising spend for the period
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: total_revenue
+        description: Total revenue for the period (net revenue from orders)
+        tests:
+          - not_null
+
+      - name: order_count
+        description: Number of orders in the period
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: new_customers
+        description: |
+          Count of new customers acquired (first order ever).
+          Only populated at 'channel' hierarchy_level.
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: total_impressions
+        description: Total ad impressions
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+              config:
+                where: "total_impressions is not null"
+
+      - name: total_clicks
+        description: Total ad clicks
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+              config:
+                where: "total_clicks is not null"
+
+      - name: roas
+        description: |
+          **CANONICAL ROAS (v1)**
+
+          Formula: SUM(revenue) / SUM(spend)
+
+          Edge cases:
+          - Returns 0 when spend = 0 (not NULL or infinity)
+          - Uses net revenue (after refunds/cancellations)
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: cac
+        description: |
+          **CANONICAL CAC (v1)**
+
+          Formula: SUM(spend) / COUNT(new_customers)
+
+          Edge cases:
+          - Returns 0 when new_customers = 0 (not NULL or infinity)
+          - Only meaningful at 'channel' hierarchy_level
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: cpc
+        description: Cost per Click (spend / clicks)
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: cpm
+        description: Cost per Mille (spend / impressions * 1000)
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: ctr
+        description: Click-through Rate (clicks / impressions * 100)
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: aov
+        description: Average Order Value (revenue / order_count)
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+
+      - name: dbt_updated_at
+        description: Timestamp when this record was last updated by dbt
+
+    tests:
+      # Uniqueness constraint on composite key
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - tenant_id
+            - metric_version
+            - period_type
+            - period_start
+            - currency
+            - channel
+            - campaign_id
+            - adset_id
+            - hierarchy_level
+
+      # ROAS accuracy test: verify calculation matches formula
+      - dbt_utils.expression_is_true:
+          expression: |
+            CASE
+              WHEN total_spend > 0 THEN ABS(roas - (total_revenue / total_spend)) < 0.01
+              ELSE roas = 0
+            END
+          config:
+            where: "metric_version = 'v1'"
+
+      # CAC accuracy test: verify calculation matches formula
+      - dbt_utils.expression_is_true:
+          expression: |
+            CASE
+              WHEN new_customers > 0 THEN ABS(cac - (total_spend / new_customers)) < 0.01
+              ELSE cac = 0
+            END
+          config:
+            where: "metric_version = 'v1' AND hierarchy_level = 'channel'"
+
+      # Divide-by-zero handling: ROAS must be 0 when spend is 0
+      - dbt_utils.expression_is_true:
+          expression: "roas = 0"
+          config:
+            where: "total_spend = 0"
+
+      # Divide-by-zero handling: CAC must be 0 when new_customers is 0
+      - dbt_utils.expression_is_true:
+          expression: "cac = 0"
+          config:
+            where: "new_customers = 0"
