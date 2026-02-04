@@ -31,9 +31,8 @@ services:
           type: web
           name: shopify-analytics-api
           property: host
-      - key: VITE_FRONTEGG_BASE_URL
-        sync: false
-      - key: VITE_FRONTEGG_CLIENT_ID
+      # Clerk authentication (set via Render dashboard)
+      - key: VITE_CLERK_PUBLISHABLE_KEY
         sync: false
 
   # ============================================
@@ -69,10 +68,10 @@ services:
           type: redis
           name: shopify-analytics-redis
           property: connectionString
-      # Frontend authentication (set via Render dashboard)
-      - key: FRONTEGG_CLIENT_ID
+      # Clerk authentication (set via Render dashboard)
+      - key: CLERK_SECRET_KEY
         sync: false
-      - key: FRONTEGG_CLIENT_SECRET
+      - key: CLERK_WEBHOOK_SECRET
         sync: false
       # Shopify API credentials (set via Render dashboard)
       - key: SHOPIFY_API_KEY
@@ -113,9 +112,10 @@ services:
           type: redis
           name: shopify-analytics-redis
           property: connectionString
-      - key: FRONTEGG_CLIENT_ID
+      # Clerk authentication (set via Render dashboard)
+      - key: CLERK_SECRET_KEY
         sync: false
-      - key: FRONTEGG_CLIENT_SECRET
+      - key: CLERK_WEBHOOK_SECRET
         sync: false
       - key: SHOPIFY_API_KEY
         sync: false
@@ -164,9 +164,10 @@ services:
           type: redis
           name: shopify-analytics-redis
           property: connectionString
-      - key: FRONTEGG_CLIENT_ID
+      # Clerk authentication (set via Render dashboard)
+      - key: CLERK_SECRET_KEY
         sync: false
-      - key: FRONTEGG_CLIENT_SECRET
+      - key: CLERK_WEBHOOK_SECRET
         sync: false
       - key: SHOPIFY_API_KEY
         sync: false

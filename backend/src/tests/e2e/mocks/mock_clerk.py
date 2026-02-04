@@ -2,15 +2,14 @@
 Mock Clerk authentication server for E2E testing.
 
 Provides:
-- JWT token generation with Clerk-compatible claims
+- JWT token generation with configurable claims
 - JWKS endpoint for token verification
-- Multi-tenant token support via Clerk Organizations
+- Multi-tenant token support (via Clerk Organizations)
 """
 
 import json
 import time
 import uuid
-import base64
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
@@ -25,13 +24,14 @@ import jwt
 
 
 @dataclass
-class ClerkTokenClaims:
-    """Standard Clerk JWT claims for testing."""
+class TokenClaims:
+    """Standard JWT claims for testing."""
+    tenant_id: str
     user_id: str
-    org_id: str
-    org_role: str
     email: str
-    metadata: Dict[str, Any]
+    roles: List[str]
+    entitlements: List[str]
+    allowed_tenants: List[str]
     exp: datetime
     iat: datetime
 
@@ -41,16 +41,16 @@ class MockClerkServer:
     Mock Clerk authentication server.
 
     Generates valid JWTs for testing with configurable:
-    - Organization context (org_id)
-    - Organization roles (org_role)
-    - Custom metadata (roles, entitlements, allowed_tenants, billing_tier)
+    - Tenant context (org_id)
+    - User roles
+    - Feature entitlements
     - Multi-tenant access (agency users)
 
     Usage:
         mock = MockClerkServer()
         token = mock.create_test_token(
-            org_id="org_123",
-            metadata={"billing_tier": "growth", "roles": ["MERCHANT_ADMIN"]}
+            tenant_id="tenant-123",
+            entitlements=["AI_INSIGHTS", "AI_ACTIONS"]
         )
 
         # Use token in test requests
@@ -59,19 +59,14 @@ class MockClerkServer:
         })
     """
 
-    # Default Clerk Frontend API URL for tests
-    DEFAULT_ISSUER = "https://test-app.clerk.accounts.dev"
-
-    def __init__(self, key_id: str = "test-key-1", issuer: Optional[str] = None):
+    def __init__(self, key_id: str = "test-key-1"):
         """
         Initialize mock Clerk server with RSA key pair.
 
         Args:
             key_id: Key ID (kid) to use in JWT headers
-            issuer: Clerk issuer URL (defaults to test URL)
         """
         self.key_id = key_id
-        self.issuer = issuer or self.DEFAULT_ISSUER
         self._private_key, self._public_key = self._generate_rsa_keys()
         self._tokens_issued: List[Dict] = []
 
@@ -87,25 +82,25 @@ class MockClerkServer:
 
     def create_test_token(
         self,
-        org_id: str,
+        tenant_id: str,
         user_id: Optional[str] = None,
         email: Optional[str] = None,
-        org_role: str = "org:member",
-        org_permissions: Optional[List[str]] = None,
-        metadata: Optional[Dict] = None,
+        roles: Optional[List[str]] = None,
+        entitlements: Optional[List[str]] = None,
+        allowed_tenants: Optional[List[str]] = None,
         expires_in_hours: int = 1,
         custom_claims: Optional[Dict] = None,
     ) -> str:
         """
-        Create a test JWT with Clerk-compatible claims.
+        Create a test JWT with specified claims.
 
         Args:
-            org_id: Organization ID (tenant ID)
+            tenant_id: Primary tenant ID (becomes org_id in token)
             user_id: User ID (auto-generated if not provided)
             email: User email
-            org_role: Clerk organization role (e.g., "org:admin", "org:member")
-            org_permissions: List of organization permissions
-            metadata: Custom metadata (roles, entitlements, allowed_tenants, billing_tier)
+            roles: List of roles (default: ["user"])
+            entitlements: List of feature entitlements
+            allowed_tenants: List of allowed tenant IDs for multi-tenant access
             expires_in_hours: Token expiration time
             custom_claims: Additional custom claims to include
 
@@ -113,42 +108,24 @@ class MockClerkServer:
             Signed JWT string
         """
         now = datetime.now(timezone.utc)
-        user_id = user_id or f"user_{uuid.uuid4().hex[:8]}"
 
-        # Ensure metadata has required fields for our app
-        metadata = metadata or {}
-        if "roles" not in metadata:
-            # Map Clerk org_role to app roles
-            role_mapping = {
-                "org:admin": "MERCHANT_ADMIN",
-                "org:member": "MERCHANT_VIEWER",
-                "admin": "ADMIN",
-            }
-            metadata["roles"] = [role_mapping.get(org_role, "MERCHANT_VIEWER")]
-        if "allowed_tenants" not in metadata:
-            metadata["allowed_tenants"] = [org_id]
-        if "billing_tier" not in metadata:
-            metadata["billing_tier"] = "free"
-
-        # Build Clerk-compatible claims
+        # Build claims (Clerk JWT format)
         claims = {
-            # Standard JWT claims
-            "sub": user_id,
+            "sub": user_id or f"user_{uuid.uuid4().hex[:24]}",
+            "email": email or f"test-{uuid.uuid4().hex[:8]}@example.com",
+            "org_id": tenant_id,  # Clerk organization ID
+            "org_role": roles[0] if roles else "org:member",  # Clerk org role format
+            "org_permissions": roles or ["org:member"],
+            "metadata": {
+                "roles": roles or ["user"],
+                "entitlements": entitlements or [],
+                "allowed_tenants": allowed_tenants or [tenant_id],
+            },
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(hours=expires_in_hours)).timestamp()),
-            "iss": self.issuer,
-
-            # Clerk-specific claims
-            "azp": "pk_test_abc123",  # Authorized party (publishable key)
-            "org_id": org_id,
-            "org_role": org_role,
-            "org_permissions": org_permissions or [],
-
-            # Custom metadata for our app
-            "metadata": metadata,
-
-            # Optional email
-            "email": email or f"test-{uuid.uuid4().hex[:8]}@example.com",
+            "iss": "https://clerk.example.com",  # Clerk issuer format
+            "azp": "test-clerk-publishable-key",  # Clerk authorized party
+            "sid": f"sess_{uuid.uuid4().hex[:24]}",  # Clerk session ID
         }
 
         # Add custom claims
@@ -157,8 +134,8 @@ class MockClerkServer:
 
         # Record token for debugging
         self._tokens_issued.append({
-            "org_id": org_id,
-            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "user_id": claims["sub"],
             "issued_at": now.isoformat(),
         })
 
@@ -180,64 +157,61 @@ class MockClerkServer:
 
     def create_admin_token(
         self,
-        org_id: str,
+        tenant_id: str,
         user_id: Optional[str] = None,
     ) -> str:
         """Create a token with admin role."""
         return self.create_test_token(
-            org_id=org_id,
+            tenant_id=tenant_id,
             user_id=user_id,
-            org_role="org:admin",
-            metadata={
-                "roles": ["MERCHANT_ADMIN"],
-                "billing_tier": "growth",
-                "allowed_tenants": [org_id],
-            },
+            roles=["admin", "user"],
+            entitlements=[
+                "AI_INSIGHTS",
+                "AI_RECOMMENDATIONS",
+                "AI_ACTIONS",
+                "ADVANCED_ANALYTICS",
+            ],
         )
 
     def create_agency_token(
         self,
-        primary_org_id: str,
+        primary_tenant_id: str,
         allowed_tenants: List[str],
         user_id: Optional[str] = None,
     ) -> str:
         """Create a token for agency users with multi-tenant access."""
         return self.create_test_token(
-            org_id=primary_org_id,
+            tenant_id=primary_tenant_id,
             user_id=user_id,
-            org_role="org:admin",
-            metadata={
-                "roles": ["AGENCY_ADMIN"],
-                "billing_tier": "enterprise",
-                "allowed_tenants": allowed_tenants,
-            },
+            roles=["agency_user", "user"],
+            allowed_tenants=allowed_tenants,
+            entitlements=["AI_INSIGHTS", "AI_RECOMMENDATIONS"],
         )
 
-    def create_free_tier_token(self, org_id: str) -> str:
+    def create_free_tier_token(self, tenant_id: str) -> str:
         """Create a token for free tier users (no AI entitlements)."""
         return self.create_test_token(
-            org_id=org_id,
-            org_role="org:member",
-            metadata={
-                "roles": ["MERCHANT_VIEWER"],
-                "billing_tier": "free",
-                "allowed_tenants": [org_id],
-            },
+            tenant_id=tenant_id,
+            roles=["user"],
+            entitlements=[],  # No AI features
         )
 
-    def create_expired_token(self, org_id: str) -> str:
+    def create_expired_token(self, tenant_id: str) -> str:
         """Create an expired token (for testing auth failures)."""
         now = datetime.now(timezone.utc)
 
         claims = {
-            "sub": f"user_{uuid.uuid4().hex[:8]}",
-            "org_id": org_id,
+            "sub": f"user_{uuid.uuid4().hex[:24]}",
+            "org_id": tenant_id,
             "org_role": "org:member",
-            "metadata": {"roles": ["MERCHANT_VIEWER"], "billing_tier": "free"},
+            "metadata": {
+                "roles": ["user"],
+                "entitlements": [],
+            },
             "iat": int((now - timedelta(hours=2)).timestamp()),
             "exp": int((now - timedelta(hours=1)).timestamp()),  # Already expired
-            "iss": self.issuer,
-            "azp": "pk_test_abc123",
+            "iss": "https://clerk.example.com",
+            "azp": "test-clerk-publishable-key",
         }
 
         private_key_pem = self._private_key.private_bytes(
@@ -260,6 +234,9 @@ class MockClerkServer:
         This is what the application fetches from Clerk to verify tokens.
         """
         public_numbers = self._public_key.public_numbers()
+
+        # Convert to base64url encoding
+        import base64
 
         def int_to_base64url(n: int, length: int) -> str:
             data = n.to_bytes(length, byteorder='big')
@@ -302,6 +279,9 @@ class MockClerkServer:
 
             if "/.well-known/jwks.json" in path or "/jwks" in path:
                 return httpx.Response(200, json=self.get_jwks())
+            elif "/oauth/token" in path:
+                # Token endpoint (not typically needed for tests)
+                return httpx.Response(200, json={"access_token": "mock"})
             else:
                 return httpx.Response(404, json={"error": "Not found"})
 
