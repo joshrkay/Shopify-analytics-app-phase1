@@ -16,12 +16,19 @@ AGENCY USER SUPPORT:
 AUTHENTICATION PROVIDER: Clerk
 - JWT verification via Clerk JWKS endpoint
 - Supports Clerk Organizations for multi-tenancy
+
+AUDIT LOGGING:
+- All tenant context violations are logged to audit trail
+- Violations include: missing auth, missing tenant, cross-tenant access
+- Audit logs are append-only for compliance (SOC2, GDPR)
 """
 
 import os
 import logging
+import uuid
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+from enum import Enum
 
 import httpx
 from fastapi import Request, HTTPException, status
@@ -34,6 +41,124 @@ import json
 from src.constants.permissions import has_multi_tenant_access, RoleCategory, get_primary_role_category
 
 logger = logging.getLogger(__name__)
+
+
+class TenantViolationType(str, Enum):
+    """Types of tenant context violations for audit logging."""
+    MISSING_AUTH_TOKEN = "missing_auth_token"
+    INVALID_TOKEN = "invalid_token"
+    MISSING_ORG_ID = "missing_org_id"
+    MISSING_USER_ID = "missing_user_id"
+    SERVICE_UNAVAILABLE = "service_unavailable"
+
+
+def _emit_tenant_violation_audit_log(
+    request: Request,
+    violation_type: TenantViolationType,
+    error_message: str,
+    user_id: Optional[str] = None,
+    org_id: Optional[str] = None,
+    extra_metadata: Optional[dict] = None,
+) -> str:
+    """
+    Emit an audit log for tenant context violations.
+
+    This function is designed to never fail - if audit logging fails,
+    it logs to the fallback logger but doesn't crash the request.
+
+    Args:
+        request: FastAPI Request object
+        violation_type: Type of violation
+        error_message: Human-readable error message
+        user_id: User ID if available
+        org_id: Organization/tenant ID if available
+        extra_metadata: Additional metadata to include
+
+    Returns:
+        Correlation ID for the violation
+    """
+    correlation_id = str(uuid.uuid4())
+
+    # Extract client info
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        ip_address = forwarded_for.split(",")[0].strip()
+    else:
+        ip_address = request.client.host if request.client else None
+
+    user_agent = request.headers.get("User-Agent")
+
+    # Build violation metadata
+    metadata = {
+        "violation_type": violation_type.value,
+        "error_message": error_message,
+        "path": str(request.url.path),
+        "method": request.method,
+        "user_id": user_id,
+        "org_id": org_id,
+        **(extra_metadata or {}),
+    }
+
+    # Log at WARNING level (for monitoring and alerting)
+    logger.warning(
+        "Tenant context violation",
+        extra={
+            "correlation_id": correlation_id,
+            "violation_type": violation_type.value,
+            "path": request.url.path,
+            "method": request.method,
+            "ip_address": ip_address,
+            "user_id": user_id,
+            "org_id": org_id,
+        }
+    )
+
+    # Try to write to audit database (lazy import to avoid circular deps)
+    try:
+        from src.platform.audit import (
+            AuditEvent,
+            AuditAction,
+            AuditOutcome,
+            write_audit_log_sync,
+        )
+        from src.database.session import get_db_session_sync
+
+        db = get_db_session_sync()
+        try:
+            event = AuditEvent(
+                tenant_id=org_id or "UNKNOWN",
+                action=AuditAction.SECURITY_CROSS_TENANT_DENIED,
+                user_id=user_id,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                resource_type="tenant_context",
+                resource_id=org_id,
+                metadata=metadata,
+                correlation_id=correlation_id,
+                source="api",
+                outcome=AuditOutcome.DENIED,
+                error_code=violation_type.value,
+            )
+            write_audit_log_sync(db, event)
+        except Exception as audit_error:
+            # Never fail on audit logging errors
+            logger.error(
+                "Failed to write tenant violation to audit log",
+                extra={
+                    "error": str(audit_error),
+                    "correlation_id": correlation_id,
+                }
+            )
+        finally:
+            db.close()
+    except ImportError:
+        # Audit module not available - log to fallback
+        logger.error(
+            "Audit module not available for tenant violation logging",
+            extra={"correlation_id": correlation_id}
+        )
+
+    return correlation_id
 
 # Security scheme for extracting Bearer token
 security = HTTPBearer(auto_error=False)
@@ -241,6 +366,12 @@ class TenantContextMiddleware:
                 "Authentication not configured - protected endpoint accessed",
                 extra={"path": request.url.path, "method": request.method}
             )
+            # Emit audit log for service unavailable
+            _emit_tenant_violation_audit_log(
+                request=request,
+                violation_type=TenantViolationType.SERVICE_UNAVAILABLE,
+                error_message="Authentication service not configured",
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Authentication service not configured. Please set CLERK_FRONTEND_API environment variable."
@@ -254,6 +385,12 @@ class TenantContextMiddleware:
                 "path": request.url.path,
                 "method": request.method
             })
+            # Emit audit log for missing token
+            _emit_tenant_violation_audit_log(
+                request=request,
+                violation_type=TenantViolationType.MISSING_AUTH_TOKEN,
+                error_message="Missing or invalid authorization token",
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Missing or invalid authorization token"
@@ -317,6 +454,13 @@ class TenantContextMiddleware:
                 logger.error("JWT missing org_id", extra={
                     "payload_keys": list(payload.keys())
                 })
+                # Emit audit log for missing org_id
+                _emit_tenant_violation_audit_log(
+                    request=request,
+                    violation_type=TenantViolationType.MISSING_ORG_ID,
+                    error_message="Token missing organization identifier",
+                    user_id=str(user_id) if user_id else None,
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Token missing organization identifier. Ensure user is part of a Clerk Organization."
@@ -326,6 +470,13 @@ class TenantContextMiddleware:
                 logger.error("JWT missing user_id (sub)", extra={
                     "payload_keys": list(payload.keys())
                 })
+                # Emit audit log for missing user_id
+                _emit_tenant_violation_audit_log(
+                    request=request,
+                    violation_type=TenantViolationType.MISSING_USER_ID,
+                    error_message="Token missing user identifier",
+                    org_id=str(org_id) if org_id else None,
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Token missing user identifier"
@@ -375,6 +526,13 @@ class TenantContextMiddleware:
                 "error": str(e),
                 "path": request.url.path
             })
+            # Emit audit log for invalid token
+            _emit_tenant_violation_audit_log(
+                request=request,
+                violation_type=TenantViolationType.INVALID_TOKEN,
+                error_message=f"Invalid or expired token: {str(e)}",
+                extra_metadata={"error_type": type(e).__name__},
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Invalid or expired token: {str(e)}"
