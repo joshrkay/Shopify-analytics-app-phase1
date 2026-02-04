@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional, List
 
-from sqlalchemy import Column, String, Boolean, DateTime, Index
+from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 
@@ -124,12 +124,8 @@ class User(Base, TimestampMixin):
         cascade="all, delete-orphan"
     )
 
-    # Indexes
-    __table_args__ = (
-        Index("ix_users_email", "email"),
-        Index("ix_users_active", "is_active"),
-        Index("ix_users_clerk_id", "clerk_user_id"),
-    )
+    # Note: Indexes are defined via index=True on columns above
+    # SQLAlchemy auto-generates index names like ix_users_email, ix_users_is_active, etc.
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, clerk_user_id={self.clerk_user_id}, email={self.email})>"
