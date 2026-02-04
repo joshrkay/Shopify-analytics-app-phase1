@@ -82,6 +82,7 @@ def setup_test_env(monkeypatch):
     """Set up test environment variables."""
     monkeypatch.setenv("FRONTEGG_CLIENT_ID", "test-client-id")
     monkeypatch.setenv("FRONTEGG_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("CLERK_FRONTEND_API", "test.clerk.accounts.dev")
 
 
 @pytest.fixture
