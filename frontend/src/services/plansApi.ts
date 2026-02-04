@@ -14,44 +14,23 @@ import type {
   ShopifyValidationRequest,
   ShopifyValidationResponse,
 } from '../types/plans';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-
-class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public detail?: string
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+import { API_BASE_URL, createHeaders, ApiError } from './apiUtils';
 
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = localStorage.getItem('auth_token');
-
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-
-  if (token) {
-    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
-  }
-
   const response = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
-    headers,
+    headers: {
+      ...createHeaders(),
+      ...options.headers,
+    },
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new ApiError(
-      errorData.detail || `HTTP ${response.status}`,
-      response.status,
-      errorData.detail
-    );
+    const error = new Error(errorData.detail || `HTTP ${response.status}`) as ApiError;
+    error.status = response.status;
+    error.detail = errorData.detail;
+    throw error;
   }
 
   return response;
@@ -152,5 +131,5 @@ export const plansApi = {
   },
 };
 
-export { ApiError };
+export { ApiError } from './apiUtils';
 export default plansApi;

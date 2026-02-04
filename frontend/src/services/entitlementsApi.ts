@@ -4,41 +4,7 @@
  * Handles API calls for feature entitlements and billing state.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
-
-/**
- * Get the current JWT token from localStorage.
- */
-function getAuthToken(): string | null {
-  return localStorage.getItem('jwt_token') || localStorage.getItem('auth_token');
-}
-
-/**
- * Create headers with authentication.
- */
-function createHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  return headers;
-}
-
-/**
- * Handle API response and throw on error.
- */
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `API error: ${response.status}`);
-  }
-  return response.json();
-}
+import { API_BASE_URL, createHeaders, handleResponse } from './apiUtils';
 
 /**
  * Feature entitlement information.

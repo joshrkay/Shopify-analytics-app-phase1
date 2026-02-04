@@ -39,6 +39,7 @@ def mock_frontegg_client():
 def setup_test_env(monkeypatch):
     """Set up test environment variables."""
     monkeypatch.setenv("FRONTEGG_CLIENT_ID", "test-client-id")
+    monkeypatch.setenv("CLERK_FRONTEND_API", "test.clerk.accounts.dev")
 
 
 @pytest.fixture
@@ -258,9 +259,9 @@ class TestFeatureFlagDecorators:
         mock_jwt_decode.return_value = {
             "org_id": "tenant-123",
             "sub": "user-456",
-            "roles": ["admin"],
+            "metadata": {"roles": ["admin"]},
             "aud": "test-client-id",
-            "iss": "https://api.frontegg.com",
+            "iss": "https://test.clerk.accounts.dev",
             "exp": 9999999999,
         }
 
@@ -295,9 +296,9 @@ class TestFeatureFlagDecorators:
         mock_jwt_decode.return_value = {
             "org_id": "tenant-123",
             "sub": "user-456",
-            "roles": ["admin"],
+            "metadata": {"roles": ["admin"]},
             "aud": "test-client-id",
-            "iss": "https://api.frontegg.com",
+            "iss": "https://test.clerk.accounts.dev",
             "exp": 9999999999,
         }
 
@@ -331,9 +332,9 @@ class TestFeatureFlagDecorators:
         mock_jwt_decode.return_value = {
             "org_id": "tenant-123",
             "sub": "user-456",
-            "roles": ["admin"],
+            "metadata": {"roles": ["admin"]},
             "aud": "test-client-id",
-            "iss": "https://api.frontegg.com",
+            "iss": "https://test.clerk.accounts.dev",
             "exp": 9999999999,
         }
 

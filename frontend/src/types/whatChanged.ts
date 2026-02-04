@@ -4,6 +4,24 @@
  * Provides type definitions for the merchant-safe debug panel.
  */
 
+// Import shared utilities
+import {
+  formatRelativeTime as _formatRelativeTime,
+  formatDuration,
+  formatRowCount,
+} from '../utils/dateUtils';
+
+// Re-export shared utilities for backwards compatibility
+export { formatDuration, formatRowCount };
+
+/**
+ * Format relative time (e.g., "2 hours ago").
+ * Uses verbose format for backwards compatibility with existing consumers.
+ */
+export function formatRelativeTime(dateString: string): string {
+  return _formatRelativeTime(dateString, { verbose: true });
+}
+
 // =============================================================================
 // Enum Types
 // =============================================================================
@@ -264,47 +282,6 @@ export function getFreshnessLabel(status: FreshnessStatus): string {
     unknown: 'Unknown',
   };
   return labels[status];
-}
-
-/**
- * Format relative time (e.g., "2 hours ago").
- */
-export function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-  });
-}
-
-/**
- * Format duration in seconds to human-readable format.
- */
-export function formatDuration(seconds?: number): string {
-  if (seconds === undefined || seconds === null) return '-';
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-}
-
-/**
- * Format row count with commas.
- */
-export function formatRowCount(count?: number): string {
-  if (count === undefined || count === null) return '-';
-  return count.toLocaleString();
 }
 
 /**

@@ -29,10 +29,8 @@ from src.models.llm_routing import (
     LLMPromptTemplate,
     LLMUsageLog,
 )
-from src.services.billing_entitlements import (
-    BillingEntitlementsService,
-    BillingFeature,
-)
+from src.services.billing_entitlements import BillingEntitlementsService
+from src.api.dependencies.entitlements import check_ai_insights_entitlement as check_llm_routing_entitlement
 
 logger = logging.getLogger(__name__)
 
@@ -136,43 +134,6 @@ class UsageLogListResponse(BaseModel):
     logs: List[UsageLogResponse]
     total: int
     has_more: bool
-
-
-# =============================================================================
-# Dependencies
-# =============================================================================
-
-
-def check_llm_routing_entitlement(
-    request: Request,
-    db_session=Depends(get_db_session),
-):
-    """
-    Dependency to check LLM routing entitlement.
-
-    LLM routing requires Growth tier or higher.
-    Raises 402 Payment Required if tenant is not entitled.
-    """
-    tenant_ctx = get_tenant_context(request)
-    service = BillingEntitlementsService(db_session, tenant_ctx.tenant_id)
-
-    # Check for AI features entitlement (proxy for LLM routing)
-    result = service.check_feature_entitlement(BillingFeature.AI_INSIGHTS)
-
-    if not result.is_entitled:
-        logger.warning(
-            "LLM routing access denied - not entitled",
-            extra={
-                "tenant_id": tenant_ctx.tenant_id,
-                "current_tier": result.current_tier,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"LLM routing requires a {result.required_tier or 'paid'} plan",
-        )
-
-    return db_session
 
 
 # =============================================================================

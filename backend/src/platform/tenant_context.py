@@ -12,6 +12,10 @@ AGENCY USER SUPPORT:
 - Active tenant_id can be switched via store selector (updates JWT context)
 - RLS enforces: tenant_id IN ({{ current_user.allowed_tenants }})
 - No wildcard access - explicit tenant_id list required
+
+AUTHENTICATION PROVIDER: Clerk
+- JWT verification via Clerk JWKS endpoint
+- Supports Clerk Organizations for multi-tenancy
 """
 
 import os
@@ -129,23 +133,35 @@ class TenantContext:
         return f"TenantContext(tenant_id={self.tenant_id}, user_id={self.user_id})"
 
 
-class FronteggJWKSClient:
+class ClerkJWKSClient:
     """
-    Fetches and manages Frontegg JWKS for JWT verification.
-    
+    Fetches and manages Clerk JWKS for JWT verification.
+
     Uses PyJWT's PyJWKClient for robust JWKS handling.
+
+    Clerk JWKS endpoint: https://<clerk-frontend-api>/.well-known/jwks.json
     """
-    
-    def __init__(self, client_id: str):
-        self.client_id = client_id
-        self.jwks_url = "https://api.frontegg.com/.well-known/jwks.json"
+
+    def __init__(self, clerk_frontend_api: str):
+        """
+        Initialize Clerk JWKS client.
+
+        Args:
+            clerk_frontend_api: Clerk Frontend API URL (e.g., 'clerk.your-domain.com' or 'your-app.clerk.accounts.dev')
+        """
+        self.clerk_frontend_api = clerk_frontend_api.rstrip('/')
+        # Construct JWKS URL from Clerk Frontend API
+        if not self.clerk_frontend_api.startswith('http'):
+            self.clerk_frontend_api = f"https://{self.clerk_frontend_api}"
+        self.jwks_url = f"{self.clerk_frontend_api}/.well-known/jwks.json"
         # PyJWT's PyJWKClient handles caching automatically
         self._jwks_client = PyJWKClient(self.jwks_url)
-    
+        logger.info(f"Clerk JWKS client initialized with URL: {self.jwks_url}")
+
     def get_signing_key(self, token: str):
         """
         Get signing key for token from JWKS.
-        
+
         Returns the signing key object from PyJWKClient.
         """
         try:
@@ -153,40 +169,61 @@ class FronteggJWKSClient:
             signing_key = self._jwks_client.get_signing_key_from_jwt(token)
             return signing_key
         except PyJWKClientError as e:
-            logger.error("Failed to get signing key from JWKS", extra={"error": str(e)})
+            logger.error("Failed to get signing key from Clerk JWKS", extra={"error": str(e), "jwks_url": self.jwks_url})
             raise
         except Exception as e:
             logger.error("Unexpected error getting signing key", extra={"error": str(e)})
             raise
 
 
+# Backwards compatibility alias
+FronteggJWKSClient = ClerkJWKSClient
+
+
 class TenantContextMiddleware:
     """
     FastAPI middleware that enforces tenant isolation.
-    
-    Extracts tenant_id from Frontegg JWT and attaches to request.state.
+
+    Extracts tenant_id from Clerk JWT and attaches to request.state.
     Rejects all requests without valid tenant context.
+
+    Clerk JWT Claims:
+    - sub: User ID
+    - azp: Authorized party (publishable key)
+    - org_id: Organization ID (for multi-tenancy)
+    - org_role: Organization role (e.g., "org:admin")
+    - org_permissions: Organization permissions
+    - metadata: Custom session/user metadata
     """
-    
+
     def __init__(self):
         """
         Initialize middleware with lazy JWKS client creation.
-        
+
         Environment variables are NOT checked here to allow module import
         without env vars present. Validation happens in app lifespan startup,
         and JWKS client is created lazily on first request.
         """
         self._jwks_client = None
-        self.issuer = "https://api.frontegg.com"
-    
+        self._issuer = None
+
     def _get_jwks_client(self):
         """Get or create JWKS client (lazy initialization)."""
         if self._jwks_client is None:
-            client_id = os.getenv("FRONTEGG_CLIENT_ID")
-            if not client_id:
-                raise ValueError("FRONTEGG_CLIENT_ID environment variable is required")
-            self._jwks_client = FronteggJWKSClient(client_id)
+            clerk_frontend_api = os.getenv("CLERK_FRONTEND_API")
+            if not clerk_frontend_api:
+                raise ValueError("CLERK_FRONTEND_API environment variable is required")
+            self._jwks_client = ClerkJWKSClient(clerk_frontend_api)
+            # Clerk issuer is the frontend API URL
+            self._issuer = self._jwks_client.clerk_frontend_api
         return self._jwks_client
+
+    @property
+    def issuer(self):
+        """Get Clerk issuer URL (lazy initialization)."""
+        if self._issuer is None:
+            self._get_jwks_client()
+        return self._issuer
     
     async def __call__(self, request: Request, call_next):
         """
@@ -206,12 +243,12 @@ class TenantContextMiddleware:
             )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Authentication service not configured. Please set FRONTEGG_CLIENT_ID environment variable."
+                detail="Authentication service not configured. Please set CLERK_FRONTEND_API environment variable."
             )
-        
+
         # Extract Bearer token
         credentials: Optional[HTTPAuthorizationCredentials] = await security(request)
-        
+
         if not credentials or not credentials.credentials:
             logger.warning("Request missing authorization token", extra={
                 "path": request.url.path,
@@ -221,55 +258,82 @@ class TenantContextMiddleware:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Missing or invalid authorization token"
             )
-        
+
         token = credentials.credentials
-        
+
         try:
             # Get signing key from JWKS (PyJWKClient handles fetching/caching)
             jwks_client = self._get_jwks_client()
             signing_key = jwks_client.get_signing_key(token)
-            
+
             # Decode and verify token using PyJWT
+            # Clerk uses RS256 and issuer is the Clerk Frontend API URL
             payload = jwt.decode(
                 token,
                 signing_key.key,
-                algorithms=["RS256"],  # Frontegg uses RS256
-                audience=jwks_client.client_id,
+                algorithms=["RS256"],
                 issuer=self.issuer,
                 options={
                     "verify_signature": True,
-                    "verify_aud": True,
+                    "verify_aud": False,  # Clerk doesn't always include aud claim
                     "verify_iss": True,
                     "verify_exp": True
                 }
             )
-            
-            # Extract tenant context from payload
-            org_id = payload.get("org_id") or payload.get("organizationId")
-            user_id = payload.get("sub") or payload.get("userId") or payload.get("user_id")
-            roles = payload.get("roles", [])
-            
+
+            # Extract tenant context from Clerk JWT payload
+            # Clerk claims:
+            # - sub: User ID
+            # - org_id: Organization ID (Clerk Organizations)
+            # - org_role: Organization role (e.g., "org:admin", "org:member")
+            # - org_permissions: Organization permissions array
+            # - metadata: Custom session/user metadata (contains allowed_tenants, billing_tier, etc.)
+
+            user_id = payload.get("sub")
+            org_id = payload.get("org_id")
+
+            # Extract custom metadata (Clerk stores custom claims in metadata or public_metadata)
+            metadata = payload.get("metadata", {}) or payload.get("public_metadata", {}) or {}
+
+            # Extract roles - Clerk uses org_role (single role) or custom roles in metadata
+            org_role = payload.get("org_role", "")
+            org_permissions = payload.get("org_permissions", [])
+
+            # Convert Clerk org_role to roles list
+            # Clerk org_role format: "org:admin", "org:member", etc.
+            roles = metadata.get("roles", [])
+            if not roles and org_role:
+                # Map Clerk org_role to application roles
+                role_mapping = {
+                    "org:admin": "MERCHANT_ADMIN",
+                    "org:member": "MERCHANT_VIEWER",
+                    "admin": "ADMIN",
+                    "owner": "OWNER",
+                }
+                mapped_role = role_mapping.get(org_role, org_role.replace("org:", "").upper())
+                roles = [mapped_role]
+
             if not org_id:
                 logger.error("JWT missing org_id", extra={
                     "payload_keys": list(payload.keys())
                 })
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Token missing organization identifier"
+                    detail="Token missing organization identifier. Ensure user is part of a Clerk Organization."
                 )
-            
+
             if not user_id:
-                logger.error("JWT missing user_id", extra={
+                logger.error("JWT missing user_id (sub)", extra={
                     "payload_keys": list(payload.keys())
                 })
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Token missing user identifier"
                 )
-            
-            # Extract allowed_tenants for agency users (from JWT claim)
-            allowed_tenants = payload.get("allowed_tenants", [])
-            billing_tier = payload.get("billing_tier", "free")
+
+            # Extract allowed_tenants for agency users (from metadata)
+            allowed_tenants = metadata.get("allowed_tenants", [])
+            billing_tier = metadata.get("billing_tier", "free")
 
             # For agency users, active_tenant_id may differ from org_id
             # Use 'active_tenant_id' claim if present, otherwise default to org_id

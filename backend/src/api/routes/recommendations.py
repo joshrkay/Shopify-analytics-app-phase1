@@ -31,10 +31,7 @@ from src.models.ai_recommendation import (
     EstimatedImpact,
     RiskLevel,
 )
-from src.services.billing_entitlements import (
-    BillingEntitlementsService,
-    BillingFeature,
-)
+from src.api.dependencies.entitlements import check_ai_recommendations_entitlement
 
 
 logger = logging.getLogger(__name__)
@@ -83,40 +80,6 @@ class RecommendationActionResponse(BaseModel):
 
     status: str = "ok"
     recommendation_id: str
-
-
-# =============================================================================
-# Dependencies
-# =============================================================================
-
-
-def check_ai_recommendations_entitlement(
-    request: Request,
-    db_session=Depends(get_db_session),
-):
-    """
-    Dependency to check AI recommendations entitlement.
-
-    Raises 402 Payment Required if tenant is not entitled.
-    """
-    tenant_ctx = get_tenant_context(request)
-    service = BillingEntitlementsService(db_session, tenant_ctx.tenant_id)
-    result = service.check_feature_entitlement(BillingFeature.AI_RECOMMENDATIONS)
-
-    if not result.is_entitled:
-        logger.warning(
-            "AI recommendations access denied - not entitled",
-            extra={
-                "tenant_id": tenant_ctx.tenant_id,
-                "current_tier": result.current_tier,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"AI Recommendations requires a {result.required_tier or 'paid'} plan",
-        )
-
-    return db_session
 
 
 # =============================================================================

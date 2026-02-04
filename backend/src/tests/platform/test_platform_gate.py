@@ -37,13 +37,13 @@ from src.db_base import Base
 
 @pytest.fixture
 def mock_jwt_payload_admin():
-    """JWT payload for admin user."""
+    """JWT payload for admin user (Clerk format)."""
     return {
         "org_id": "tenant-123",
         "sub": "user-admin-1",
-        "roles": ["admin", "user"],
+        "metadata": {"roles": ["admin", "user"]},
         "aud": "test-client-id",
-        "iss": "https://api.frontegg.com",
+        "iss": "https://test.clerk.accounts.dev",
         "exp": 9999999999,
         "iat": 1000000000,
     }
@@ -51,13 +51,13 @@ def mock_jwt_payload_admin():
 
 @pytest.fixture
 def mock_jwt_payload_user():
-    """JWT payload for regular user."""
+    """JWT payload for regular user (Clerk format)."""
     return {
         "org_id": "tenant-123",
         "sub": "user-regular-1",
-        "roles": ["user"],
+        "metadata": {"roles": ["user"]},
         "aud": "test-client-id",
-        "iss": "https://api.frontegg.com",
+        "iss": "https://test.clerk.accounts.dev",
         "exp": 9999999999,
         "iat": 1000000000,
     }
@@ -65,13 +65,13 @@ def mock_jwt_payload_user():
 
 @pytest.fixture
 def mock_jwt_payload_tenant_b():
-    """JWT payload for different tenant."""
+    """JWT payload for different tenant (Clerk format)."""
     return {
         "org_id": "tenant-456",
         "sub": "user-2",
-        "roles": ["admin"],
+        "metadata": {"roles": ["admin"]},
         "aud": "test-client-id",
-        "iss": "https://api.frontegg.com",
+        "iss": "https://test.clerk.accounts.dev",
         "exp": 9999999999,
         "iat": 1000000000,
     }
@@ -82,6 +82,7 @@ def setup_test_env(monkeypatch):
     """Set up test environment variables."""
     monkeypatch.setenv("FRONTEGG_CLIENT_ID", "test-client-id")
     monkeypatch.setenv("FRONTEGG_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("CLERK_FRONTEND_API", "test.clerk.accounts.dev")
 
 
 @pytest.fixture

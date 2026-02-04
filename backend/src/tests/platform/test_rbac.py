@@ -89,6 +89,7 @@ def multi_role_context():
 def setup_test_env(monkeypatch):
     """Set up test environment variables."""
     monkeypatch.setenv("FRONTEGG_CLIENT_ID", "test-client-id")
+    monkeypatch.setenv("CLERK_FRONTEND_API", "test.clerk.accounts.dev")
 
 
 # ============================================================================
@@ -240,9 +241,9 @@ class TestPermissionDecorators:
         mock_jwt_decode.return_value = {
             "org_id": "tenant-123",
             "sub": "user-admin",
-            "roles": ["admin"],
+            "metadata": {"roles": ["admin"]},
             "aud": "test-client-id",
-            "iss": "https://api.frontegg.com",
+            "iss": "https://test.clerk.accounts.dev",
             "exp": 9999999999,
         }
 
@@ -271,9 +272,9 @@ class TestPermissionDecorators:
         mock_jwt_decode.return_value = {
             "org_id": "tenant-123",
             "sub": "user-viewer",
-            "roles": ["viewer"],
+            "metadata": {"roles": ["viewer"]},
             "aud": "test-client-id",
-            "iss": "https://api.frontegg.com",
+            "iss": "https://test.clerk.accounts.dev",
             "exp": 9999999999,
         }
 
@@ -304,9 +305,9 @@ class TestPermissionDecorators:
         mock_jwt_decode.return_value = {
             "org_id": "tenant-123",
             "sub": "user-viewer",
-            "roles": ["viewer"],
+            "metadata": {"roles": ["viewer"]},
             "aud": "test-client-id",
-            "iss": "https://api.frontegg.com",
+            "iss": "https://test.clerk.accounts.dev",
             "exp": 9999999999,
         }
 
@@ -336,9 +337,9 @@ class TestPermissionDecorators:
         mock_jwt_decode.return_value = {
             "org_id": "tenant-123",
             "sub": "user-editor",
-            "roles": ["editor"],
+            "metadata": {"roles": ["editor"]},
             "aud": "test-client-id",
-            "iss": "https://api.frontegg.com",
+            "iss": "https://test.clerk.accounts.dev",
             "exp": 9999999999,
         }
 
@@ -368,9 +369,9 @@ class TestPermissionDecorators:
         mock_jwt_decode.return_value = {
             "org_id": "tenant-123",
             "sub": "user-owner",
-            "roles": ["owner"],
+            "metadata": {"roles": ["owner"]},
             "aud": "test-client-id",
-            "iss": "https://api.frontegg.com",
+            "iss": "https://test.clerk.accounts.dev",
             "exp": 9999999999,
         }
 

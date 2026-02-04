@@ -32,10 +32,7 @@ from src.database.session import get_db_session
 from src.models.ai_action import AIAction, ActionStatus, ActionType
 from src.models.action_execution_log import ActionExecutionLog
 from src.models.action_job import ActionJob, ActionJobStatus
-from src.services.billing_entitlements import (
-    BillingEntitlementsService,
-    BillingFeature,
-)
+from src.api.dependencies.entitlements import check_ai_actions_entitlement
 from src.services.action_execution_service import ActionExecutionService
 from src.services.action_rollback_service import ActionRollbackService
 from src.services.action_job_dispatcher import ActionJobDispatcher
@@ -68,35 +65,6 @@ router = APIRouter(prefix="/api/actions", tags=["actions"])
 # =============================================================================
 # Dependencies
 # =============================================================================
-
-
-def check_ai_actions_entitlement(
-    request: Request,
-    db_session=Depends(get_db_session),
-):
-    """
-    Dependency to check AI actions entitlement.
-
-    Raises 402 Payment Required if tenant is not entitled.
-    """
-    tenant_ctx = get_tenant_context(request)
-    service = BillingEntitlementsService(db_session, tenant_ctx.tenant_id)
-    result = service.check_feature_entitlement(BillingFeature.AI_ACTIONS)
-
-    if not result.is_entitled:
-        logger.warning(
-            "AI actions access denied - not entitled",
-            extra={
-                "tenant_id": tenant_ctx.tenant_id,
-                "current_tier": result.current_tier,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Action Execution requires a {result.required_tier or 'Pro'} plan",
-        )
-
-    return db_session
 
 
 def check_view_permission(request: Request):

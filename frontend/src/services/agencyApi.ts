@@ -13,47 +13,7 @@ import type {
   SwitchStoreResponse,
   UserContext,
 } from '../types/agency';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
-
-/**
- * Get the current JWT token from localStorage.
- */
-function getAuthToken(): string | null {
-  return localStorage.getItem('jwt_token');
-}
-
-/**
- * Set the JWT token in localStorage.
- */
-function setAuthToken(token: string): void {
-  localStorage.setItem('jwt_token', token);
-}
-
-/**
- * Create headers with authentication.
- */
-function createHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
-
-/**
- * Handle API response and throw on error.
- */
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `API error: ${response.status}`);
-  }
-  return response.json();
-}
+import { API_BASE_URL, createHeaders, handleResponse, setAuthToken } from './apiUtils';
 
 /**
  * Fetch assigned stores for the current agency user.

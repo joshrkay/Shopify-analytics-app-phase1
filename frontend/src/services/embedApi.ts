@@ -7,6 +7,8 @@
  * - Embed configuration retrieval
  */
 
+import { API_BASE_URL, createHeaders, handleResponse } from './apiUtils';
+
 export interface EmbedTokenResponse {
   jwt_token: string;
   expires_at: string;
@@ -32,44 +34,6 @@ export interface EmbedHealthResponse {
   embed_configured: boolean;
   superset_url_configured?: boolean;
   message?: string;
-}
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
-
-/**
- * Get the current JWT token from localStorage.
- */
-function getAuthToken(): string | null {
-  // Try both possible token keys for compatibility
-  return localStorage.getItem('jwt_token') || localStorage.getItem('auth_token');
-}
-
-/**
- * Create headers with authentication.
- */
-function createHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
-
-/**
- * Handle API response and throw on error.
- */
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.detail || `API error: ${response.status}`);
-    (error as any).status = response.status;
-    (error as any).detail = errorData.detail;
-    throw error;
-  }
-  return response.json();
 }
 
 /**

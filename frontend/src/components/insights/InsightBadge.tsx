@@ -7,9 +7,8 @@
  * Story 9.3 - Insight & Recommendation UX
  */
 
-import { useEffect, useState } from 'react';
-import { Badge, Spinner, InlineStack, Text, Tooltip } from '@shopify/polaris';
 import { getUnreadInsightsCount } from '../../services/insightsApi';
+import { NotificationBadge } from '../common/NotificationBadge';
 
 interface InsightBadgeProps {
   /**
@@ -37,78 +36,16 @@ export function InsightBadge({
   showLabel = false,
   label = 'Insights',
 }: InsightBadgeProps) {
-  const [count, setCount] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchCount = async () => {
-    try {
-      const unreadCount = await getUnreadInsightsCount();
-      setCount(unreadCount);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to fetch insights count:', err);
-      setError('Failed to load');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCount();
-
-    if (refreshInterval > 0) {
-      const interval = setInterval(fetchCount, refreshInterval);
-      return () => clearInterval(interval);
-    }
-  }, [refreshInterval]);
-
-  if (isLoading) {
-    return <Spinner size="small" />;
-  }
-
-  if (error || count === null) {
-    return null;
-  }
-
-  if (count === 0) {
-    return null;
-  }
-
-  const badgeContent = (
-    <InlineStack gap="100" blockAlign="center">
-      {showLabel && (
-        <Text as="span" variant="bodySm">
-          {label}
-        </Text>
-      )}
-      <Badge tone="attention">{count > 99 ? '99+' : count.toString()}</Badge>
-    </InlineStack>
-  );
-
-  if (onClick) {
-    return (
-      <Tooltip content={`${count} unread insight${count !== 1 ? 's' : ''}`}>
-        <button
-          onClick={onClick}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 0,
-          }}
-          aria-label={`${count} unread insights`}
-        >
-          {badgeContent}
-        </button>
-      </Tooltip>
-    );
-  }
-
   return (
-    <Tooltip content={`${count} unread insight${count !== 1 ? 's' : ''}`}>
-      {badgeContent}
-    </Tooltip>
+    <NotificationBadge
+      fetchCount={getUnreadInsightsCount}
+      onClick={onClick}
+      refreshInterval={refreshInterval}
+      showLabel={showLabel}
+      label={label}
+      singularNoun="unread insight"
+      pluralNoun="unread insights"
+    />
   );
 }
 

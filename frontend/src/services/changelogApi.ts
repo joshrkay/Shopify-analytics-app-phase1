@@ -18,69 +18,7 @@ import type {
   ChangelogFilters,
   FeatureArea,
 } from '../types/changelog';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
-/**
- * Get the current JWT token from localStorage.
- */
-function getAuthToken(): string | null {
-  return localStorage.getItem('jwt_token') || localStorage.getItem('auth_token');
-}
-
-/**
- * Create headers with authentication.
- */
-function createHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
-
-/**
- * Handle API response and throw on error.
- */
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.detail || `API error: ${response.status}`);
-    (error as Error & { status: number; detail: string }).status = response.status;
-    (error as Error & { status: number; detail: string }).detail = errorData.detail;
-    throw error;
-  }
-  return response.json();
-}
-
-/**
- * Build query string from filters.
- */
-function buildQueryString(filters: ChangelogFilters): string {
-  const params = new URLSearchParams();
-
-  if (filters.release_type) {
-    params.append('release_type', filters.release_type);
-  }
-  if (filters.feature_area) {
-    params.append('feature_area', filters.feature_area);
-  }
-  if (filters.include_read !== undefined) {
-    params.append('include_read', String(filters.include_read));
-  }
-  if (filters.limit !== undefined) {
-    params.append('limit', String(filters.limit));
-  }
-  if (filters.offset !== undefined) {
-    params.append('offset', String(filters.offset));
-  }
-
-  const queryString = params.toString();
-  return queryString ? `?${queryString}` : '';
-}
+import { API_BASE_URL, createHeaders, handleResponse, buildQueryString } from './apiUtils';
 
 /**
  * List published changelog entries with optional filtering.

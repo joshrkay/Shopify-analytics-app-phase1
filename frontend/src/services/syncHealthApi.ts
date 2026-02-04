@@ -128,42 +128,7 @@ export interface ActiveIncidentsResponse {
 // API Configuration
 // =============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
-/**
- * Get the current JWT token from localStorage.
- */
-function getAuthToken(): string | null {
-  return localStorage.getItem('jwt_token') || localStorage.getItem('auth_token');
-}
-
-/**
- * Create headers with authentication.
- */
-function createHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
-
-/**
- * Handle API response and throw on error.
- */
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.detail || `API error: ${response.status}`);
-    (error as any).status = response.status;
-    (error as any).detail = errorData.detail;
-    throw error;
-  }
-  return response.json();
-}
+import { API_BASE_URL, createHeaders, handleResponse } from './apiUtils';
 
 // =============================================================================
 // Sync Health API Functions

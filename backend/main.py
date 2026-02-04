@@ -50,9 +50,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting AI Growth Analytics API")
 
-    # Check Frontegg authentication environment variables
+    # Check Clerk authentication environment variables
     # These are optional - app can run without them but auth will be disabled
-    auth_vars = ["FRONTEGG_CLIENT_ID"]
+    auth_vars = ["CLERK_FRONTEND_API"]
     env_status = {}
     for var in auth_vars:
         value = os.getenv(var)
@@ -65,11 +65,11 @@ async def lifespan(app: FastAPI):
 
     if missing_vars:
         logger.warning(
-            f"Frontegg authentication not configured (missing: {missing_vars}). "
-            "Protected endpoints will return 503. Set FRONTEGG_CLIENT_ID to enable authentication."
+            f"Clerk authentication not configured (missing: {missing_vars}). "
+            "Protected endpoints will return 503. Set CLERK_FRONTEND_API to enable authentication."
         )
     else:
-        logger.info("Frontegg authentication configured", extra={"env_status": env_status})
+        logger.info("Clerk authentication configured", extra={"env_status": env_status})
 
     # Middleware will initialize lazily on first request if auth is configured
     logger.info(

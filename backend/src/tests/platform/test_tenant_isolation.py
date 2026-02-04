@@ -21,13 +21,13 @@ from src.repositories.base_repo import BaseRepository, TenantIsolationError
 from src.db_base import Base
 
 
-# Mock JWT payloads for testing
+# Mock JWT payloads for testing (Clerk format)
 TENANT_A_JWT_PAYLOAD = {
     "org_id": "tenant-a-org-123",
     "sub": "user-1",
-    "roles": ["admin"],
+    "metadata": {"roles": ["admin"]},
     "aud": "test-client-id",
-    "iss": "https://api.frontegg.com",
+    "iss": "https://test.clerk.accounts.dev",
     "exp": 9999999999,
     "iat": 1000000000,
 }
@@ -35,9 +35,9 @@ TENANT_A_JWT_PAYLOAD = {
 TENANT_B_JWT_PAYLOAD = {
     "org_id": "tenant-b-org-456",
     "sub": "user-2",
-    "roles": ["user"],
+    "metadata": {"roles": ["user"]},
     "aud": "test-client-id",
-    "iss": "https://api.frontegg.com",
+    "iss": "https://test.clerk.accounts.dev",
     "exp": 9999999999,
     "iat": 1000000000,
 }
@@ -64,8 +64,9 @@ def mock_jwks():
 def app_with_middleware(monkeypatch):
     """Create FastAPI app with tenant context middleware."""
     import os
-    # Set environment variable for middleware initialization
+    # Set environment variables for middleware initialization
     monkeypatch.setenv("FRONTEGG_CLIENT_ID", "test-client-id")
+    monkeypatch.setenv("CLERK_FRONTEND_API", "test.clerk.accounts.dev")
     
     app = FastAPI()
     
