@@ -34,6 +34,9 @@ from src.api.routes import admin_changelog
 from src.api.routes import what_changed
 from src.api.routes import shopify_ingestion
 from src.api.routes import ad_platform_ingestion
+from src.api.routes import webhooks_clerk
+from src.api.routes import tenant_members
+from src.api.routes import user_tenants
 from src.api.dq import routes as sync_health
 
 # Configure structured logging
@@ -181,6 +184,18 @@ app.include_router(shopify_ingestion.router)
 # Include ad platform ingestion routes (requires authentication)
 # Ad platform data source setup and sync via Airbyte
 app.include_router(ad_platform_ingestion.router)
+
+# Include Clerk webhook routes (uses Svix signature verification, not JWT)
+# Epic 1.1 - Identity synchronization from Clerk
+app.include_router(webhooks_clerk.router)
+
+# Include tenant members routes (requires authentication and TEAM_MANAGE permission)
+# Epic 1.1 - Agency tenant access management
+app.include_router(tenant_members.router)
+
+# Include user tenants routes (requires authentication)
+# Epic 1.1 - Get tenants accessible by current user
+app.include_router(user_tenants.router)
 
 
 # Global exception handler for tenant isolation errors

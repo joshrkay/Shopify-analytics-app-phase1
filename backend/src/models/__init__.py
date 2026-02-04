@@ -6,6 +6,11 @@ Tenant-scoped models inherit from TenantScopedMixin.
 """
 
 from src.models.base import TimestampMixin, TenantScopedMixin
+# Identity models (Epic 1.1)
+from src.models.organization import Organization
+from src.models.tenant import Tenant, TenantStatus
+from src.models.user import User
+from src.models.user_tenant_roles import UserTenantRole
 from src.models.store import ShopifyStore
 from src.models.plan import Plan, PlanFeature
 from src.models.subscription import Subscription
@@ -83,6 +88,12 @@ from src.models.data_change_event import (
 __all__ = [
     "TimestampMixin",
     "TenantScopedMixin",
+    # Identity models (Epic 1.1)
+    "Organization",
+    "Tenant",
+    "TenantStatus",
+    "User",
+    "UserTenantRole",
     "ShopifyStore",
     "Plan",
     "PlanFeature",

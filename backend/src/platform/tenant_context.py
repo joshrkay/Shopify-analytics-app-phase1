@@ -428,7 +428,7 @@ def get_tenant_context(request: Request) -> TenantContext:
 def require_tenant_context(func):
     """
     Decorator to ensure tenant context exists before route handler executes.
-    
+
     Usage:
         @app.get("/api/data")
         @require_tenant_context
@@ -437,7 +437,7 @@ def require_tenant_context(func):
             # Use tenant_ctx.tenant_id
     """
     from functools import wraps
-    
+
     @wraps(func)
     async def wrapper(*args, **kwargs):
         # Find Request object in args/kwargs
@@ -448,13 +448,129 @@ def require_tenant_context(func):
                 break
         if not request:
             request = kwargs.get("request")
-        
+
         if not request:
             raise ValueError("Request object not found in function arguments")
-        
+
         # Verify tenant context exists
         get_tenant_context(request)
-        
+
         return await func(*args, **kwargs)
-    
+
     return wrapper
+
+
+def get_db_allowed_tenants(session, clerk_user_id: str) -> list[str]:
+    """
+    Get allowed_tenants from database (UserTenantRole table).
+
+    This supplements the JWT-based allowed_tenants with database-granted
+    access (e.g., agency grants).
+
+    Args:
+        session: SQLAlchemy database session
+        clerk_user_id: Clerk user ID (from JWT sub claim)
+
+    Returns:
+        List of tenant_ids the user has access to
+    """
+    from src.models.user import User
+    from src.models.user_tenant_roles import UserTenantRole
+    from src.models.tenant import Tenant, TenantStatus
+
+    # Get user by clerk_user_id
+    user = session.query(User).filter(
+        User.clerk_user_id == clerk_user_id,
+        User.is_active == True,
+    ).first()
+
+    if not user:
+        return []
+
+    # Get all active tenant roles for this user
+    roles = session.query(UserTenantRole).filter(
+        UserTenantRole.user_id == user.id,
+        UserTenantRole.is_active == True,
+    ).all()
+
+    # Filter to active tenants only
+    allowed_tenants = []
+    for role in roles:
+        tenant = session.query(Tenant).filter(
+            Tenant.id == role.tenant_id,
+            Tenant.status == TenantStatus.ACTIVE,
+        ).first()
+        if tenant and tenant.id not in allowed_tenants:
+            allowed_tenants.append(tenant.id)
+
+    return allowed_tenants
+
+
+def enrich_tenant_context_from_db(
+    request: Request,
+    session,
+) -> TenantContext:
+    """
+    Enrich the existing TenantContext with database-based allowed_tenants.
+
+    This function merges JWT-based allowed_tenants with database-granted
+    access (e.g., agency grants). Use this in routes that need the complete
+    list of accessible tenants.
+
+    The active_tenant_id remains unchanged (from JWT), but allowed_tenants
+    is updated to include database grants.
+
+    Args:
+        request: FastAPI request with tenant_context in state
+        session: SQLAlchemy database session
+
+    Returns:
+        Updated TenantContext with merged allowed_tenants
+
+    Example:
+        @router.get("/my-tenants")
+        async def list_tenants(request: Request):
+            db = get_db_session(request)
+            tenant_ctx = enrich_tenant_context_from_db(request, db)
+            return {"tenants": tenant_ctx.allowed_tenants}
+    """
+    current_ctx = get_tenant_context(request)
+
+    # Get database-based allowed_tenants
+    db_tenants = get_db_allowed_tenants(session, current_ctx.user_id)
+
+    # Merge with JWT-based allowed_tenants
+    merged_tenants = list(set(current_ctx.allowed_tenants + db_tenants))
+
+    # If no change, return current context
+    if set(merged_tenants) == set(current_ctx.allowed_tenants):
+        return current_ctx
+
+    # Ensure active tenant is in merged list
+    if current_ctx.tenant_id not in merged_tenants:
+        merged_tenants.insert(0, current_ctx.tenant_id)
+
+    # Create enriched context
+    enriched_ctx = TenantContext(
+        tenant_id=current_ctx.tenant_id,
+        user_id=current_ctx.user_id,
+        roles=current_ctx.roles,
+        org_id=current_ctx.org_id,
+        allowed_tenants=merged_tenants,
+        billing_tier=current_ctx.billing_tier,
+    )
+
+    # Update request state
+    request.state.tenant_context = enriched_ctx
+
+    logger.debug(
+        "Enriched tenant context from database",
+        extra={
+            "user_id": current_ctx.user_id,
+            "jwt_tenants": len(current_ctx.allowed_tenants),
+            "db_tenants": len(db_tenants),
+            "merged_tenants": len(merged_tenants),
+        }
+    )
+
+    return enriched_ctx

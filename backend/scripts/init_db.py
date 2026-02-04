@@ -26,6 +26,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from src.db_base import Base
 
 # Import all models to register them with Base.metadata
+# Identity models (Epic 1.1)
+from src.models.organization import Organization
+from src.models.tenant import Tenant
+from src.models.user import User
+from src.models.user_tenant_roles import UserTenantRole
+# Existing models
 from src.models.plan import Plan, PlanFeature
 from src.models.store import ShopifyStore
 from src.models.subscription import Subscription
