@@ -8,7 +8,6 @@ import uuid
 import enum
 
 from sqlalchemy import Column, String, Enum, DateTime, Text, UniqueConstraint, Index
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from src.db_base import Base

@@ -5,14 +5,41 @@ Provides common functionality:
 - TimestampMixin: created_at, updated_at timestamps
 - TenantScopedMixin: tenant_id for multi-tenant isolation
 - generate_uuid: UUID generation for primary keys
+- GUID: Cross-database compatible UUID type
 """
 
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, DateTime, func
+from sqlalchemy import Column, String, DateTime, func, TypeDecorator
+from sqlalchemy.types import CHAR
 from sqlalchemy.orm import declared_attr
+
+
+class GUID(TypeDecorator):
+    """
+    Platform-independent GUID type.
+
+    Uses CHAR(36) for storage, works with PostgreSQL, SQLite, and other databases.
+    Stores UUID as string and converts to/from Python uuid.UUID on access.
+    """
+    impl = CHAR(36)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            if isinstance(value, uuid.UUID):
+                return str(value)
+            return str(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            if not isinstance(value, uuid.UUID):
+                return uuid.UUID(value)
+            return value
+        return value
 
 
 def generate_uuid() -> str:

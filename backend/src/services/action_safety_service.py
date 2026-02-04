@@ -23,12 +23,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import Column, String, Integer, DateTime, Text, Index, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Column, String, Integer, DateTime, Text, Index, UniqueConstraint, JSON
 from sqlalchemy.orm import Session
 
 from src.db_base import Base
-from src.models.base import TenantScopedMixin
+from src.models.base import TenantScopedMixin, GUID
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ class AIRateLimit(Base, TenantScopedMixin):
 
     __tablename__ = "ai_rate_limits"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
     operation_type = Column(String(50), nullable=False)
     window_start = Column(DateTime(timezone=True), nullable=False)
     window_type = Column(String(20), nullable=False, default="hourly")
@@ -64,7 +63,7 @@ class AICooldown(Base, TenantScopedMixin):
 
     __tablename__ = "ai_cooldowns"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
     platform = Column(String(50), nullable=False)
     entity_type = Column(String(50), nullable=False)
     entity_id = Column(String(255), nullable=False)
@@ -85,13 +84,13 @@ class AISafetyEvent(Base, TenantScopedMixin):
 
     __tablename__ = "ai_safety_events"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
     event_type = Column(String(50), nullable=False)
     operation_type = Column(String(50), nullable=False)
     entity_id = Column(String(255), nullable=True)
     action_id = Column(String(255), nullable=True)
     reason = Column(Text, nullable=False)
-    event_metadata = Column(JSONB, nullable=False, default=dict)
+    event_metadata = Column(JSON, nullable=False, default=dict)
     correlation_id = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

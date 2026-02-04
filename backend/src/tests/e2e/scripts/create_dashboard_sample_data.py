@@ -130,8 +130,10 @@ async def create_sample_data_local(
 
     app.dependency_overrides[get_db_session] = override_get_db
 
-    # Create async client
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    # Create async client using ASGITransport (httpx 0.23.0+ pattern)
+    import httpx
+    transport = httpx.ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Get database session for verification
         async with async_session_maker() as db_session:
             # Create sample data generator
