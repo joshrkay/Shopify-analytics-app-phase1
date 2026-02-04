@@ -28,11 +28,23 @@ def _parse_date_with_timezone(date_str: str) -> datetime:
 
 
 class MetricStatus(Enum):
-    """Status of a metric version."""
+    """
+    Status of a metric version.
 
+    Lifecycle: DRAFT -> ACTIVE -> DEPRECATED -> SUNSET -> RETIRED
+
+    - DRAFT: Under development, not available in production
+    - ACTIVE: Current production version, default for new dashboards
+    - DEPRECATED: Scheduled for removal, still queryable with warnings
+    - SUNSET: Past deprecation date, queryable but blocked in new dashboards
+    - RETIRED: No longer available, queries blocked
+    """
+
+    DRAFT = "draft"
     ACTIVE = "active"
     DEPRECATED = "deprecated"
     SUNSET = "sunset"
+    RETIRED = "retired"
 
 
 class WarningLevel(Enum):
@@ -186,6 +198,22 @@ class MetricVersionResolver:
         status_str = version_config.get("status", "active")
         status = MetricStatus(status_str)
         warnings = []
+
+        if status == MetricStatus.RETIRED:
+            # BLOCK - retired metrics cannot be used at all
+            raise ValueError(
+                f"Metric '{metric_name}' version '{version}' has been retired "
+                f"and is no longer available. "
+                f"Please use version '{metric_config.get('current_version')}'."
+            )
+
+        if status == MetricStatus.DRAFT:
+            # BLOCK - draft metrics not available in production
+            raise ValueError(
+                f"Metric '{metric_name}' version '{version}' is in draft status "
+                f"and not available for use. "
+                f"Please use version '{metric_config.get('current_version')}'."
+            )
 
         if status == MetricStatus.SUNSET:
             # BLOCK - sunset metrics cannot be used

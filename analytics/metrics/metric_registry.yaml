@@ -1,0 +1,377 @@
+# =============================================================================
+# METRIC REGISTRY - Single Source of Truth for Metric Versioning
+# =============================================================================
+#
+# This registry defines all canonical metrics, their versions, lifecycle states,
+# and governance metadata. It is the authoritative source for:
+#
+#   - Metric definitions and formulas
+#   - Version lifecycle management
+#   - Dashboard compatibility tracking
+#   - Approval and audit requirements
+#
+# PRINCIPLES:
+#   1. No silent metric changes - every change is versioned
+#   2. Every dashboard references a specific metric version
+#   3. Deprecated != deleted - old versions remain queryable
+#   4. Humans approve breaking changes
+#   5. Rollback is always possible
+#
+# =============================================================================
+
+version: "1.0"
+last_modified: "2026-02-04T00:00:00Z"
+modified_by: "data-team"
+
+# =============================================================================
+# LIFECYCLE STATES
+# =============================================================================
+# Each metric version progresses through these states:
+#
+#   draft -> active -> deprecated -> sunset -> retired
+#
+# =============================================================================
+
+lifecycle_states:
+  draft:
+    description: "Metric under development, not available in production"
+    queryable: false
+    visible_in_dashboards: false
+    requires_approval_to_promote: true
+
+  active:
+    description: "Current production metric version, default for new dashboards"
+    queryable: true
+    visible_in_dashboards: true
+    is_default: true
+
+  deprecated:
+    description: "Scheduled for removal, still queryable with warnings"
+    queryable: true
+    visible_in_dashboards: true
+    emits_deprecation_warning: true
+    requires_sunset_date: true
+    requires_migration_notice: true
+
+  sunset:
+    description: "Past deprecation date, queryable but blocked in new dashboards"
+    queryable: true
+    visible_in_dashboards: false
+    requires_explicit_opt_in: true
+    blocked_for_new_dashboards: true
+
+  retired:
+    description: "No longer available, queries blocked"
+    queryable: false
+    visible_in_dashboards: false
+    queries_blocked: true
+
+# =============================================================================
+# GOVERNANCE CONFIGURATION
+# =============================================================================
+
+governance:
+  # Breaking change policy
+  breaking_change_policy:
+    requires_approval: true
+    approval_required_from:
+      - data-governance-board
+      - product-owner
+    notification_required_for:
+      - all_affected_tenants
+      - dashboard_owners
+    minimum_notice_days: 30
+
+  # Deprecation enforcement
+  deprecation_enforcement:
+    warn_days_before_sunset: 30
+    block_days_before_sunset: 7
+    merchant_visibility:
+      - dashboard_banner
+      - email_notification
+    log_all_deprecated_queries: true
+
+  # Audit requirements
+  audit:
+    emit_events_for:
+      - version_created
+      - status_changed
+      - approval_requested
+      - approval_granted
+      - approval_rejected
+      - sunset_scheduled
+      - dashboard_version_pinned
+    retention_days: 365
+
+# =============================================================================
+# METRIC DEFINITIONS
+# =============================================================================
+
+metrics:
+  # ---------------------------------------------------------------------------
+  # ROAS - Return on Ad Spend
+  # ---------------------------------------------------------------------------
+  roas:
+    display_name: "Return on Ad Spend"
+    description: "Revenue generated per dollar of advertising spend"
+    category: "marketing"
+    owner: "data-team@company.com"
+    current_version: "v1"
+
+    versions:
+      v1:
+        status: active
+        dbt_model: "metrics/fct_roas"
+        definition: "SUM(revenue) / SUM(spend)"
+        formula_sql: |
+          CASE
+            WHEN total_spend = 0 OR total_spend IS NULL THEN 0
+            ELSE ROUND((total_revenue / total_spend)::NUMERIC, 4)
+          END
+        released_date: "2026-02-04T00:00:00Z"
+        created_by: "data-team"
+
+        # Breaking change indicator
+        breaking_change: false
+        breaking_change_reason: null
+
+        # Governance
+        approval:
+          status: "approved"
+          requested_by: "data-team"
+          requested_at: "2026-02-03T00:00:00Z"
+          approved_by: "data-governance-board"
+          approved_at: "2026-02-04T00:00:00Z"
+          approval_ticket: "ANALYTICS-001"
+          approval_notes: "Initial ROAS metric implementation for marketing analytics"
+
+        # Source dependencies
+        source_tables:
+          - fact_ad_spend
+          - fact_orders
+
+        # Edge case handling (documented)
+        edge_cases:
+          zero_spend:
+            behavior: "Returns 0"
+            rationale: "Avoids NULL/infinity, indicates no spend"
+          null_spend:
+            behavior: "Treated as 0"
+            rationale: "Defensive handling for missing data"
+          negative_revenue:
+            behavior: "Included in calculation"
+            rationale: "Reflects reality of refunds/cancellations"
+          multi_currency:
+            behavior: "Calculated separately per currency"
+            rationale: "No implicit currency conversion"
+
+        # Drill-down support
+        drill_down:
+          supported_levels:
+            - channel
+            - campaign
+            - adset
+          hierarchy: "channel -> campaign -> adset"
+
+        # Tenant isolation
+        tenant_isolation:
+          enforced: true
+          filter_column: "tenant_id"
+          test_coverage: true
+
+        # Dashboard compatibility
+        compatible_dashboards:
+          - marketing_overview
+          - campaign_performance
+          - channel_analysis
+          - executive_summary
+
+        # Documentation
+        documentation:
+          description: |
+            ROAS (Return on Ad Spend) measures the revenue generated for every
+            dollar spent on advertising. A ROAS of 2.0 means $2 revenue per $1 spent.
+          usage_notes: |
+            - Use for evaluating ad campaign efficiency
+            - Compare across channels to optimize budget allocation
+            - Consider attribution windows when interpreting
+          caveats: |
+            - Does not account for organic revenue lift
+            - Attribution may vary by platform
+            - Multi-touch attribution not included in v1
+          migration_guide: null  # No migration needed for v1
+
+  # ---------------------------------------------------------------------------
+  # CAC - Customer Acquisition Cost
+  # ---------------------------------------------------------------------------
+  cac:
+    display_name: "Customer Acquisition Cost"
+    description: "Cost to acquire a new customer through paid advertising"
+    category: "marketing"
+    owner: "data-team@company.com"
+    current_version: "v1"
+
+    versions:
+      v1:
+        status: active
+        dbt_model: "metrics/fct_cac"
+        definition: "SUM(spend) / COUNT(new_customers)"
+        formula_sql: |
+          CASE
+            WHEN new_customers = 0 OR new_customers IS NULL THEN 0
+            ELSE ROUND((total_spend / new_customers)::NUMERIC, 2)
+          END
+        released_date: "2026-02-04T00:00:00Z"
+        created_by: "data-team"
+
+        # Breaking change indicator
+        breaking_change: false
+        breaking_change_reason: null
+
+        # Governance
+        approval:
+          status: "approved"
+          requested_by: "data-team"
+          requested_at: "2026-02-03T00:00:00Z"
+          approved_by: "data-governance-board"
+          approved_at: "2026-02-04T00:00:00Z"
+          approval_ticket: "ANALYTICS-002"
+          approval_notes: "Initial CAC metric implementation for marketing analytics"
+
+        # Source dependencies
+        source_tables:
+          - fact_ad_spend
+          - fact_orders
+
+        # Edge case handling (documented)
+        edge_cases:
+          zero_customers:
+            behavior: "Returns 0"
+            rationale: "Avoids NULL/infinity, indicates no acquisitions"
+          null_customers:
+            behavior: "Treated as 0"
+            rationale: "Defensive handling for missing data"
+          multi_currency:
+            behavior: "Calculated separately per currency"
+            rationale: "No implicit currency conversion"
+          duplicate_customers:
+            behavior: "Counted once per customer_key"
+            rationale: "First order defines new customer"
+
+        # New customer definition
+        new_customer_definition:
+          criteria: "First order ever based on customer_key (pseudonymized)"
+          attribution: "Must be attributed to paid channel"
+          excluded_statuses: []  # All new customers counted in v1
+
+        # Tenant isolation
+        tenant_isolation:
+          enforced: true
+          filter_column: "tenant_id"
+          test_coverage: true
+
+        # Dashboard compatibility
+        compatible_dashboards:
+          - marketing_overview
+          - customer_acquisition
+          - ltv_cac_analysis
+          - executive_summary
+
+        # Documentation
+        documentation:
+          description: |
+            CAC (Customer Acquisition Cost) measures the cost to acquire a new
+            customer through paid advertising. Lower CAC indicates more efficient
+            customer acquisition.
+          usage_notes: |
+            - Compare with LTV to evaluate acquisition efficiency
+            - Track trends over time to identify optimization opportunities
+            - Consider by channel to allocate budget effectively
+          caveats: |
+            - Only includes customers attributed to paid channels
+            - Organic acquisitions not counted
+            - Does not distinguish customer quality
+          migration_guide: null  # No migration needed for v1
+
+  # ---------------------------------------------------------------------------
+  # AOV - Average Order Value (placeholder for future implementation)
+  # ---------------------------------------------------------------------------
+  aov:
+    display_name: "Average Order Value"
+    description: "Average revenue per order"
+    category: "revenue"
+    owner: "data-team@company.com"
+    current_version: "v1"
+
+    versions:
+      v1:
+        status: active
+        dbt_model: "metrics/fct_aov"  # Uses existing model
+        definition: "SUM(net_revenue) / COUNT(orders)"
+        formula_sql: |
+          CASE
+            WHEN order_count = 0 OR order_count IS NULL THEN 0
+            ELSE ROUND((total_net_revenue / order_count)::NUMERIC, 2)
+          END
+        released_date: "2026-01-01T00:00:00Z"
+        created_by: "data-team"
+        breaking_change: false
+        approval:
+          status: "approved"
+          approved_by: "data-governance-board"
+          approved_at: "2026-01-01T00:00:00Z"
+          approval_ticket: "ANALYTICS-000"
+        source_tables:
+          - fact_orders
+        tenant_isolation:
+          enforced: true
+          filter_column: "tenant_id"
+        compatible_dashboards:
+          - revenue_overview
+          - order_analysis
+
+# =============================================================================
+# DASHBOARD VERSION PINNING
+# =============================================================================
+# Dashboards must explicitly reference metric versions.
+# This section defines the default behavior and override rules.
+
+dashboard_compatibility:
+  # Default behavior for new dashboards
+  default_behavior:
+    use_current_version: true
+    auto_upgrade: false
+    require_explicit_pinning: true
+
+  # Rules for existing dashboards
+  existing_dashboards:
+    auto_migrate: false
+    notification_on_deprecation: true
+    grace_period_days: 90
+
+  # Validation rules
+  validation:
+    fail_on_missing_version: true
+    fail_on_retired_version: true
+    warn_on_deprecated_version: true
+    warn_on_sunset_version: true
+
+# =============================================================================
+# MIGRATION RULES
+# =============================================================================
+# Rules for migrating between metric versions
+
+migration:
+  auto_migration:
+    enabled: false
+    reason: "All migrations require human approval"
+
+  side_by_side_comparison:
+    enabled: true
+    comparison_period_days: 30
+    show_differences: true
+
+  rollback:
+    enabled: true
+    max_rollback_versions: 2
+    requires_approval: true

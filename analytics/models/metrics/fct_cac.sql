@@ -384,6 +384,10 @@ select
         coalesce(period_start::text, 'all_time')
     )) as id,
 
+    -- Metric versioning (Story 2.2)
+    'cac' as metric_name,
+    'v1' as metric_version,
+
     tenant_id,
     platform,
     period_type,
