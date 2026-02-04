@@ -216,8 +216,11 @@ If a new version causes issues:
 ### ROAS v1 (active)
 
 - **Definition:** `SUM(revenue) / SUM(spend)`
-- **Model:** `analytics/models/marts/metrics/roas_v1.sql`
+- **Model:** `analytics/models/metrics/fct_roas.sql`
 - **Approval:** ANALYTICS-001
+- **Columns:**
+  - `metric_name = 'roas'`
+  - `metric_version = 'v1'`
 - **Edge Cases:**
   - Zero spend: Returns 0
   - Multi-currency: Separate calculations
@@ -225,8 +228,11 @@ If a new version causes issues:
 ### CAC v1 (active)
 
 - **Definition:** `SUM(spend) / COUNT(new_customers)`
-- **Model:** `analytics/models/marts/metrics/cac_v1.sql`
+- **Model:** `analytics/models/metrics/fct_cac.sql`
 - **Approval:** ANALYTICS-002
+- **Columns:**
+  - `metric_name = 'cac'`
+  - `metric_version = 'v1'`
 - **Edge Cases:**
   - Zero customers: Returns 0
   - Multi-currency: Separate calculations

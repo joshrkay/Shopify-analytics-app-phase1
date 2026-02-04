@@ -121,7 +121,7 @@ metrics:
     versions:
       v1:
         status: active
-        dbt_model: "marts/metrics/roas_v1"
+        dbt_model: "metrics/fct_roas"
         definition: "SUM(revenue) / SUM(spend)"
         formula_sql: |
           CASE
@@ -214,7 +214,7 @@ metrics:
     versions:
       v1:
         status: active
-        dbt_model: "marts/metrics/cac_v1"
+        dbt_model: "metrics/fct_cac"
         definition: "SUM(spend) / COUNT(new_customers)"
         formula_sql: |
           CASE

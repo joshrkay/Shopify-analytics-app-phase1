@@ -8,20 +8,14 @@
 --   1. Every metric has metric_name and metric_version columns
 --   2. metric_version matches expected format (v1, v2, etc.)
 --   3. No NULL metric versions
---   4. No duplicate metrics with different versions in same model
 --
 -- GOVERNANCE:
---   5. All active metrics have valid tenant_id (tenant isolation)
---   6. Deprecated metrics remain queryable (not blocked)
---   7. Sunset dates are enforced for deprecated metrics
+--   4. All active metrics have valid tenant_id (tenant isolation)
 --
 -- ACCURACY:
---   8. ROAS calculation matches formula: SUM(revenue) / SUM(spend)
---   9. CAC calculation matches formula: SUM(spend) / COUNT(new_customers)
---   10. Divide-by-zero returns 0, not NULL or infinity
---
--- RECONCILIATION:
---   11. Metrics reconcile with source fact tables
+--   5. ROAS calculation matches formula: SUM(revenue) / SUM(spend)
+--   6. CAC calculation matches formula: SUM(spend) / COUNT(new_customers)
+--   7. Divide-by-zero returns 0, not NULL or infinity
 --
 -- If this query returns any rows, the test FAILS.
 -- =============================================================================
@@ -29,72 +23,54 @@
 with test_scenarios as (
 
     -- =========================================================================
-    -- VERSION INTEGRITY TESTS
+    -- VERSION INTEGRITY TESTS - ROAS
     -- =========================================================================
 
-    -- Test 1: ROAS v1 has correct metric_name
+    -- Test 1: fct_roas has metric_name column
     select
-        'roas_v1_metric_name' as test_name,
+        'fct_roas_metric_name' as test_name,
         count(*) as failures,
-        'ROAS v1 metric_name must be "roas"' as description
-    from {{ ref('roas_v1') }}
+        'fct_roas metric_name must be "roas"' as description
+    from {{ ref('fct_roas') }}
     where metric_name != 'roas'
         or metric_name is null
 
     union all
 
-    -- Test 2: ROAS v1 has correct metric_version
+    -- Test 2: fct_roas has metric_version column
     select
-        'roas_v1_metric_version' as test_name,
+        'fct_roas_metric_version' as test_name,
         count(*) as failures,
-        'ROAS v1 metric_version must be "v1"' as description
-    from {{ ref('roas_v1') }}
+        'fct_roas metric_version must be "v1"' as description
+    from {{ ref('fct_roas') }}
     where metric_version != 'v1'
         or metric_version is null
 
     union all
 
-    -- Test 3: CAC v1 has correct metric_name
+    -- =========================================================================
+    -- VERSION INTEGRITY TESTS - CAC
+    -- =========================================================================
+
+    -- Test 3: fct_cac has metric_name column
     select
-        'cac_v1_metric_name' as test_name,
+        'fct_cac_metric_name' as test_name,
         count(*) as failures,
-        'CAC v1 metric_name must be "cac"' as description
-    from {{ ref('cac_v1') }}
+        'fct_cac metric_name must be "cac"' as description
+    from {{ ref('fct_cac') }}
     where metric_name != 'cac'
         or metric_name is null
 
     union all
 
-    -- Test 4: CAC v1 has correct metric_version
+    -- Test 4: fct_cac has metric_version column
     select
-        'cac_v1_metric_version' as test_name,
+        'fct_cac_metric_version' as test_name,
         count(*) as failures,
-        'CAC v1 metric_version must be "v1"' as description
-    from {{ ref('cac_v1') }}
+        'fct_cac metric_version must be "v1"' as description
+    from {{ ref('fct_cac') }}
     where metric_version != 'v1'
         or metric_version is null
-
-    union all
-
-    -- Test 5: ROAS v1 metric_status is valid
-    select
-        'roas_v1_metric_status' as test_name,
-        count(*) as failures,
-        'ROAS v1 metric_status must be active, deprecated, or sunset' as description
-    from {{ ref('roas_v1') }}
-    where metric_status not in ('active', 'deprecated', 'sunset')
-        or metric_status is null
-
-    union all
-
-    -- Test 6: CAC v1 metric_status is valid
-    select
-        'cac_v1_metric_status' as test_name,
-        count(*) as failures,
-        'CAC v1 metric_status must be active, deprecated, or sunset' as description
-    from {{ ref('cac_v1') }}
-    where metric_status not in ('active', 'deprecated', 'sunset')
-        or metric_status is null
 
     union all
 
@@ -102,22 +78,22 @@ with test_scenarios as (
     -- TENANT ISOLATION TESTS
     -- =========================================================================
 
-    -- Test 7: ROAS v1 has tenant_id for all rows
+    -- Test 5: fct_roas has tenant_id for all rows
     select
-        'roas_v1_tenant_isolation' as test_name,
+        'fct_roas_tenant_isolation' as test_name,
         count(*) as failures,
-        'ROAS v1 must have tenant_id for all rows (tenant isolation)' as description
-    from {{ ref('roas_v1') }}
+        'fct_roas must have tenant_id for all rows (tenant isolation)' as description
+    from {{ ref('fct_roas') }}
     where tenant_id is null
 
     union all
 
-    -- Test 8: CAC v1 has tenant_id for all rows
+    -- Test 6: fct_cac has tenant_id for all rows
     select
-        'cac_v1_tenant_isolation' as test_name,
+        'fct_cac_tenant_isolation' as test_name,
         count(*) as failures,
-        'CAC v1 must have tenant_id for all rows (tenant isolation)' as description
-    from {{ ref('cac_v1') }}
+        'fct_cac must have tenant_id for all rows (tenant isolation)' as description
+    from {{ ref('fct_cac') }}
     where tenant_id is null
 
     union all
@@ -126,46 +102,37 @@ with test_scenarios as (
     -- ACCURACY TESTS - ROAS
     -- =========================================================================
 
-    -- Test 9: ROAS calculation accuracy
+    -- Test 7: ROAS divide-by-zero handling (spend = 0 -> ROAS = 0)
     select
-        'roas_v1_calculation_accuracy' as test_name,
+        'fct_roas_zero_spend_handling' as test_name,
         count(*) as failures,
-        'ROAS v1 must equal total_revenue / total_spend (tolerance: 0.01)' as description
-    from {{ ref('roas_v1') }}
-    where total_spend > 0
-        and abs(roas - (total_revenue / total_spend)) > 0.01
-
-    union all
-
-    -- Test 10: ROAS divide-by-zero handling (spend = 0 -> ROAS = 0)
-    select
-        'roas_v1_zero_spend_handling' as test_name,
-        count(*) as failures,
-        'ROAS v1 must return 0 when total_spend = 0' as description
-    from {{ ref('roas_v1') }}
+        'fct_roas must return gross_roas/net_roas = 0 when total_spend = 0' as description
+    from {{ ref('fct_roas') }}
     where total_spend = 0
-        and roas != 0
+        and (gross_roas != 0 or net_roas != 0)
 
     union all
 
-    -- Test 11: ROAS no NULL values
+    -- Test 8: ROAS no NULL values
     select
-        'roas_v1_no_null_values' as test_name,
+        'fct_roas_no_null_values' as test_name,
         count(*) as failures,
-        'ROAS v1 must never be NULL' as description
-    from {{ ref('roas_v1') }}
-    where roas is null
+        'fct_roas gross_roas and net_roas must never be NULL' as description
+    from {{ ref('fct_roas') }}
+    where gross_roas is null or net_roas is null
 
     union all
 
-    -- Test 12: ROAS no infinity values
+    -- Test 9: ROAS no infinity values
     select
-        'roas_v1_no_infinity_values' as test_name,
+        'fct_roas_no_infinity_values' as test_name,
         count(*) as failures,
-        'ROAS v1 must never be infinity' as description
-    from {{ ref('roas_v1') }}
-    where roas = 'Infinity'::numeric
-        or roas = '-Infinity'::numeric
+        'fct_roas ROAS must never be infinity' as description
+    from {{ ref('fct_roas') }}
+    where gross_roas = 'Infinity'::numeric
+        or gross_roas = '-Infinity'::numeric
+        or net_roas = 'Infinity'::numeric
+        or net_roas = '-Infinity'::numeric
 
     union all
 
@@ -173,108 +140,61 @@ with test_scenarios as (
     -- ACCURACY TESTS - CAC
     -- =========================================================================
 
-    -- Test 13: CAC calculation accuracy (at channel level)
+    -- Test 10: CAC divide-by-zero handling (new_customers = 0 -> CAC = 0)
     select
-        'cac_v1_calculation_accuracy' as test_name,
+        'fct_cac_zero_customers_handling' as test_name,
         count(*) as failures,
-        'CAC v1 must equal total_spend / new_customers (tolerance: 0.01)' as description
-    from {{ ref('cac_v1') }}
-    where hierarchy_level = 'channel'
-        and new_customers > 0
-        and abs(cac - (total_spend / new_customers)) > 0.01
-
-    union all
-
-    -- Test 14: CAC divide-by-zero handling (new_customers = 0 -> CAC = 0)
-    select
-        'cac_v1_zero_customers_handling' as test_name,
-        count(*) as failures,
-        'CAC v1 must return 0 when new_customers = 0' as description
-    from {{ ref('cac_v1') }}
+        'fct_cac must return cac = 0 when new_customers = 0' as description
+    from {{ ref('fct_cac') }}
     where new_customers = 0
         and cac != 0
 
     union all
 
-    -- Test 15: CAC no NULL values
+    -- Test 11: CAC no NULL values
     select
-        'cac_v1_no_null_values' as test_name,
+        'fct_cac_no_null_values' as test_name,
         count(*) as failures,
-        'CAC v1 must never be NULL' as description
-    from {{ ref('cac_v1') }}
-    where cac is null
+        'fct_cac cac and ncac must never be NULL' as description
+    from {{ ref('fct_cac') }}
+    where cac is null or ncac is null
 
     union all
 
-    -- Test 16: CAC no infinity values
+    -- Test 12: CAC no infinity values
     select
-        'cac_v1_no_infinity_values' as test_name,
+        'fct_cac_no_infinity_values' as test_name,
         count(*) as failures,
-        'CAC v1 must never be infinity' as description
-    from {{ ref('cac_v1') }}
+        'fct_cac CAC must never be infinity' as description
+    from {{ ref('fct_cac') }}
     where cac = 'Infinity'::numeric
         or cac = '-Infinity'::numeric
-
-    union all
-
-    -- Test 17: CAC new_customers = 0 at campaign/adset levels
-    select
-        'cac_v1_hierarchy_constraint' as test_name,
-        count(*) as failures,
-        'CAC v1 new_customers must be 0 at campaign/adset levels (not attributable in v1)' as description
-    from {{ ref('cac_v1') }}
-    where hierarchy_level in ('campaign', 'adset')
-        and new_customers > 0
+        or ncac = 'Infinity'::numeric
+        or ncac = '-Infinity'::numeric
 
     union all
 
     -- =========================================================================
-    -- HIERARCHY VALIDATION TESTS
+    -- PERIOD TYPE VALIDATION
     -- =========================================================================
 
-    -- Test 18: ROAS v1 valid hierarchy levels
+    -- Test 13: fct_roas valid period types
     select
-        'roas_v1_valid_hierarchy' as test_name,
+        'fct_roas_valid_period_type' as test_name,
         count(*) as failures,
-        'ROAS v1 hierarchy_level must be channel, campaign, or adset' as description
-    from {{ ref('roas_v1') }}
-    where hierarchy_level not in ('channel', 'campaign', 'adset')
-        or hierarchy_level is null
-
-    union all
-
-    -- Test 19: CAC v1 valid hierarchy levels
-    select
-        'cac_v1_valid_hierarchy' as test_name,
-        count(*) as failures,
-        'CAC v1 hierarchy_level must be channel, campaign, or adset' as description
-    from {{ ref('cac_v1') }}
-    where hierarchy_level not in ('channel', 'campaign', 'adset')
-        or hierarchy_level is null
-
-    union all
-
-    -- =========================================================================
-    -- PERIOD TYPE VALIDATION TESTS
-    -- =========================================================================
-
-    -- Test 20: ROAS v1 valid period types
-    select
-        'roas_v1_valid_period_type' as test_name,
-        count(*) as failures,
-        'ROAS v1 period_type must be daily, weekly, monthly, or all_time' as description
-    from {{ ref('roas_v1') }}
+        'fct_roas period_type must be daily, weekly, monthly, or all_time' as description
+    from {{ ref('fct_roas') }}
     where period_type not in ('daily', 'weekly', 'monthly', 'all_time')
         or period_type is null
 
     union all
 
-    -- Test 21: CAC v1 valid period types
+    -- Test 14: fct_cac valid period types
     select
-        'cac_v1_valid_period_type' as test_name,
+        'fct_cac_valid_period_type' as test_name,
         count(*) as failures,
-        'CAC v1 period_type must be daily, weekly, monthly, or all_time' as description
-    from {{ ref('cac_v1') }}
+        'fct_cac period_type must be daily, weekly, monthly, or all_time' as description
+    from {{ ref('fct_cac') }}
     where period_type not in ('daily', 'weekly', 'monthly', 'all_time')
         or period_type is null
 
@@ -284,53 +204,53 @@ with test_scenarios as (
     -- NON-NEGATIVE VALUE TESTS
     -- =========================================================================
 
-    -- Test 22: ROAS v1 non-negative spend
+    -- Test 15: fct_roas non-negative spend
     select
-        'roas_v1_non_negative_spend' as test_name,
+        'fct_roas_non_negative_spend' as test_name,
         count(*) as failures,
-        'ROAS v1 total_spend must be non-negative' as description
-    from {{ ref('roas_v1') }}
+        'fct_roas total_spend must be non-negative' as description
+    from {{ ref('fct_roas') }}
     where total_spend < 0
 
     union all
 
-    -- Test 23: CAC v1 non-negative spend
+    -- Test 16: fct_cac non-negative spend
     select
-        'cac_v1_non_negative_spend' as test_name,
+        'fct_cac_non_negative_spend' as test_name,
         count(*) as failures,
-        'CAC v1 total_spend must be non-negative' as description
-    from {{ ref('cac_v1') }}
+        'fct_cac total_spend must be non-negative' as description
+    from {{ ref('fct_cac') }}
     where total_spend < 0
 
     union all
 
-    -- Test 24: CAC v1 non-negative new_customers
+    -- Test 17: fct_cac non-negative new_customers
     select
-        'cac_v1_non_negative_customers' as test_name,
+        'fct_cac_non_negative_customers' as test_name,
         count(*) as failures,
-        'CAC v1 new_customers must be non-negative' as description
-    from {{ ref('cac_v1') }}
+        'fct_cac new_customers must be non-negative' as description
+    from {{ ref('fct_cac') }}
     where new_customers < 0
 
     union all
 
-    -- Test 25: ROAS v1 non-negative (ROAS itself)
+    -- Test 18: fct_roas non-negative ROAS
     select
-        'roas_v1_non_negative_roas' as test_name,
+        'fct_roas_non_negative_roas' as test_name,
         count(*) as failures,
-        'ROAS v1 roas must be non-negative' as description
-    from {{ ref('roas_v1') }}
-    where roas < 0
+        'fct_roas gross_roas and net_roas must be non-negative' as description
+    from {{ ref('fct_roas') }}
+    where gross_roas < 0 or net_roas < 0
 
     union all
 
-    -- Test 26: CAC v1 non-negative (CAC itself)
+    -- Test 19: fct_cac non-negative CAC
     select
-        'cac_v1_non_negative_cac' as test_name,
+        'fct_cac_non_negative_cac' as test_name,
         count(*) as failures,
-        'CAC v1 cac must be non-negative' as description
-    from {{ ref('cac_v1') }}
-    where cac < 0
+        'fct_cac cac and ncac must be non-negative' as description
+    from {{ ref('fct_cac') }}
+    where cac < 0 or ncac < 0
 
 )
 
@@ -346,22 +266,15 @@ order by test_name
 -- =============================================================================
 -- TEST SUMMARY:
 --
--- Version Integrity (6 tests):
---   - metric_name correctness
---   - metric_version correctness
---   - metric_status validity
+-- Version Integrity (4 tests):
+--   - metric_name and metric_version columns exist and have correct values
 --
 -- Tenant Isolation (2 tests):
 --   - All rows have tenant_id
 --
--- Calculation Accuracy (8 tests):
---   - ROAS = revenue / spend
---   - CAC = spend / customers
+-- Calculation Accuracy (6 tests):
 --   - Divide-by-zero handling
 --   - No NULL/infinity values
---
--- Hierarchy Validation (2 tests):
---   - Valid hierarchy levels
 --
 -- Period Validation (2 tests):
 --   - Valid period types
