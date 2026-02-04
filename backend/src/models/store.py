@@ -1,5 +1,5 @@
 """
-ShopifyStore model - Links Shopify shop to Frontegg tenant.
+ShopifyStore model - Links Shopify shop to Clerk tenant (organization).
 
 SECURITY: tenant_id is ONLY extracted from JWT, never from client input.
 """
@@ -24,8 +24,8 @@ class StoreStatus(str, enum.Enum):
 
 class ShopifyStore(Base, TimestampMixin, TenantScopedMixin):
     """
-    Shopify store linked to a Frontegg tenant.
-    
+    Shopify store linked to a Clerk organization (tenant).
+
     Maps a Shopify shop domain to a tenant_id (from JWT org_id).
     Stores encrypted access token for Shopify API calls.
     """

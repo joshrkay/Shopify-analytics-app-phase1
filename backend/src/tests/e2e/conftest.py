@@ -3,7 +3,7 @@ E2E Test Configuration and Fixtures.
 
 Provides:
 - Test database setup with PostgreSQL
-- Mock service instances (Shopify, Airbyte, OpenRouter, Frontegg)
+- Mock service instances (Shopify, Airbyte, OpenRouter, Clerk)
 - Test client with dependency overrides
 - Test data providers
 """
@@ -27,9 +27,8 @@ from httpx import AsyncClient
 os.environ["ENV"] = "test"
 os.environ["SHOPIFY_API_SECRET"] = "test-webhook-secret-for-hmac"
 os.environ["SHOPIFY_BILLING_TEST_MODE"] = "true"
-os.environ.setdefault("FRONTEGG_CLIENT_ID", "test-client-id")
-os.environ.setdefault("FRONTEGG_CLIENT_SECRET", "test-client-secret")
-os.environ.setdefault("FRONTEGG_BASE_URL", "https://api.frontegg.com")
+os.environ.setdefault("CLERK_SECRET_KEY", "test-clerk-secret-key")
+os.environ.setdefault("CLERK_PUBLISHABLE_KEY", "test-clerk-publishable-key")
 os.environ.setdefault("ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==")
 os.environ.setdefault("AIRBYTE_API_TOKEN", "test-airbyte-token")
 os.environ.setdefault("AIRBYTE_WORKSPACE_ID", "test-workspace-id")
@@ -41,7 +40,8 @@ from .mocks import (
     ShopifyWebhookSimulator,
     MockAirbyteServer,
     MockOpenRouterServer,
-    MockFronteggServer,
+    MockClerkServer,
+    MockFronteggServer,  # Backwards compatibility alias
 )
 
 # Import helpers
@@ -169,9 +169,16 @@ async def async_db_session(async_db_engine) -> AsyncGenerator[AsyncSession, None
 # =============================================================================
 
 @pytest.fixture(scope="session")
-def mock_frontegg() -> MockFronteggServer:
-    """Create mock Frontegg auth server (session-scoped for key consistency)."""
-    return MockFronteggServer()
+def mock_clerk() -> MockClerkServer:
+    """Create mock Clerk auth server (session-scoped for key consistency)."""
+    return MockClerkServer()
+
+
+# Backwards compatibility alias
+@pytest.fixture(scope="session")
+def mock_frontegg(mock_clerk) -> MockClerkServer:
+    """Backwards compatibility alias for mock_clerk fixture."""
+    return mock_clerk
 
 
 @pytest.fixture
@@ -268,11 +275,11 @@ def admin_token(mock_frontegg, test_tenant_id) -> str:
 # =============================================================================
 
 class MockJWKSClient:
-    """Mock JWKS client that uses the mock Frontegg server's keys."""
+    """Mock JWKS client that uses the mock Clerk server's keys."""
 
-    def __init__(self, mock_frontegg_server):
-        self._mock = mock_frontegg_server
-        self.client_id = os.getenv("FRONTEGG_CLIENT_ID", "test-client-id")
+    def __init__(self, mock_clerk_server):
+        self._mock = mock_clerk_server
+        self.client_id = os.getenv("CLERK_PUBLISHABLE_KEY", "test-clerk-publishable-key")
 
     def get_signing_key(self, token):
         """Return mock signing key using the mock server's public key."""
@@ -283,7 +290,7 @@ class MockJWKSClient:
 
 
 @pytest.fixture
-def test_app(db_session, mock_frontegg, mock_shopify, mock_airbyte, mock_openrouter):
+def test_app(db_session, mock_clerk, mock_shopify, mock_airbyte, mock_openrouter):
     """
     Create FastAPI test application with all dependencies mocked.
     """
@@ -300,13 +307,14 @@ def test_app(db_session, mock_frontegg, mock_shopify, mock_airbyte, mock_openrou
     app.dependency_overrides[get_db_session] = override_get_db_session
 
     # Store mock references for access in tests
-    app.state.mock_frontegg = mock_frontegg
+    app.state.mock_clerk = mock_clerk
+    app.state.mock_frontegg = mock_clerk  # Backwards compatibility
     app.state.mock_shopify = mock_shopify
     app.state.mock_airbyte = mock_airbyte
     app.state.mock_openrouter = mock_openrouter
 
-    # Create mock JWKS client that uses mock_frontegg's keys
-    mock_jwks_client = MockJWKSClient(mock_frontegg)
+    # Create mock JWKS client that uses mock_clerk's keys
+    mock_jwks_client = MockJWKSClient(mock_clerk)
 
     # Patch the TenantContextMiddleware to use our mock JWKS client
     with patch.object(TenantContextMiddleware, '_get_jwks_client', return_value=mock_jwks_client):

@@ -1,5 +1,5 @@
 """
-Feature flags for AI Growth Analytics using Frontegg.
+Feature flags for AI Growth Analytics.
 
 CRITICAL SECURITY REQUIREMENTS:
 - Feature flags MUST be evaluated server-side for security-relevant gating
@@ -38,7 +38,7 @@ class FeatureFlag(str, Enum):
     Enumeration of all feature flags.
 
     Add new flags here as features are developed.
-    Keep in sync with Frontegg feature flags configuration.
+    Feature flags can be configured via environment variables.
     """
     # AI features (all must have kill switches)
     AI_INSIGHTS = "ai-insights"
@@ -64,16 +64,16 @@ class FeatureFlag(str, Enum):
     RATE_LIMITING_STRICT = "rate-limiting-strict"
 
 
-class FronteggFeatureFlagClient:
+class FeatureFlagClient:
     """
-    Wrapper for Frontegg feature flags with graceful degradation.
+    Feature flag client with graceful degradation.
 
-    Frontegg feature flags can be managed via:
-    1. Environment variables for global defaults
-    2. Frontegg entitlements API for tenant/user-specific flags
-    3. JWT claims for feature entitlements
+    Feature flags can be managed via:
+    1. Environment variables for global defaults (FEATURE_FLAG_<NAME>)
+    2. JWT claims for feature entitlements
+    3. Database-backed configuration (future)
 
-    If Frontegg is not configured, all flags return their default values.
+    If no configuration is found, flags return their default values.
     """
 
     def __init__(self):
@@ -96,14 +96,7 @@ class FronteggFeatureFlagClient:
                 self._flag_defaults[flag.value] = False
             # If not set, will use the default passed to is_enabled()
 
-        # Check for Frontegg configuration
-        client_id = os.getenv("FRONTEGG_CLIENT_ID")
-        if client_id:
-            logger.info("Frontegg feature flags initialized")
-        else:
-            logger.warning(
-                "FRONTEGG_CLIENT_ID not set - feature flags will use environment defaults"
-            )
+        logger.info("Feature flags initialized from environment")
 
         self._initialized = True
 
@@ -139,7 +132,7 @@ class FronteggFeatureFlagClient:
 
         Evaluation order:
         1. Check environment variable override (FEATURE_FLAG_<NAME>)
-        2. Check Frontegg entitlements (if configured)
+        2. Check entitlements from JWT claims (if configured)
         3. Fall back to default value
 
         Args:
@@ -168,11 +161,11 @@ class FronteggFeatureFlagClient:
                 )
                 return result
 
-            # Build context for potential Frontegg evaluation
+            # Build context for potential entitlement evaluation
             context = self._build_context(tenant_id, user_id, custom_attributes)
 
-            # For now, return default - Frontegg entitlements can be added later
-            # when specific API integration is needed
+            # For now, return default - JWT entitlements can be checked later
+            # when specific integration is needed
             logger.debug(
                 "Feature flag using default",
                 extra={
@@ -240,12 +233,16 @@ class FronteggFeatureFlagClient:
 
 
 # Singleton instance
-_client = FronteggFeatureFlagClient()
+_client = FeatureFlagClient()
 
 
-def get_feature_flag_client() -> FronteggFeatureFlagClient:
+def get_feature_flag_client() -> FeatureFlagClient:
     """Get the global feature flag client instance."""
     return _client
+
+
+# Backwards compatibility alias
+FronteggFeatureFlagClient = FeatureFlagClient
 
 
 async def is_feature_enabled(

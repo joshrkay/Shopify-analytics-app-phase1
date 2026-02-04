@@ -157,11 +157,11 @@ class NotificationEmailWorker:
         """
         Get user email address.
 
-        In production, this would query the user service or Frontegg.
+        In production, this would query the user service or Clerk.
         For now, returns None (emails require user lookup integration).
         """
         # TODO: Integrate with user service to get email addresses
-        # This is a placeholder - actual implementation would query Frontegg or user table
+        # This is a placeholder - actual implementation would query Clerk or user table
         return None
 
     async def process_notification(self, notification: Notification) -> bool:

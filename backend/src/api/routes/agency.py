@@ -136,7 +136,7 @@ def _generate_jwt_token(
     """
     Generate a new JWT token with updated tenant context.
 
-    NOTE: In production, this should call your auth service (e.g., Frontegg)
+    NOTE: In production, this should call your auth service (e.g., Clerk)
     to issue a new token. This is a placeholder implementation.
     """
     import jwt

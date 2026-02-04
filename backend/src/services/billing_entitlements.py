@@ -399,12 +399,11 @@ class BillingRoleSync:
             # SECURITY: Role revocation is enforced at multiple layers:
             # 1. Entitlement checks block access immediately (this service)
             # 2. JWT validation rejects disallowed roles (TenantContextMiddleware)
-            # 3. Frontegg webhook integration syncs role changes async
+            # 3. Clerk webhook integration syncs role changes async
             #
-            # For immediate revocation in Frontegg, configure a webhook handler
-            # that listens to billing.downgrade events and calls:
-            # POST https://api.frontegg.com/identity/resources/users/v1/{user_id}/roles
-            # with the roles to remove. See docs/RBAC_CONFIGURATION.md
+            # For immediate revocation in Clerk, configure a webhook handler
+            # that listens to billing.downgrade events and updates user metadata.
+            # See docs/RBAC_CONFIGURATION.md
 
         return {
             "tenant_id": tenant_id,
