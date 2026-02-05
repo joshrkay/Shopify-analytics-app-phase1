@@ -115,7 +115,9 @@ class ConnectorCredential(Base, TimestampMixin, TenantScopedMixin):
                 "Wiped to NULL on hard delete. NEVER log this value.",
     )
 
-    metadata = Column(
+    # Python attribute renamed to avoid clash with SQLAlchemy's reserved
+    # 'metadata' attribute. DB column is still named 'metadata'.
+    credential_metadata = Column(
         "metadata",
         JSONType,
         nullable=False,
@@ -224,7 +226,7 @@ class ConnectorCredential(Base, TimestampMixin, TenantScopedMixin):
             "credential_name": self.credential_name,
             "source_type": self.source_type,
             "status": self.status.value if self.status else None,
-            "metadata": self.metadata or {},
+            "metadata": self.credential_metadata or {},
             "created_at": (
                 self.created_at.isoformat() if self.created_at else None
             ),

@@ -132,7 +132,7 @@ class CredentialVault:
             credential_name=credential_name,
             source_type=source_type,
             encrypted_payload=encrypted,
-            metadata=metadata or {},
+            credential_metadata=metadata or {},
             status=CredentialStatus.ACTIVE,
             created_by=created_by,
         )

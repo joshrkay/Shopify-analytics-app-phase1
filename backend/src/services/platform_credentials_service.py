@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Union
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.models.connector_credential import CredentialStatus
