@@ -2,18 +2,18 @@
     config(
         materialized='view',
         schema='semantic',
-        tags=['semantic', 'campaigns', 'versioned', 'immutable']
+        tags=['semantic', 'marketing', 'spend', 'versioned', 'immutable']
     )
 }}
 
--- fact_campaign_performance_v1 - IMMUTABLE versioned view of campaign data
+-- sem_marketing_spend_v1 - IMMUTABLE versioned semantic view of marketing spend
 --
 -- Version: v1
 -- Status: active
 -- Released: 2026-02-05
--- Source: fact_campaign_performance (schema registry v1.0.0)
+-- Source: marketing_spend (canonical, schema registry v1.1.0)
 --
--- DO NOT EDIT THIS VIEW. Create fact_campaign_performance_v2 instead.
+-- DO NOT EDIT THIS VIEW. Create sem_marketing_spend_v2 instead.
 --
 -- This view defines the frozen column contract for v1. It exposes only
 -- approved consumer-facing columns and excludes:
@@ -31,16 +31,20 @@ select
     channel,
     ad_account_id,
     campaign_id,
-    campaign_name,
+    adset_id,
+    ad_id,
     spend,
+    currency,
     impressions,
     clicks,
     conversions,
-    ctr,
+    conversion_value,
+    cpm,
     cpc,
+    ctr,
     cpa,
-    currency,
+    roas,
     dbt_updated_at,
     'v1' as schema_version
-from {{ ref('fact_campaign_performance') }}
+from {{ ref('marketing_spend') }}
 where tenant_id is not null

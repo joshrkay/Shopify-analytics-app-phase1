@@ -6,17 +6,17 @@ models:
   # These own the column contract. DO NOT EDIT — create _v2 instead.
   # ---------------------------------------------------------------------------
 
-  - name: fact_orders_v1
+  - name: sem_orders_v1
     description: |
       ## Order Data - Version 1 (IMMUTABLE)
 
       Frozen column contract for order data. DO NOT EDIT — create
-      fact_orders_v2 instead.
+      sem_orders_v2 instead.
 
-      Source: fact_orders (schema registry v1.1.0)
+      Source: orders (canonical, schema registry v1.1.0)
       Released: 2026-02-05
 
-      Approved columns: 22 (21 from fact_orders + schema_version tag).
+      Approved columns: 22 (21 from orders + schema_version tag).
       Excluded: platform (deprecated), refunds_json, airbyte_record_id,
       ingested_at (internal).
     config:
@@ -125,17 +125,17 @@ models:
           - accepted_values:
               values: ['v1']
 
-  - name: fact_marketing_spend_v1
+  - name: sem_marketing_spend_v1
     description: |
       ## Marketing Spend - Version 1 (IMMUTABLE)
 
       Frozen column contract for marketing spend data. DO NOT EDIT — create
-      fact_marketing_spend_v2 instead.
+      sem_marketing_spend_v2 instead.
 
-      Source: fact_ad_spend (schema registry v1.1.0)
+      Source: marketing_spend (canonical, schema registry v1.1.0)
       Released: 2026-02-05
 
-      Approved columns: 22 (21 from fact_ad_spend + schema_version tag).
+      Approved columns: 22 (21 from marketing_spend + schema_version tag).
       Excluded: platform (deprecated), airbyte_record_id, ingested_at (internal).
     config:
       tags: ['semantic', 'marketing', 'spend', 'versioned', 'immutable']
@@ -261,17 +261,17 @@ models:
           - accepted_values:
               values: ['v1']
 
-  - name: fact_campaign_performance_v1
+  - name: sem_campaign_performance_v1
     description: |
       ## Campaign Performance - Version 1 (IMMUTABLE)
 
       Frozen column contract for campaign performance data. DO NOT EDIT —
-      create fact_campaign_performance_v2 instead.
+      create sem_campaign_performance_v2 instead.
 
-      Source: fact_campaign_performance (schema registry v1.0.0)
+      Source: campaign_performance (canonical, schema registry v1.0.0)
       Released: 2026-02-05
 
-      Approved columns: 18 (17 from fact_campaign_performance + schema_version tag).
+      Approved columns: 18 (17 from campaign_performance + schema_version tag).
       Excluded: platform (deprecated), airbyte_record_id, ingested_at (internal).
     config:
       tags: ['semantic', 'campaigns', 'versioned', 'immutable']
@@ -399,12 +399,12 @@ models:
       This view always points to the latest **approved** order data version.
       Downstream consumers (Superset, AI marts) should use this view.
 
-      Current target: fact_orders_v1 (approved 2026-02-05)
+      Current target: sem_orders_v1 (approved 2026-02-05)
 
       ### Upgrade Process
-      1. Create fact_orders_v2 with updated column contract
+      1. Create sem_orders_v2 with updated column contract
       2. Get approval from Analytics Tech Lead
-      3. Update this alias SQL to ref('fact_orders_v2')
+      3. Update this alias SQL to ref('sem_orders_v2')
       4. Run pre-deploy validation
       5. Communicate to affected dashboards
     config:
@@ -434,12 +434,12 @@ models:
       This view always points to the latest **approved** marketing spend version.
       Downstream consumers (Superset, AI marts) should use this view.
 
-      Current target: fact_marketing_spend_v1 (approved 2026-02-05)
+      Current target: sem_marketing_spend_v1 (approved 2026-02-05)
 
       ### Upgrade Process
-      1. Create fact_marketing_spend_v2 with updated column contract
+      1. Create sem_marketing_spend_v2 with updated column contract
       2. Get approval from Analytics Tech Lead
-      3. Update this alias SQL to ref('fact_marketing_spend_v2')
+      3. Update this alias SQL to ref('sem_marketing_spend_v2')
       4. Run pre-deploy validation
       5. Communicate to affected dashboards
     config:
@@ -469,12 +469,12 @@ models:
       This view always points to the latest **approved** campaign data version.
       Downstream consumers (Superset, AI marts) should use this view.
 
-      Current target: fact_campaign_performance_v1 (approved 2026-02-05)
+      Current target: sem_campaign_performance_v1 (approved 2026-02-05)
 
       ### Upgrade Process
-      1. Create fact_campaign_performance_v2 with updated column contract
+      1. Create sem_campaign_performance_v2 with updated column contract
       2. Get approval from Analytics Tech Lead
-      3. Update this alias SQL to ref('fact_campaign_performance_v2')
+      3. Update this alias SQL to ref('sem_campaign_performance_v2')
       4. Run pre-deploy validation
       5. Communicate to affected dashboards
     config:
