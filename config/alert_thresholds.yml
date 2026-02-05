@@ -1,0 +1,57 @@
+# Freshness Alert Thresholds
+# Defines when and how operators are notified about SLA violations.
+#
+# Consumers:
+#   - backend/src/monitoring/freshness_alerts.py (FreshnessAlertManager)
+#
+# Alert flow:
+#   1. DataAvailabilityService evaluates state per (tenant, source)
+#   2. FreshnessAlertManager checks thresholds below
+#   3. Alerts are deduplicated and dispatched to Slack / PagerDuty
+
+version: 1
+
+channels:
+  slack_analytics_ops:
+    channel: "#analytics-ops"
+    env_var: SLACK_FRESHNESS_WEBHOOK_URL
+  pagerduty_analytics:
+    env_var: PAGERDUTY_FRESHNESS_ROUTING_KEY
+
+# Cooldown in minutes between duplicate alerts for the same source+tenant
+dedup_cooldown_minutes: 30
+
+# ─── Alert rules ─────────────────────────────────────────────────────────────
+
+rules:
+  stale_extended:
+    description: "Source has been STALE for longer than the stale_alert_delay"
+    trigger_state: stale
+    stale_alert_delay_minutes: 120   # 2 hours in STALE before alerting
+    severity: warning
+    channels:
+      - slack_analytics_ops
+    message_template: >-
+      Source "{source_type}" has been stale for {minutes_stale}m
+      across {tenant_count} tenant(s). Likely cause: {likely_cause}.
+
+  unavailable_immediate:
+    description: "Source transitioned to UNAVAILABLE — alert immediately"
+    trigger_state: unavailable
+    stale_alert_delay_minutes: 0     # immediate
+    severity: critical
+    channels:
+      - slack_analytics_ops
+      - pagerduty_analytics
+    message_template: >-
+      Source "{source_type}" is UNAVAILABLE for {tenant_count} tenant(s).
+      Likely cause: {likely_cause}. Immediate attention required.
+
+# ─── Escalation ──────────────────────────────────────────────────────────────
+
+escalation:
+  multi_tenant_threshold: 3          # if >= 3 tenants affected, escalate
+  escalated_severity: critical       # promote severity on escalation
+  escalated_channels:
+    - slack_analytics_ops
+    - pagerduty_analytics
