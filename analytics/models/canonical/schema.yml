@@ -490,3 +490,245 @@ models:
           superset_expose: false
         tests:
           - not_null
+
+  # ── v1 Canonical Fact Tables ──────────────────────────────────────────
+  # These replace the legacy canonical models above with:
+  #   - Rolling rebuild windows (business-date based)
+  #   - delete+insert incremental strategy
+  #   - source_system + source_primary_key lineage
+  #   - No derived business metrics (those belong in semantic/metrics layer)
+
+  - name: fact_orders_v1
+    description: |
+      Canonical fact table for Shopify orders (v1).
+
+      Source of truth for actual revenue (Shopify orders).
+      Part of hybrid revenue truth policy: Shopify revenue here,
+      attributed revenue in fact_campaign_performance_v1.
+
+      Rolling Rebuild: 90 days (configurable via var('shopify_rebuild_days')).
+      Filters on business date (order_date), not ingestion timestamp.
+
+      Grain: One row per order.
+
+      SECURITY: All rows are tenant-isolated via tenant_id.
+    columns:
+      - name: id
+        description: Surrogate key (MD5 hash of tenant_id + order_id)
+        tests:
+          - not_null
+          - unique
+      - name: tenant_id
+        description: Tenant identifier for data isolation
+        tests:
+          - not_null
+          - relationships:
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
+              config:
+                where: "tenant_id is not null"
+      - name: order_id
+        description: Shopify order ID
+        tests:
+          - not_null
+      - name: order_date
+        description: Order date (business date used for rolling rebuild window)
+        tests:
+          - not_null
+      - name: customer_id
+        description: Pseudonymized customer identifier (MD5 hash of email or customer_id_raw)
+        tests:
+          - not_null
+      - name: revenue_gross
+        description: Total order revenue including tax (Shopify source of truth)
+        tests:
+          - not_null
+      - name: revenue_net
+        description: Order subtotal before tax
+        tests:
+          - not_null
+      - name: currency
+        description: Currency code (uppercase, 3-letter)
+        tests:
+          - not_null
+      - name: is_refund
+        description: Whether the order has been refunded or partially refunded
+        tests:
+          - not_null
+      - name: updated_at
+        description: Last update timestamp from source
+        tests:
+          - not_null
+      - name: source_system
+        description: Source system identifier (shopify)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['shopify']
+      - name: source_primary_key
+        description: Primary key in the source system (order_id)
+        tests:
+          - not_null
+      - name: ingested_at
+        description: Timestamp when record was ingested from Airbyte
+        tests:
+          - not_null
+      - name: dbt_updated_at
+        description: Timestamp when record was last processed by dbt
+        tests:
+          - not_null
+
+  - name: fact_marketing_spend_v1
+    description: |
+      Canonical fact table for marketing spend (v1).
+
+      Source of truth for ad platform spend across Meta, Google, TikTok, and Snapchat.
+      Focused on delivery metrics (spend, impressions, clicks).
+      Business metrics (cpm, cpc, ctr, cpa, roas) are NOT computed here —
+      they belong in the semantic/metrics layer.
+
+      Rolling Rebuild: 30 days (configurable via var('ads_rebuild_days')).
+      Filters on business date (spend_date), not ingestion timestamp.
+
+      Grain: One row per tenant + source_system + campaign + ad_set + ad + date.
+
+      SECURITY: All rows are tenant-isolated via tenant_id.
+    columns:
+      - name: id
+        description: Surrogate key (MD5 hash of tenant_id + source_system + campaign_id + ad_set_id + ad_id + spend_date)
+        tests:
+          - not_null
+          - unique
+      - name: tenant_id
+        description: Tenant identifier for data isolation
+        tests:
+          - not_null
+          - relationships:
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
+              config:
+                where: "tenant_id is not null"
+      - name: spend_date
+        description: Date of the spend (business date used for rolling rebuild window)
+        tests:
+          - not_null
+      - name: channel
+        description: Canonical marketing channel (paid_social, paid_search, etc.)
+        tests:
+          - not_null
+      - name: campaign_id
+        description: Campaign ID (platform-specific)
+        tests:
+          - not_null
+      - name: ad_set_id
+        description: Ad set/group/squad ID (platform-specific, nullable)
+      - name: spend
+        description: Amount spent (numeric, normalized currency)
+        tests:
+          - not_null
+      - name: impressions
+        description: Number of impressions
+      - name: clicks
+        description: Number of clicks
+      - name: currency
+        description: Currency code (uppercase, 3-letter)
+        tests:
+          - not_null
+      - name: updated_at
+        description: Last update timestamp from source (airbyte_emitted_at)
+        tests:
+          - not_null
+      - name: source_system
+        description: Source system identifier (meta_ads, google_ads, tiktok_ads, snapchat_ads)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['meta_ads', 'google_ads', 'tiktok_ads', 'snapchat_ads']
+      - name: source_primary_key
+        description: Primary key in the source system
+        tests:
+          - not_null
+      - name: dbt_updated_at
+        description: Timestamp when record was last processed by dbt
+        tests:
+          - not_null
+
+  - name: fact_campaign_performance_v1
+    description: |
+      Canonical fact table for campaign performance (v1).
+
+      Includes both attributed revenue and spend for ROAS calculation.
+      Part of hybrid revenue truth policy: attributed revenue (from ad platforms)
+      lives here, actual revenue (Shopify) lives in fact_orders_v1.
+
+      Rolling Rebuild: 30 days (configurable via var('ads_rebuild_days')).
+      Filters on business date (campaign_date), not ingestion timestamp.
+
+      Grain: One row per tenant + source_system + campaign + ad_set + date.
+
+      SECURITY: All rows are tenant-isolated via tenant_id.
+    columns:
+      - name: id
+        description: Surrogate key (MD5 hash of tenant_id + source_system + campaign_id + ad_set_id + campaign_date)
+        tests:
+          - not_null
+          - unique
+      - name: tenant_id
+        description: Tenant identifier for data isolation
+        tests:
+          - not_null
+          - relationships:
+              to: ref('_tenant_airbyte_connections')
+              field: tenant_id
+              config:
+                where: "tenant_id is not null"
+      - name: campaign_date
+        description: Date of the campaign performance (business date used for rolling rebuild window)
+        tests:
+          - not_null
+      - name: channel
+        description: Canonical marketing channel (paid_social, paid_search, etc.)
+        tests:
+          - not_null
+      - name: campaign_id
+        description: Campaign ID (platform-specific)
+        tests:
+          - not_null
+      - name: campaign_name
+        description: Campaign name from the ad platform
+      - name: ad_set_id
+        description: Ad set/group/squad ID (platform-specific, nullable)
+      - name: attributed_revenue
+        description: Revenue attributed by the ad platform (conversion_value). NOT Shopify revenue.
+      - name: spend
+        description: Amount spent (numeric, normalized currency)
+        tests:
+          - not_null
+      - name: conversions
+        description: Number of conversions reported by the ad platform
+      - name: impressions
+        description: Number of impressions
+      - name: clicks
+        description: Number of clicks
+      - name: currency
+        description: Currency code (uppercase, 3-letter)
+        tests:
+          - not_null
+      - name: updated_at
+        description: Last update timestamp from source (airbyte_emitted_at)
+        tests:
+          - not_null
+      - name: source_system
+        description: Source system identifier (meta_ads, google_ads, tiktok_ads, snapchat_ads)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['meta_ads', 'google_ads', 'tiktok_ads', 'snapchat_ads']
+      - name: source_primary_key
+        description: Primary key in the source system
+        tests:
+          - not_null
+      - name: dbt_updated_at
+        description: Timestamp when record was last processed by dbt
+        tests:
+          - not_null

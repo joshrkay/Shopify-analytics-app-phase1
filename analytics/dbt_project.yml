@@ -100,6 +100,13 @@ vars:
   lookback_days_ga4: 3
   lookback_days_recharge: 3
 
+  # Rolling rebuild window configuration for v1 canonical models
+  # Controls how far back to reprocess on incremental runs (business-date based)
+  # Override per-source as needed based on data latency characteristics
+  shopify_rebuild_days: 90
+  ads_rebuild_days: 30
+  email_rebuild_days: 30
+
   # Freshness thresholds configuration
   # These are placeholder values - actual thresholds should be configured
   # based on Story 7.6 freshness SLA requirements
