@@ -40,11 +40,21 @@ HARD_DELETE_AFTER_DAYS = 20
 
 
 class CredentialStatus(str, enum.Enum):
-    """Connector credential lifecycle status."""
+    """
+    Canonical credential lifecycle status.
+
+    Used by both the ConnectorCredential model (DB column) and the
+    PlatformCredentialsService validation layer. Import from here
+    instead of redefining elsewhere.
+
+    MISSING is a runtime-only status indicating no credential row exists.
+    It is never stored in the database.
+    """
     ACTIVE = "active"
     EXPIRED = "expired"
     REVOKED = "revoked"
     INVALID = "invalid"
+    MISSING = "missing"
 
 
 class ConnectorCredential(Base, TimestampMixin, TenantScopedMixin):

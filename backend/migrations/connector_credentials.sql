@@ -27,7 +27,8 @@ DO $$ BEGIN
         'active',
         'expired',
         'revoked',
-        'invalid'
+        'invalid',
+        'missing'
     );
 EXCEPTION
     WHEN duplicate_object THEN NULL;
