@@ -85,6 +85,11 @@ from src.models.data_change_event import (
     AFFECTED_METRICS,
 )
 from src.models.dashboard_metric_binding import DashboardMetricBinding
+from src.models.data_availability import (
+    DataAvailability,
+    AvailabilityState,
+    AvailabilityReason,
+)
 
 __all__ = [
     "TimestampMixin",
@@ -187,4 +192,8 @@ __all__ = [
     "AFFECTED_METRICS",
     # Dashboard Metric Binding models (Story 2.3)
     "DashboardMetricBinding",
+    # Data Availability state machine
+    "DataAvailability",
+    "AvailabilityState",
+    "AvailabilityReason",
 ]
