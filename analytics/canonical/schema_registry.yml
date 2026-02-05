@@ -1,0 +1,552 @@
+# Canonical Schema Registry
+#
+# Single source of truth for schema versions across all canonical models
+# (facts, metrics, marts). Every table that downstream consumers depend on
+# MUST be registered here.
+#
+# Versioning follows Semantic Versioning (https://semver.org):
+#   MAJOR  - Breaking change: column removed, renamed, or type changed
+#   MINOR  - Backward-compatible addition: new column added
+#   PATCH  - No schema change: docs, description, or test update only
+#
+# Rules:
+#   - Raw and staging models are NOT registered (they are internal)
+#   - Only models exposed to dashboards, APIs, or external consumers belong here
+#   - Deprecated versions must have a sunset_date (minimum 90 days notice)
+#   - Migration guide is required for any MAJOR version bump
+#   - AI agents MUST NOT auto-approve version changes (see ai_restrictions.yaml)
+
+registry_version: "1.0.0"
+last_updated: "2026-02-05"
+maintainer: "Analytics Tech Lead"
+
+# ---------------------------------------------------------------------------
+# FACTS LAYER
+# ---------------------------------------------------------------------------
+
+tables:
+
+  # ------- fact_orders -------
+  fact_orders:
+    layer: facts
+    schema: analytics
+    materialization: incremental
+    grain: "one row per order per tenant"
+    owner: "Analytics Tech Lead"
+    current_version: "1.1.0"
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          Initial release. Base Shopify order fields with tenant isolation,
+          pseudonymized customer_key, and financial/fulfillment status.
+        columns_added:
+          - id
+          - order_id
+          - order_name
+          - order_number
+          - customer_key
+          - source_platform
+          - order_created_at
+          - order_updated_at
+          - order_cancelled_at
+          - order_closed_at
+          - date
+          - revenue_gross
+          - revenue_net
+          - total_tax
+          - currency
+          - financial_status
+          - fulfillment_status
+          - tags
+          - note
+          - tenant_id
+          - airbyte_record_id
+          - ingested_at
+          - dbt_updated_at
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+      - version: "1.1.0"
+        released: "2026-01-15"
+        status: active
+        description: >
+          Tenant-local timezone date support (User Story 7.7.1). The 'date'
+          column now uses the tenant's configured timezone instead of UTC.
+          No columns added or removed; semantic change to date derivation.
+        columns_added: []
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns:
+      - column: platform
+        reason: "Renamed to source_platform in 1.0.0 for canonical consistency"
+        removed_in: "1.0.0"
+
+  # ------- fact_ad_spend -------
+  fact_ad_spend:
+    layer: facts
+    schema: analytics
+    materialization: incremental
+    grain: "one row per day + platform + account + campaign + ad per tenant"
+    owner: "Analytics Tech Lead"
+    current_version: "1.1.0"
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          Initial release. Unified ad spend from Meta Ads and Google Ads
+          with canonical source_platform and channel columns.
+        columns_added:
+          - id
+          - tenant_id
+          - date
+          - source_platform
+          - channel
+          - ad_account_id
+          - campaign_id
+          - adset_id
+          - ad_id
+          - spend
+          - currency
+          - impressions
+          - clicks
+          - conversions
+          - conversion_value
+          - cpm
+          - cpc
+          - ctr
+          - cpa
+          - roas
+          - platform
+          - airbyte_record_id
+          - ingested_at
+          - dbt_updated_at
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+      - version: "1.1.0"
+        released: "2026-01-15"
+        status: active
+        description: >
+          Added TikTok Ads and Snapchat Ads as source platforms.
+          source_platform accepted values expanded. No schema change.
+        columns_added: []
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns:
+      - column: platform
+        reason: "Legacy alias for source_platform; retained for backward compatibility"
+        sunset_date: "2026-06-01"
+
+  # ------- fact_campaign_performance -------
+  fact_campaign_performance:
+    layer: facts
+    schema: analytics
+    materialization: incremental
+    grain: "one row per day + campaign per tenant"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          Initial release. Unified campaign performance from Meta Ads and
+          Google Ads with calculated CTR, CPC, and CPA.
+        columns_added:
+          - id
+          - tenant_id
+          - date
+          - source_platform
+          - channel
+          - ad_account_id
+          - campaign_id
+          - campaign_name
+          - spend
+          - impressions
+          - clicks
+          - conversions
+          - ctr
+          - cpc
+          - cpa
+          - currency
+          - platform
+          - airbyte_record_id
+          - ingested_at
+          - dbt_updated_at
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns:
+      - column: platform
+        reason: "Legacy alias for source_platform; retained for backward compatibility"
+        sunset_date: "2026-06-01"
+
+  # ------- fct_revenue -------
+  fct_revenue:
+    layer: metrics
+    schema: metrics
+    materialization: incremental
+    grain: "one row per order + revenue_type per tenant"
+    owner: "Analytics Tech Lead"
+    current_version: "2.0.0"
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: deprecated
+        deprecated_date: "2026-01-15"
+        sunset_date: "2026-04-15"
+        description: >
+          Initial release. Revenue calculated as SUM(revenue) excluding
+          returned orders. Did not include refund or cancellation breakdowns.
+        columns_added:
+          - id
+          - tenant_id
+          - order_id
+          - customer_key
+          - revenue_date
+          - currency
+          - financial_status
+          - gross_revenue
+          - net_revenue
+          - ingested_at
+          - dbt_updated_at
+        columns_removed: []
+        breaking: false
+        migration_guide: "docs/migrate_revenue_v1_to_v2.md"
+
+      - version: "2.0.0"
+        released: "2026-01-15"
+        status: active
+        description: >
+          BREAKING: Revenue now includes refund and cancellation breakdowns.
+          Added revenue_type column (gross_revenue, refund, cancellation) and
+          separate refund_amount / cancellation_amount columns. Net revenue
+          formula changed to gross_revenue + refund_amount + cancellation_amount.
+          Historical values will differ from v1.
+        columns_added:
+          - order_name
+          - order_number
+          - order_created_at
+          - order_cancelled_at
+          - fulfillment_status
+          - revenue_type
+          - subtotal_price
+          - total_tax
+          - shipping_amount
+          - refund_amount
+          - cancellation_amount
+          - tags
+          - note
+        columns_removed: []
+        breaking: true
+        migration_guide: "docs/migrate_revenue_v1_to_v2.md"
+
+    deprecated_columns: []
+
+  # ------- fct_aov -------
+  fct_aov:
+    layer: metrics
+    schema: metrics
+    materialization: table
+    grain: "one row per tenant + currency + period_type + period_start"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          Initial release. AOV with outlier detection (3-sigma, 90-day
+          rolling window) across daily, weekly, monthly, and all_time periods.
+        columns_added:
+          - id
+          - tenant_id
+          - currency
+          - period_type
+          - period_start
+          - order_count
+          - total_net_revenue
+          - aov
+          - avg_order_value
+          - min_order_value
+          - max_order_value
+          - stddev_order_value
+          - outliers_excluded_count
+          - dbt_updated_at
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+  # ------- fct_roas -------
+  fct_roas:
+    layer: metrics
+    schema: metrics
+    materialization: table
+    grain: "varies by period_type and platform"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          Initial release. Gross ROAS and Net ROAS using platform-attributed
+          revenue only (last-click attribution). Zero spend returns 0.
+        columns_added:
+          - id
+          - gross_roas
+          - net_roas
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+  # ------- fct_cac -------
+  fct_cac:
+    layer: metrics
+    schema: metrics
+    materialization: table
+    grain: "varies by period_type and platform"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          Initial release. CAC and nCAC (net CAC) with customer retention
+          rate. nCAC excludes customers whose first order was fully
+          cancelled or refunded.
+        columns_added:
+          - id
+          - new_customers
+          - net_new_customers
+          - cac
+          - ncac
+          - customer_retention_rate_pct
+          - first_order_roas
+          - net_first_order_roas
+          - avg_first_order_value
+          - avg_net_first_order_value
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+  # ------- fct_marketing_metrics -------
+  fct_marketing_metrics:
+    layer: marts
+    schema: marts
+    materialization: table
+    grain: "one row per tenant + version + period + currency + channel + campaign + adset + hierarchy"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          Initial release. Canonical ROAS and CAC with drill-down hierarchy
+          (channel -> campaign -> adset). Includes metric_version column
+          for formula versioning.
+        columns_added:
+          - id
+          - metric_version
+          - tenant_id
+          - period_type
+          - period_start
+          - period_end
+          - currency
+          - hierarchy_level
+          - channel
+          - campaign_id
+          - adset_id
+          - total_spend
+          - total_revenue
+          - order_count
+          - new_customers
+          - total_impressions
+          - total_clicks
+          - roas
+          - cac
+          - cpc
+          - cpm
+          - ctr
+          - aov
+          - dbt_updated_at
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+  # ------- metric_roas_v1 -------
+  metric_roas_v1:
+    layer: marts
+    schema: metrics
+    materialization: view
+    grain: "varies by period_type"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+    immutable: true
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          IMMUTABLE. Platform-attributed ROAS using last-click attribution.
+          Revenue includes only platform-attributed orders. Spend from
+          Meta Ads + Google Ads.
+        columns_added:
+          - id
+          - tenant_id
+          - platform
+          - period_type
+          - period_start
+          - currency
+          - campaign_id
+          - order_count
+          - total_spend
+          - total_gross_revenue
+          - total_net_revenue
+          - gross_roas
+          - net_roas
+          - avg_order_value_gross
+          - avg_order_value_net
+          - dbt_updated_at
+          - metric_version
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+  # ------- metric_roas_v2 -------
+  metric_roas_v2:
+    layer: marts
+    schema: metrics
+    materialization: view
+    grain: "varies by period_type"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+    immutable: true
+
+    versions:
+      - version: "1.0.0"
+        released: "2026-02-01"
+        status: active
+        description: >
+          IMMUTABLE. Blended ROAS including all revenue (attributed + organic).
+          BREAKING vs metric_roas_v1: produces higher ROAS values because
+          organic revenue is included in the numerator.
+        columns_added:
+          - id
+          - tenant_id
+          - platform
+          - period_type
+          - period_start
+          - currency
+          - campaign_id
+          - order_count
+          - total_spend
+          - total_gross_revenue
+          - total_net_revenue
+          - gross_roas
+          - net_roas
+          - avg_order_value_gross
+          - avg_order_value_net
+          - dbt_updated_at
+          - metric_version
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+  # ------- metric_roas_current -------
+  metric_roas_current:
+    layer: marts
+    schema: metrics
+    materialization: view
+    grain: "varies by period_type"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+    alias_target: metric_roas_v1
+    governed: true
+
+    versions:
+      - version: "1.0.0"
+        released: "2025-06-01"
+        status: active
+        description: >
+          Governed alias that points to the latest approved ROAS version.
+          Currently targets metric_roas_v1. Repointing requires change
+          request approval from Analytics Tech Lead + Product Manager.
+        columns_added:
+          - id
+          - tenant_id
+          - gross_roas
+          - net_roas
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+# ---------------------------------------------------------------------------
+# GLOBAL POLICIES
+# ---------------------------------------------------------------------------
+
+policies:
+  deprecation:
+    minimum_notice_days: 90
+    require_migration_guide: true
+    require_sunset_date: true
+    communication_channels:
+      - dashboard_banner
+      - email_notification
+    enforcement:
+      warn_days_before_sunset: 30
+      block_on_sunset: true
+
+  versioning:
+    require_explicit_approval: true
+    auto_migrate: false
+    approvers:
+      schema_change: ["Analytics Tech Lead"]
+      breaking_change: ["Analytics Tech Lead", "Product Manager"]
+      metric_repoint: ["Analytics Tech Lead", "Product Manager"]
+
+  change_process:
+    steps:
+      - "Open PR with schema change and updated schema_registry.yml"
+      - "Bump version number (MAJOR for breaking, MINOR for additive, PATCH for docs)"
+      - "Add migration guide if MAJOR bump"
+      - "Get approval from required approvers"
+      - "Update downstream consumers (dashboards, APIs) if needed"
+      - "Run pre-deploy validation (dbt compile + dbt test)"
+      - "Merge and deploy"
+      - "Notify affected merchants if breaking change"
