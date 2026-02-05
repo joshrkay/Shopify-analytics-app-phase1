@@ -412,7 +412,7 @@ class TenantContextMiddleware:
         from src.models.user_tenant_roles import UserTenantRole
         from src.models.tenant import Tenant, TenantStatus
 
-        db = get_db_session_sync()
+        db = next(get_db_session_sync())
         try:
             # Find user by clerk_user_id
             user = db.query(User).filter(

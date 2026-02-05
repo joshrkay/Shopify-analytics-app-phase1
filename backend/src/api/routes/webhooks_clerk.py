@@ -258,7 +258,7 @@ async def handle_clerk_webhook(
 
     # Process webhook with database session
     try:
-        session = get_db_session_sync()
+        session = next(get_db_session_sync())
         try:
             handler = ClerkWebhookHandler(session)
             result = handler.handle_event(event_type, payload)

@@ -806,7 +806,7 @@ def get_tenant_guard(request: Request) -> TenantGuard:
         async def get_data(guard: TenantGuard = Depends(get_tenant_guard)):
             guard.guard_request(request)
     """
-    db = get_db_session_sync()
+    db = next(get_db_session_sync())
     return TenantGuard(db)
 
 
@@ -834,7 +834,7 @@ def require_tenant_guard(
             tenant_id = auth.current_tenant_id
             ...
     """
-    db = get_db_session_sync()
+    db = next(get_db_session_sync())
     guard = TenantGuard(db)
 
     try:
@@ -863,7 +863,7 @@ def require_tenant_access(tenant_id: str):
         request: Request,
         auth: AuthContext = Depends(require_auth),
     ) -> AuthContext:
-        db = get_db_session_sync()
+        db = next(get_db_session_sync())
         guard = TenantGuard(db)
 
         try:
@@ -891,7 +891,7 @@ async def require_tenant_guard_for_path(
             # auth is validated for access to tenant_id
             ...
     """
-    db = get_db_session_sync()
+    db = next(get_db_session_sync())
     guard = TenantGuard(db)
 
     try:

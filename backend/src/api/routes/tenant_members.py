@@ -118,7 +118,7 @@ def _get_db_session(request: Request):
     """Get database session from request state or create new one."""
     db = getattr(request.state, 'db', None)
     if not db:
-        db = get_db_session_sync()
+        db = next(get_db_session_sync())
     return db
 
 

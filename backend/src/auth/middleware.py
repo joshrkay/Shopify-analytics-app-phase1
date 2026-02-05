@@ -234,7 +234,7 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
                 )
 
             # Resolve auth context with database
-            session = get_db_session_sync()
+            session = next(get_db_session_sync())
             try:
                 resolver = AuthContextResolver(session)
                 auth_context = resolver.resolve(extracted, lazy_sync=True)
