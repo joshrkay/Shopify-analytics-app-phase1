@@ -517,29 +517,30 @@ tables:
     deprecated_columns: []
 
 # ---------------------------------------------------------------------------
-# SEMANTIC VIEWS LAYER
+# SEMANTIC VIEWS LAYER — IMMUTABLE VERSIONED VIEWS
 # ---------------------------------------------------------------------------
 
-  # ------- fact_orders_current -------
-  fact_orders_current:
+  # ------- fact_orders_v1 -------
+  fact_orders_v1:
     layer: semantic_views
     schema: semantic
     materialization: view
     grain: "one row per order per tenant"
     owner: "Analytics Tech Lead"
     current_version: "1.0.0"
-    alias_target: fact_orders
-    governed: true
+    immutable: true
+    source_model: fact_orders
 
     versions:
       - version: "1.0.0"
         released: "2026-02-05"
         status: active
         description: >
-          Governed semantic view for order data. Exposes only approved
-          consumer-facing columns from fact_orders (v1). Excludes deprecated
-          column (platform), internal columns (refunds_json, airbyte_record_id,
-          ingested_at). Enforces tenant_id IS NOT NULL.
+          IMMUTABLE. Frozen column contract for order data. Exposes 22
+          approved consumer-facing columns from fact_orders (registry v1.1.0)
+          plus schema_version tag. Excludes deprecated column (platform),
+          internal columns (refunds_json, airbyte_record_id, ingested_at).
+          Enforces tenant_id IS NOT NULL.
         columns_added:
           - id
           - tenant_id
@@ -562,32 +563,34 @@ tables:
           - tags
           - note
           - dbt_updated_at
+          - schema_version
         columns_removed: []
         breaking: false
         migration_guide: null
 
     deprecated_columns: []
 
-  # ------- fact_marketing_spend_current -------
-  fact_marketing_spend_current:
+  # ------- fact_marketing_spend_v1 -------
+  fact_marketing_spend_v1:
     layer: semantic_views
     schema: semantic
     materialization: view
     grain: "one row per day + platform + account + campaign + ad per tenant"
     owner: "Analytics Tech Lead"
     current_version: "1.0.0"
-    alias_target: fact_ad_spend
-    governed: true
+    immutable: true
+    source_model: fact_ad_spend
 
     versions:
       - version: "1.0.0"
         released: "2026-02-05"
         status: active
         description: >
-          Governed semantic view for marketing spend data. Exposes only
-          approved consumer-facing columns from fact_ad_spend (v1). Excludes
-          deprecated column (platform) and internal columns
-          (airbyte_record_id, ingested_at). Enforces tenant_id IS NOT NULL.
+          IMMUTABLE. Frozen column contract for marketing spend data. Exposes
+          22 approved consumer-facing columns from fact_ad_spend (registry
+          v1.1.0) plus schema_version tag. Excludes deprecated column
+          (platform) and internal columns (airbyte_record_id, ingested_at).
+          Enforces tenant_id IS NOT NULL.
         columns_added:
           - id
           - tenant_id
@@ -610,30 +613,32 @@ tables:
           - cpa
           - roas
           - dbt_updated_at
+          - schema_version
         columns_removed: []
         breaking: false
         migration_guide: null
 
     deprecated_columns: []
 
-  # ------- fact_campaign_performance_current -------
-  fact_campaign_performance_current:
+  # ------- fact_campaign_performance_v1 -------
+  fact_campaign_performance_v1:
     layer: semantic_views
     schema: semantic
     materialization: view
     grain: "one row per day + campaign per tenant"
     owner: "Analytics Tech Lead"
     current_version: "1.0.0"
-    alias_target: fact_campaign_performance
-    governed: true
+    immutable: true
+    source_model: fact_campaign_performance
 
     versions:
       - version: "1.0.0"
         released: "2026-02-05"
         status: active
         description: >
-          Governed semantic view for campaign performance data. Exposes only
-          approved consumer-facing columns from fact_campaign_performance (v1).
+          IMMUTABLE. Frozen column contract for campaign performance data.
+          Exposes 18 approved consumer-facing columns from
+          fact_campaign_performance (registry v1.0.0) plus schema_version tag.
           Excludes deprecated column (platform) and internal columns
           (airbyte_record_id, ingested_at). Enforces tenant_id IS NOT NULL.
         columns_added:
@@ -654,6 +659,153 @@ tables:
           - cpa
           - currency
           - dbt_updated_at
+          - schema_version
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+# ---------------------------------------------------------------------------
+# SEMANTIC VIEWS LAYER — GOVERNED ALIASES
+# ---------------------------------------------------------------------------
+
+  # ------- fact_orders_current -------
+  fact_orders_current:
+    layer: semantic_views
+    schema: semantic
+    materialization: view
+    grain: "one row per order per tenant"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+    alias_target: fact_orders_v1
+    governed: true
+
+    versions:
+      - version: "1.0.0"
+        released: "2026-02-05"
+        status: active
+        description: >
+          Governed alias for order data. Points to fact_orders_v1. Downstream
+          consumers (Superset, AI marts) should use this view exclusively.
+          Repointing requires change request approval.
+        columns_added:
+          - id
+          - tenant_id
+          - order_id
+          - order_name
+          - order_number
+          - customer_key
+          - source_platform
+          - order_created_at
+          - order_updated_at
+          - order_cancelled_at
+          - order_closed_at
+          - date
+          - revenue_gross
+          - revenue_net
+          - total_tax
+          - currency
+          - financial_status
+          - fulfillment_status
+          - tags
+          - note
+          - dbt_updated_at
+          - schema_version
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+  # ------- fact_marketing_spend_current -------
+  fact_marketing_spend_current:
+    layer: semantic_views
+    schema: semantic
+    materialization: view
+    grain: "one row per day + platform + account + campaign + ad per tenant"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+    alias_target: fact_marketing_spend_v1
+    governed: true
+
+    versions:
+      - version: "1.0.0"
+        released: "2026-02-05"
+        status: active
+        description: >
+          Governed alias for marketing spend data. Points to
+          fact_marketing_spend_v1. Downstream consumers (Superset, AI marts)
+          should use this view exclusively. Repointing requires change
+          request approval.
+        columns_added:
+          - id
+          - tenant_id
+          - date
+          - source_platform
+          - channel
+          - ad_account_id
+          - campaign_id
+          - adset_id
+          - ad_id
+          - spend
+          - currency
+          - impressions
+          - clicks
+          - conversions
+          - conversion_value
+          - cpm
+          - cpc
+          - ctr
+          - cpa
+          - roas
+          - dbt_updated_at
+          - schema_version
+        columns_removed: []
+        breaking: false
+        migration_guide: null
+
+    deprecated_columns: []
+
+  # ------- fact_campaign_performance_current -------
+  fact_campaign_performance_current:
+    layer: semantic_views
+    schema: semantic
+    materialization: view
+    grain: "one row per day + campaign per tenant"
+    owner: "Analytics Tech Lead"
+    current_version: "1.0.0"
+    alias_target: fact_campaign_performance_v1
+    governed: true
+
+    versions:
+      - version: "1.0.0"
+        released: "2026-02-05"
+        status: active
+        description: >
+          Governed alias for campaign performance data. Points to
+          fact_campaign_performance_v1. Downstream consumers (Superset,
+          AI marts) should use this view exclusively. Repointing requires
+          change request approval.
+        columns_added:
+          - id
+          - tenant_id
+          - date
+          - source_platform
+          - channel
+          - ad_account_id
+          - campaign_id
+          - campaign_name
+          - spend
+          - impressions
+          - clicks
+          - conversions
+          - ctr
+          - cpc
+          - cpa
+          - currency
+          - dbt_updated_at
+          - schema_version
         columns_removed: []
         breaking: false
         migration_guide: null

@@ -2,51 +2,25 @@
     config(
         materialized='view',
         schema='semantic',
-        tags=['semantic', 'governed', 'orders']
+        tags=['semantic', 'orders', 'alias', 'governed']
     )
 }}
 
--- fact_orders_current - Governed semantic view for order data
+-- fact_orders_current - Governed alias for the approved order data version
 --
--- This view is the ONLY entry point downstream consumers (Superset, AI marts)
--- should use for order data. It hides physical table names, version changes,
--- and internal columns.
+-- This view ALWAYS points to the latest approved version.
+-- It is the ONLY entry point downstream consumers (Superset, AI marts)
+-- should use for order data.
 --
--- Current target: fact_orders v1 (registered 2025-06-01)
+-- Current target: fact_orders_v1 (approved 2026-02-05)
 --
--- Column contract: Only approved columns are exposed. Deprecated columns
--- (platform) and internal columns (refunds_json, airbyte_record_id, ingested_at)
--- are intentionally excluded.
---
--- To repoint to a new version:
---   1. Open a change request via config/governance/change_requests.yaml
---   2. Update this SQL to ref() the new model
---   3. Verify column contract still holds (dbt test -s fact_orders_current)
---   4. Get approval from Analytics Tech Lead
+-- To upgrade:
+--   1. Create fact_orders_v2 with the new column contract
+--   2. Get approval via config/governance/change_requests.yaml
+--   3. Update this alias to ref('fact_orders_v2')
+--   4. Run pre-deploy validation
+--   5. Communicate to affected dashboards
 --
 -- See: canonical/schema_registry.yml
 
-select
-    id,
-    tenant_id,
-    order_id,
-    order_name,
-    order_number,
-    customer_key,
-    source_platform,
-    order_created_at,
-    order_updated_at,
-    order_cancelled_at,
-    order_closed_at,
-    date,
-    revenue_gross,
-    revenue_net,
-    total_tax,
-    currency,
-    financial_status,
-    fulfillment_status,
-    tags,
-    note,
-    dbt_updated_at
-from {{ ref('fact_orders') }}
-where tenant_id is not null
+select * from {{ ref('fact_orders_v1') }}

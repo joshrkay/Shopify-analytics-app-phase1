@@ -2,51 +2,25 @@
     config(
         materialized='view',
         schema='semantic',
-        tags=['semantic', 'governed', 'marketing', 'spend']
+        tags=['semantic', 'marketing', 'spend', 'alias', 'governed']
     )
 }}
 
--- fact_marketing_spend_current - Governed semantic view for ad spend data
+-- fact_marketing_spend_current - Governed alias for the approved spend version
 --
--- This view is the ONLY entry point downstream consumers (Superset, AI marts)
--- should use for marketing spend data. It hides the physical table name
--- (fact_ad_spend), version changes, and internal columns.
+-- This view ALWAYS points to the latest approved version.
+-- It is the ONLY entry point downstream consumers (Superset, AI marts)
+-- should use for marketing spend data.
 --
--- Current target: fact_ad_spend v1 (registered 2025-06-01)
+-- Current target: fact_marketing_spend_v1 (approved 2026-02-05)
 --
--- Column contract: Only approved columns are exposed. Deprecated columns
--- (platform) and internal columns (airbyte_record_id, ingested_at) are
--- intentionally excluded.
---
--- To repoint to a new version:
---   1. Open a change request via config/governance/change_requests.yaml
---   2. Update this SQL to ref() the new model
---   3. Verify column contract still holds (dbt test -s fact_marketing_spend_current)
---   4. Get approval from Analytics Tech Lead
+-- To upgrade:
+--   1. Create fact_marketing_spend_v2 with the new column contract
+--   2. Get approval via config/governance/change_requests.yaml
+--   3. Update this alias to ref('fact_marketing_spend_v2')
+--   4. Run pre-deploy validation
+--   5. Communicate to affected dashboards
 --
 -- See: canonical/schema_registry.yml
 
-select
-    id,
-    tenant_id,
-    date,
-    source_platform,
-    channel,
-    ad_account_id,
-    campaign_id,
-    adset_id,
-    ad_id,
-    spend,
-    currency,
-    impressions,
-    clicks,
-    conversions,
-    conversion_value,
-    cpm,
-    cpc,
-    ctr,
-    cpa,
-    roas,
-    dbt_updated_at
-from {{ ref('fact_ad_spend') }}
-where tenant_id is not null
+select * from {{ ref('fact_marketing_spend_v1') }}
