@@ -1,0 +1,91 @@
+# Data Freshness SLAs
+# Single source of truth for freshness thresholds by source and billing tier.
+# All values expressed in minutes.
+#
+# Consumers:
+#   - dbt macros: analytics/macros/get_freshness_threshold.sql (via load_file_contents)
+#   - Backend API: read with PyYAML / any YAML parser
+#
+# To override the billing tier in dbt:
+#   dbt source freshness --vars '{billing_tier: enterprise}'
+
+version: 1
+default_tier: free
+
+sources:
+  shopify_orders:
+    free:
+      warn_after_minutes: 1440    # 24 h
+      error_after_minutes: 2880   # 48 h
+    growth:
+      warn_after_minutes: 360     #  6 h
+      error_after_minutes: 720    # 12 h
+    enterprise:
+      warn_after_minutes: 60      #  1 h
+      error_after_minutes: 120    #  2 h
+
+  facebook_ads:
+    free:
+      warn_after_minutes: 1440
+      error_after_minutes: 2880
+    growth:
+      warn_after_minutes: 360
+      error_after_minutes: 720
+    enterprise:
+      warn_after_minutes: 60
+      error_after_minutes: 120
+
+  google_ads:
+    free:
+      warn_after_minutes: 1440
+      error_after_minutes: 2880
+    growth:
+      warn_after_minutes: 360
+      error_after_minutes: 720
+    enterprise:
+      warn_after_minutes: 60
+      error_after_minutes: 120
+
+  tiktok_ads:
+    free:
+      warn_after_minutes: 1440
+      error_after_minutes: 2880
+    growth:
+      warn_after_minutes: 360
+      error_after_minutes: 720
+    enterprise:
+      warn_after_minutes: 60
+      error_after_minutes: 120
+
+  snapchat_ads:
+    free:
+      warn_after_minutes: 1440
+      error_after_minutes: 2880
+    growth:
+      warn_after_minutes: 360
+      error_after_minutes: 720
+    enterprise:
+      warn_after_minutes: 60
+      error_after_minutes: 120
+
+  email:
+    free:
+      warn_after_minutes: 1440
+      error_after_minutes: 2880
+    growth:
+      warn_after_minutes: 720     # 12 h
+      error_after_minutes: 1440   # 24 h
+    enterprise:
+      warn_after_minutes: 360     #  6 h
+      error_after_minutes: 720    # 12 h
+
+  sms:
+    free:
+      warn_after_minutes: 1440
+      error_after_minutes: 2880
+    growth:
+      warn_after_minutes: 720
+      error_after_minutes: 1440
+    enterprise:
+      warn_after_minutes: 360
+      error_after_minutes: 720

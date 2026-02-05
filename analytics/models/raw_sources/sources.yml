@@ -5,8 +5,8 @@ sources:
     description: Raw Shopify data ingested via Airbyte
     schema: "{{ var('raw_shopify_schema', 'airbyte_raw') }}"
     freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+      warn_after: {count: {{ get_freshness_threshold('shopify_orders', 'warn_after_minutes') }}, period: minute}
+      error_after: {count: {{ get_freshness_threshold('shopify_orders', 'error_after_minutes') }}, period: minute}
     tables:
       - name: orders
         identifier: _airbyte_raw_shopify_orders
@@ -48,8 +48,8 @@ sources:
     description: Raw Meta (Facebook/Instagram) Ads data ingested via Airbyte
     schema: "{{ var('raw_facebook_ads_schema', 'airbyte_raw') }}"
     freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+      warn_after: {count: {{ get_freshness_threshold('facebook_ads', 'warn_after_minutes') }}, period: minute}
+      error_after: {count: {{ get_freshness_threshold('facebook_ads', 'error_after_minutes') }}, period: minute}
     tables:
       - name: ad_insights
         identifier: _airbyte_raw_meta_ads
@@ -73,8 +73,8 @@ sources:
     description: Raw Google Ads data ingested via Airbyte
     schema: "{{ var('raw_google_ads_schema', 'airbyte_raw') }}"
     freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+      warn_after: {count: {{ get_freshness_threshold('google_ads', 'warn_after_minutes') }}, period: minute}
+      error_after: {count: {{ get_freshness_threshold('google_ads', 'error_after_minutes') }}, period: minute}
     tables:
       - name: ad_stats
         identifier: _airbyte_raw_google_ads
@@ -98,8 +98,8 @@ sources:
     description: Raw TikTok Ads data ingested via Airbyte
     schema: "{{ var('raw_tiktok_ads_schema', 'airbyte_raw') }}"
     freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+      warn_after: {count: {{ get_freshness_threshold('tiktok_ads', 'warn_after_minutes') }}, period: minute}
+      error_after: {count: {{ get_freshness_threshold('tiktok_ads', 'error_after_minutes') }}, period: minute}
     tables:
       - name: ad_reports
         identifier: _airbyte_raw_tiktok_ads
@@ -117,8 +117,8 @@ sources:
     description: Raw Snapchat Ads data ingested via Airbyte
     schema: "{{ var('raw_snapchat_ads_schema', 'airbyte_raw') }}"
     freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+      warn_after: {count: {{ get_freshness_threshold('snapchat_ads', 'warn_after_minutes') }}, period: minute}
+      error_after: {count: {{ get_freshness_threshold('snapchat_ads', 'error_after_minutes') }}, period: minute}
     tables:
       - name: ad_reports
         identifier: _airbyte_raw_snapchat_ads
@@ -136,8 +136,8 @@ sources:
     description: Raw email marketing data ingested via Airbyte (Klaviyo, Shopify Email)
     schema: "{{ var('raw_email_schema', 'airbyte_raw') }}"
     freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+      warn_after: {count: {{ get_freshness_threshold('email', 'warn_after_minutes') }}, period: minute}
+      error_after: {count: {{ get_freshness_threshold('email', 'error_after_minutes') }}, period: minute}
     tables:
       - name: klaviyo_events
         identifier: _airbyte_raw_klaviyo_events
@@ -167,8 +167,8 @@ sources:
     description: Raw SMS marketing data ingested via Airbyte (Attentive, Postscript, SMSBump)
     schema: "{{ var('raw_sms_schema', 'airbyte_raw') }}"
     freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+      warn_after: {count: {{ get_freshness_threshold('sms', 'warn_after_minutes') }}, period: minute}
+      error_after: {count: {{ get_freshness_threshold('sms', 'error_after_minutes') }}, period: minute}
     tables:
       - name: attentive_events
         identifier: _airbyte_raw_attentive_events

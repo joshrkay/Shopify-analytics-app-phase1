@@ -24,56 +24,6 @@
 {% endmacro %}
 
 
-{% macro get_freshness_warn_hours(source_name) %}
-    {#
-    Get the freshness warning threshold in hours for a specific source.
-
-    Used by freshness tests to determine when to warn about stale data.
-    Thresholds should be configured based on source SLAs from Story 7.6.
-
-    Args:
-        source_name: The source identifier (e.g., 'shopify', 'meta_ads')
-
-    Returns:
-        Integer number of hours for warning threshold
-
-    Note:
-        These are placeholder values. Actual thresholds should be configured
-        based on Story 7.6 freshness SLA requirements.
-    #}
-
-    {% set source_var = 'freshness_warn_hours_' ~ source_name %}
-    {% set default_var = 'freshness_warn_hours_default' %}
-
-    {{ var(source_var, var(default_var, 24)) }}
-{% endmacro %}
-
-
-{% macro get_freshness_error_hours(source_name) %}
-    {#
-    Get the freshness error threshold in hours for a specific source.
-
-    Used by freshness tests to determine when to error on stale data.
-    Thresholds should be configured based on source SLAs from Story 7.6.
-
-    Args:
-        source_name: The source identifier (e.g., 'shopify', 'meta_ads')
-
-    Returns:
-        Integer number of hours for error threshold
-
-    Note:
-        These are placeholder values. Actual thresholds should be configured
-        based on Story 7.6 freshness SLA requirements.
-    #}
-
-    {% set source_var = 'freshness_error_hours_' ~ source_name %}
-    {% set default_var = 'freshness_error_hours_default' %}
-
-    {{ var(source_var, var(default_var, 48)) }}
-{% endmacro %}
-
-
 {% macro get_incremental_filter(source_name, date_column) %}
     {#
     Generate the incremental filter clause for a staging model.

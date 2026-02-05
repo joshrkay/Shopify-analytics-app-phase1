@@ -3,8 +3,7 @@
 -- This test validates:
 -- 1. get_lookback_days returns default value for unknown sources
 -- 2. get_lookback_days returns configured value for known sources
--- 3. get_freshness_warn_hours returns expected defaults
--- 4. get_freshness_error_hours returns expected defaults
+-- 3. get_freshness_threshold returns expected SLA values from config
 --
 -- Returns rows only when test fails
 
@@ -15,9 +14,9 @@ with test_cases as (
         {{ get_lookback_days('google_ads') }} as lookback_google_ads,
         {{ get_lookback_days('unknown_source') }} as lookback_unknown,
 
-        -- Test freshness thresholds
-        {{ get_freshness_warn_hours('shopify') }} as freshness_warn_shopify,
-        {{ get_freshness_error_hours('shopify') }} as freshness_error_shopify
+        -- Test freshness thresholds (from config/data_freshness_sla.yml, free tier)
+        {{ get_freshness_threshold('shopify_orders', 'warn_after_minutes') }} as freshness_warn_shopify,
+        {{ get_freshness_threshold('shopify_orders', 'error_after_minutes') }} as freshness_error_shopify
 ),
 
 assertions as (
@@ -30,11 +29,11 @@ assertions as (
         -- Unknown source should get default (3)
         case when lookback_unknown = 3 then 'PASS' else 'FAIL: unknown lookback=' || lookback_unknown::text end as test_lookback_unknown,
 
-        -- Freshness warn should be 24 hours by default
-        case when freshness_warn_shopify = 24 then 'PASS' else 'FAIL: warn_hours=' || freshness_warn_shopify::text end as test_freshness_warn,
+        -- Freshness warn should be 1440 minutes (24h) for free tier
+        case when freshness_warn_shopify = 1440 then 'PASS' else 'FAIL: warn_minutes=' || freshness_warn_shopify::text end as test_freshness_warn,
 
-        -- Freshness error should be 48 hours by default
-        case when freshness_error_shopify = 48 then 'PASS' else 'FAIL: error_hours=' || freshness_error_shopify::text end as test_freshness_error
+        -- Freshness error should be 2880 minutes (48h) for free tier
+        case when freshness_error_shopify = 2880 then 'PASS' else 'FAIL: error_minutes=' || freshness_error_shopify::text end as test_freshness_error
     from test_cases
 )
 
