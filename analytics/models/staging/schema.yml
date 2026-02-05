@@ -49,6 +49,10 @@ models:
       Staging model for Shopify orders with strict typing, standardization, and dedup.
       Includes record_sk (stable surrogate key), source_system, source_primary_key.
       Deduplicates by (tenant_id, order_id) keeping the latest Airbyte emission.
+    tests:
+      - test_freshness:
+          column_name: airbyte_emitted_at
+          source_name: shopify_orders
     columns:
       - name: record_sk
         description: Stable surrogate key md5(tenant_id || source_system || source_primary_key)
@@ -203,6 +207,10 @@ models:
       Staging model for Meta Ads (Facebook/Instagram) with strict typing, standardization,
       and dedup. Includes record_sk, source_system, source_primary_key.
       No derived business metrics (cpm, cpc, ctr, cpa, roas) - deferred to canonical layer.
+    tests:
+      - test_freshness:
+          column_name: airbyte_emitted_at
+          source_name: facebook_ads
     columns:
       - name: record_sk
         description: Stable surrogate key md5(tenant_id || source_system || source_primary_key)
@@ -321,6 +329,10 @@ models:
       Staging model for Google Ads with strict typing, standardization, and dedup.
       Includes record_sk, source_system, source_primary_key.
       No derived business metrics (cpm, cpc, ctr, cpa, roas) - deferred to canonical layer.
+    tests:
+      - test_freshness:
+          column_name: airbyte_emitted_at
+          source_name: google_ads
     columns:
       - name: record_sk
         description: Stable surrogate key md5(tenant_id || source_system || source_primary_key)
@@ -436,6 +448,10 @@ models:
       Includes record_sk, source_system, source_primary_key.
       Returns empty result if source table doesn't exist yet.
       No derived business metrics - deferred to canonical layer.
+    tests:
+      - test_freshness:
+          column_name: airbyte_emitted_at
+          source_name: tiktok_ads
     columns:
       - name: record_sk
         description: Stable surrogate key md5(tenant_id || source_system || source_primary_key)
@@ -552,6 +568,10 @@ models:
       Staging model for email campaign metrics aggregated from Klaviyo events.
       Includes record_sk, source_system, source_primary_key.
       Provides raw count metrics only (no derived rates) - deferred to canonical layer.
+    tests:
+      - test_freshness:
+          column_name: airbyte_emitted_at
+          source_name: email
     columns:
       - name: record_sk
         description: Stable surrogate key md5(tenant_id || source_system || source_primary_key)

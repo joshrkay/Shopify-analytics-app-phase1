@@ -5,6 +5,7 @@ Provides endpoints for:
 - Overall data health summary
 - Per-source health indicators
 - Stale data warnings
+- Freshness SLA configuration (per source, per billing tier)
 
 SECURITY: All routes require valid tenant context from JWT.
 Health data is tenant-scoped - users can only see their own connections.
@@ -14,9 +15,9 @@ Story 3.6 - Data Freshness & Health Monitoring
 
 import os
 import logging
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 
-from fastapi import APIRouter, Request, HTTPException, status, Depends
+from fastapi import APIRouter, Request, HTTPException, status, Depends, Query
 from pydantic import BaseModel, Field
 
 from src.platform.tenant_context import get_tenant_context
@@ -68,6 +69,20 @@ class StaleSourcesResponse(BaseModel):
     """List of stale data sources."""
     stale_sources: List[SourceHealthResponse]
     count: int
+
+
+class SourceSLAResponse(BaseModel):
+    """SLA thresholds for a single source across all tiers."""
+    source_name: str
+    tiers: Dict[str, Dict[str, int]]
+
+
+class FreshnessSLAConfigResponse(BaseModel):
+    """Full freshness SLA configuration."""
+    version: int
+    default_tier: str
+    tiers: List[str]
+    sources: Dict[str, Dict[str, Dict[str, int]]]
 
 
 # =============================================================================
@@ -272,3 +287,88 @@ async def get_all_sources_health(
     sources = service.get_all_sources_health()
 
     return [_source_health_to_response(s) for s in sources]
+
+
+# =============================================================================
+# Freshness SLA Configuration Endpoints
+# =============================================================================
+
+@router.get(
+    "/freshness-sla",
+    response_model=FreshnessSLAConfigResponse,
+)
+async def get_freshness_sla_config(request: Request):
+    """
+    Return the full freshness SLA configuration.
+
+    Exposes per-source, per-tier warn/error thresholds (in minutes)
+    from config/data_freshness_sla.yml. This is the same config that
+    dbt macros reference, ensuring a single source of truth.
+
+    SECURITY: SLA configuration is not tenant-specific data; it is
+    global platform config. Authentication is still required.
+    """
+    from src.config.freshness_sla import get_freshness_sla_loader
+
+    tenant_ctx = get_tenant_context(request)
+    logger.info(
+        "Freshness SLA config requested",
+        extra={"tenant_id": tenant_ctx.tenant_id},
+    )
+
+    loader = get_freshness_sla_loader()
+    return FreshnessSLAConfigResponse(**loader.get_all())
+
+
+@router.get(
+    "/freshness-sla/{source_name}",
+    response_model=SourceSLAResponse,
+)
+async def get_source_freshness_sla(
+    request: Request,
+    source_name: str,
+    tier: Optional[str] = Query(
+        None,
+        description="Filter to a specific billing tier (free, growth, enterprise)",
+    ),
+):
+    """
+    Return freshness SLA thresholds for a specific ingestion source.
+
+    Args:
+        source_name: SLA source key, e.g. 'shopify_orders', 'email'.
+        tier: Optional billing tier filter.
+
+    SECURITY: Authentication required. Config is global (not tenant data).
+    """
+    from src.config.freshness_sla import get_freshness_sla_loader
+
+    tenant_ctx = get_tenant_context(request)
+    logger.info(
+        "Source freshness SLA requested",
+        extra={
+            "tenant_id": tenant_ctx.tenant_id,
+            "source_name": source_name,
+            "tier": tier,
+        },
+    )
+
+    loader = get_freshness_sla_loader()
+
+    if source_name not in loader.source_names:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown SLA source: {source_name}",
+        )
+
+    all_tiers = loader.get_source_all_tiers(source_name)
+
+    if tier:
+        if tier not in loader.tiers:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown tier: {tier}. Valid tiers: {loader.tiers}",
+            )
+        all_tiers = {tier: all_tiers[tier]}
+
+    return SourceSLAResponse(source_name=source_name, tiers=all_tiers)

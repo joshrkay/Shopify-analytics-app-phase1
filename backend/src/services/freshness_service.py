@@ -6,13 +6,19 @@ Bridges the existing DataHealthService infrastructure to provide:
 2. Dashboard-ready freshness summaries
 3. AI staleness gate — blocks AI jobs when underlying data is stale
 
+Freshness classification uses config/data_freshness_sla.yml as the single source
+of truth.  The same YAML is consumed by dbt macros, ensuring consistent thresholds
+across the backend and the analytics layer.
+
 SECURITY: All operations are tenant-scoped via tenant_id from JWT.
 
 Usage:
     from src.services.freshness_service import FreshnessService
 
-    # Dashboard usage
-    service = FreshnessService(db_session=session, tenant_id=tenant_id)
+    # Dashboard usage (tier-aware)
+    service = FreshnessService(
+        db_session=session, tenant_id=tenant_id, billing_tier="growth",
+    )
     summary = service.get_freshness_summary()
 
     # AI gate (static convenience)
@@ -26,7 +32,7 @@ Usage:
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -34,13 +40,32 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # ─── Thresholds ──────────────────────────────────────────────────────────────
-# Import canonical thresholds from DataHealthService — single source of truth.
+# SLA thresholds are loaded from config/data_freshness_sla.yml via the loader.
+# The legacy flat constants are kept only as last-resort fallbacks.
 from src.services.data_health_service import (  # noqa: E402
     DEFAULT_FRESHNESS_THRESHOLD_MINUTES,
     DEFAULT_CRITICAL_THRESHOLD_MINUTES,
 )
 
 AI_STALENESS_BLOCK_THRESHOLD_MINUTES = DEFAULT_CRITICAL_THRESHOLD_MINUTES
+
+# ─── Source-type mapping ─────────────────────────────────────────────────────
+# Maps connection source_type values (stored on TenantAirbyteConnection) to the
+# SLA source keys in config/data_freshness_sla.yml.
+_SOURCE_TYPE_TO_SLA_KEY: Dict[str, str] = {
+    "shopify": "shopify_orders",
+    "source-shopify": "shopify_orders",
+    "source-facebook-marketing": "facebook_ads",
+    "source-google-ads": "google_ads",
+    "source-tiktok-marketing": "tiktok_ads",
+    "source-snapchat-marketing": "snapchat_ads",
+    "source-klaviyo": "email",
+    "klaviyo": "email",
+    "email": "email",
+    "sms": "sms",
+    "source-attentive": "sms",
+    "source-postscript": "sms",
+}
 
 
 # ─── Data classes ─────────────────────────────────────────────────────────────
@@ -131,8 +156,9 @@ class FreshnessService:
     """
     Unified freshness layer consumed by dashboards and AI job runners.
 
-    Delegates low-level freshness calculations to DataHealthService and
-    adds the AI staleness gate on top.
+    Uses per-source, per-tier SLA thresholds from config/data_freshness_sla.yml
+    for freshness classification.  Falls back to legacy flat thresholds when the
+    SLA config is unavailable or the source is not mapped.
 
     SECURITY: tenant_id must come from JWT (org_id), never client input.
     """
@@ -141,6 +167,7 @@ class FreshnessService:
         self,
         db_session: Session,
         tenant_id: str,
+        billing_tier: Optional[str] = None,
         ai_block_threshold_minutes: int = AI_STALENESS_BLOCK_THRESHOLD_MINUTES,
     ):
         if not tenant_id:
@@ -148,7 +175,24 @@ class FreshnessService:
 
         self.db = db_session
         self.tenant_id = tenant_id
+        self.billing_tier = billing_tier
         self.ai_block_threshold_minutes = ai_block_threshold_minutes
+
+        # Lazily-loaded SLA config (avoids import-time file I/O)
+        self._sla_loader = None
+
+    def _get_sla_loader(self):
+        """Return the SLA config loader (lazy-initialised)."""
+        if self._sla_loader is None:
+            try:
+                from src.config.freshness_sla import get_freshness_sla_loader
+                self._sla_loader = get_freshness_sla_loader()
+            except Exception as exc:
+                logger.warning(
+                    "Could not load SLA config, using legacy thresholds: %s",
+                    exc,
+                )
+        return self._sla_loader
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
@@ -171,12 +215,35 @@ class FreshnessService:
         from src.services.data_availability_service import minutes_since_sync
         return minutes_since_sync(ts)
 
+    def _get_sla_thresholds(self, source_type: Optional[str]) -> tuple:
+        """
+        Return (warn_minutes, error_minutes) from the SLA config.
+
+        Falls back to legacy flat thresholds when the SLA config is
+        unavailable or the source_type cannot be mapped.
+        """
+        sla = self._get_sla_loader()
+        sla_key = _SOURCE_TYPE_TO_SLA_KEY.get(source_type or "")
+
+        if sla and sla_key:
+            warn = sla.get_threshold(sla_key, self.billing_tier, "warn_after_minutes")
+            error = sla.get_threshold(sla_key, self.billing_tier, "error_after_minutes")
+            return warn, error
+
+        # Legacy fallback
+        return DEFAULT_FRESHNESS_THRESHOLD_MINUTES, DEFAULT_CRITICAL_THRESHOLD_MINUTES
+
     def _classify_freshness(
         self,
         last_sync_at: Optional[datetime],
-        sync_freq_minutes: int,
+        source_type: Optional[str] = None,
     ) -> str:
-        """Return a FreshnessStatus value string."""
+        """
+        Return a FreshnessStatus value string.
+
+        Uses per-source, per-tier SLA thresholds from
+        config/data_freshness_sla.yml.
+        """
         from src.services.data_health_service import FreshnessStatus
 
         if last_sync_at is None:
@@ -186,20 +253,18 @@ class FreshnessService:
         if minutes is None:
             return FreshnessStatus.UNKNOWN.value
 
-        effective_threshold = max(
-            sync_freq_minutes, DEFAULT_FRESHNESS_THRESHOLD_MINUTES
-        )
+        warn_threshold, error_threshold = self._get_sla_thresholds(source_type)
 
-        if minutes <= effective_threshold:
+        if minutes <= warn_threshold:
             return FreshnessStatus.FRESH.value
-        elif minutes <= DEFAULT_CRITICAL_THRESHOLD_MINUTES:
+        elif minutes <= error_threshold:
             return FreshnessStatus.STALE.value
         else:
             return FreshnessStatus.CRITICAL.value
 
     def _build_source_freshness(self, conn) -> SourceFreshness:
         freq = self._parse_sync_frequency(conn.sync_frequency_minutes)
-        status = self._classify_freshness(conn.last_sync_at, freq)
+        status = self._classify_freshness(conn.last_sync_at, conn.source_type)
         minutes = self._minutes_since(conn.last_sync_at)
 
         is_stale = status in ("stale", "critical", "never_synced")
@@ -475,6 +540,7 @@ class FreshnessService:
         db_session: Session,
         tenant_id: str,
         required_sources: Optional[List[str]] = None,
+        billing_tier: Optional[str] = None,
         ai_block_threshold_minutes: int = AI_STALENESS_BLOCK_THRESHOLD_MINUTES,
     ) -> FreshnessGateResult:
         """
@@ -492,6 +558,7 @@ class FreshnessService:
             db_session: Database session
             tenant_id: Tenant ID from JWT
             required_sources: Optional source types to check
+            billing_tier: Tenant's billing tier for SLA lookup
             ai_block_threshold_minutes: Override for block threshold
 
         Returns:
@@ -500,6 +567,7 @@ class FreshnessService:
         service = FreshnessService(
             db_session=db_session,
             tenant_id=tenant_id,
+            billing_tier=billing_tier,
             ai_block_threshold_minutes=ai_block_threshold_minutes,
         )
         return service.check_freshness_gate(

@@ -18,6 +18,9 @@ alembic==1.13.1
 # Redis
 redis==5.0.1
 
+# Configuration
+PyYAML==6.0.1
+
 # Environment variables
 python-dotenv==1.0.0
 
