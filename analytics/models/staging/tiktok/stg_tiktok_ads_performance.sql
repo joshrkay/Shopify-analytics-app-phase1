@@ -2,35 +2,35 @@
     config(
         materialized='incremental',
         schema='staging',
-        unique_key=['tenant_id', 'ad_account_id', 'campaign_id', 'adgroup_id', 'ad_id', 'date'],
+        unique_key='record_sk',
         incremental_strategy='delete+insert',
         enabled=var('enable_tiktok_ads', true)
     )
 }}
 
 {#
-    Staging model for TikTok Ads with normalized fields and tenant isolation.
+    Staging model for TikTok Ads with strict typing and standardization.
 
     This model:
     - Extracts and normalizes raw TikTok Ads data from Airbyte
+    - Adds record_sk (stable surrogate key), source_system, source_primary_key
+    - Deduplicates by natural key keeping the latest Airbyte emission
     - Adds internal IDs for cross-platform joins (Option B ID normalization)
     - Maps to canonical channel taxonomy
     - Supports incremental processing with configurable lookback window
-    - Excludes PII fields
     - Returns empty result if source table doesn't exist yet
+    - Does NOT calculate business metrics (cpm, cpc, ctr, cpa, roas) - deferred to canonical layer
 
-    Required output columns (staging contract):
-    - tenant_id, report_date, source, platform_channel, canonical_channel
-    - platform_account_id, internal_account_id, platform_campaign_id, internal_campaign_id
-    - spend, impressions, clicks, conversions, conversion_value
-    - cpm, cpc, ctr, cpa, roas_platform (derived where possible)
+    SECURITY: Tenant isolation enforced via _tenant_airbyte_connections.
 #}
 
 -- Check if source table exists; if not, return empty result set
 {% if not source_exists('raw_tiktok_ads', 'ad_reports') %}
 
--- Source table does not exist yet; return empty result with correct schema
 select
+    cast(null as text) as record_sk,
+    cast(null as text) as source_system,
+    cast(null as text) as source_primary_key,
     cast(null as text) as tenant_id,
     cast(null as date) as report_date,
     cast(null as date) as date,
@@ -49,18 +49,12 @@ select
     cast(null as numeric) as conversions,
     cast(null as numeric) as conversion_value,
     cast(null as text) as currency,
-    cast(null as numeric) as cpm,
-    cast(null as numeric) as cpc,
-    cast(null as numeric) as ctr,
-    cast(null as numeric) as cpa,
-    cast(null as numeric) as roas_platform,
     cast(null as text) as campaign_name,
     cast(null as text) as adgroup_name,
     cast(null as text) as ad_name,
     cast(null as text) as objective,
     cast(null as integer) as reach,
     cast(null as numeric) as frequency,
-    cast(null as numeric) as cost_per_conversion,
     cast(null as text) as platform,
     cast(null as text) as airbyte_record_id,
     cast(null as timestamp) as airbyte_emitted_at
@@ -100,11 +94,6 @@ tiktok_ads_extracted as (
         raw.ad_data->>'objective_type' as objective,
         raw.ad_data->>'reach' as reach_raw,
         raw.ad_data->>'frequency' as frequency_raw,
-        raw.ad_data->>'cpm' as cpm_raw,
-        raw.ad_data->>'cpc' as cpc_raw,
-        raw.ad_data->>'ctr' as ctr_raw,
-        raw.ad_data->>'cost_per_conversion' as cost_per_conversion_raw,
-        -- Platform channel: derive from objective or default to feed
         coalesce(raw.ad_data->>'placement_type', raw.ad_data->>'objective_type', 'feed') as platform_channel_raw
     from raw_tiktok_ads raw
 ),
@@ -140,7 +129,7 @@ tiktok_ads_normalized as (
             else null
         end as date,
 
-        -- Spend: convert to numeric, handle nulls and invalid values
+        -- Spend: convert to numeric
         case
             when spend_raw is null or trim(spend_raw) = '' then 0.0
             when trim(spend_raw) ~ '^-?[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?$'
@@ -148,7 +137,7 @@ tiktok_ads_normalized as (
             else 0.0
         end as spend,
 
-        -- Impressions: convert to integer, handle nulls
+        -- Impressions: convert to integer
         case
             when impressions_raw is null or trim(impressions_raw) = '' then 0
             when trim(impressions_raw) ~ '^-?[0-9]+$'
@@ -156,7 +145,7 @@ tiktok_ads_normalized as (
             else 0
         end as impressions,
 
-        -- Clicks: convert to integer, handle nulls
+        -- Clicks: convert to integer
         case
             when clicks_raw is null or trim(clicks_raw) = '' then 0
             when trim(clicks_raw) ~ '^-?[0-9]+$'
@@ -164,7 +153,7 @@ tiktok_ads_normalized as (
             else 0
         end as clicks,
 
-        -- Conversions: convert to numeric, handle nulls
+        -- Conversions: convert to numeric
         case
             when conversions_raw is null or trim(conversions_raw) = '' then 0.0
             when trim(conversions_raw) ~ '^-?[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?$'
@@ -213,42 +202,8 @@ tiktok_ads_normalized as (
             else null
         end as frequency,
 
-        -- CPM (Cost Per Mille): convert to numeric
-        case
-            when cpm_raw is null or trim(cpm_raw) = '' then null
-            when trim(cpm_raw) ~ '^-?[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?$'
-                then least(greatest(trim(cpm_raw)::numeric, 0.0), 999999.99)
-            else null
-        end as cpm_platform,
-
-        -- CPC (Cost Per Click): convert to numeric
-        case
-            when cpc_raw is null or trim(cpc_raw) = '' then null
-            when trim(cpc_raw) ~ '^-?[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?$'
-                then least(greatest(trim(cpc_raw)::numeric, 0.0), 999999.99)
-            else null
-        end as cpc_platform,
-
-        -- CTR (Click-Through Rate): convert to numeric (percentage)
-        case
-            when ctr_raw is null or trim(ctr_raw) = '' then null
-            when trim(ctr_raw) ~ '^-?[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?$'
-                then least(greatest(trim(ctr_raw)::numeric, 0.0), 100.0)
-            else null
-        end as ctr_platform,
-
-        -- Cost per conversion: convert to numeric
-        case
-            when cost_per_conversion_raw is null or trim(cost_per_conversion_raw) = '' then null
-            when trim(cost_per_conversion_raw) ~ '^-?[0-9]+\.?[0-9]*([eE][+-]?[0-9]+)?$'
-                then least(greatest(trim(cost_per_conversion_raw)::numeric, 0.0), 999999.99)
-            else null
-        end as cost_per_conversion,
-
-        -- Platform identifier
+        -- Platform/source identifiers
         'tiktok_ads' as platform,
-
-        -- Source identifier (same as platform for consistency)
         'tiktok_ads' as source,
 
         -- Metadata
@@ -274,20 +229,13 @@ tiktok_ads_with_tenant as (
     from tiktok_ads_normalized ads
 ),
 
--- Add internal IDs and canonical channel
-tiktok_ads_final as (
+-- Add internal IDs, canonical channel, and dedup
+tiktok_ads_enriched as (
     select
-        -- Tenant ID (required for multi-tenant isolation)
         tenant_id,
-
-        -- Date fields
         date,
-        date as report_date,  -- Alias for staging contract consistency
-
-        -- Source identifier
+        date as report_date,
         source,
-
-        -- Platform IDs (kept for backward compatibility)
         ad_account_id,
         campaign_id,
         adgroup_id,
@@ -301,44 +249,13 @@ tiktok_ads_final as (
         platform_channel,
         {{ map_canonical_channel('source', 'platform_channel') }} as canonical_channel,
 
-        -- Core metrics
+        -- Core metrics only (no derived business metrics)
         spend,
         impressions,
         clicks,
         conversions,
         conversion_value,
         currency,
-
-        -- Derived metrics (calculated where possible)
-        -- CPM: Cost Per Mille = (spend / impressions) * 1000
-        case
-            when impressions > 0 then round((spend / impressions) * 1000, 4)
-            else cpm_platform
-        end as cpm,
-
-        -- CPC: Cost Per Click = spend / clicks
-        case
-            when clicks > 0 then round(spend / clicks, 4)
-            else cpc_platform
-        end as cpc,
-
-        -- CTR: Click Through Rate = (clicks / impressions) * 100
-        case
-            when impressions > 0 then round((clicks::numeric / impressions) * 100, 4)
-            else ctr_platform
-        end as ctr,
-
-        -- CPA: Cost Per Acquisition = spend / conversions
-        case
-            when conversions > 0 then round(spend / conversions, 4)
-            else cost_per_conversion
-        end as cpa,
-
-        -- ROAS Platform: Return on Ad Spend = conversion_value / spend
-        case
-            when spend > 0 then round(conversion_value / spend, 4)
-            else null
-        end as roas_platform,
 
         -- Additional fields
         campaign_name,
@@ -347,19 +264,44 @@ tiktok_ads_final as (
         objective,
         reach,
         frequency,
-        cost_per_conversion,
 
-        -- Platform identifier (kept for backward compatibility)
         platform,
-
-        -- Metadata
         airbyte_record_id,
-        airbyte_emitted_at
+        airbyte_emitted_at,
+
+        -- Dedup: keep latest record per natural key
+        row_number() over (
+            partition by tenant_id, ad_account_id, campaign_id, adgroup_id, ad_id, date
+            order by airbyte_emitted_at desc
+        ) as _row_num
 
     from tiktok_ads_with_tenant
+    where tenant_id is not null
+        and ad_account_id is not null
+        and trim(ad_account_id) != ''
+        and campaign_id is not null
+        and trim(campaign_id) != ''
+        and date is not null
 )
 
 select
+    -- Surrogate key: md5(tenant_id || source_system || source_primary_key)
+    md5(concat(
+        tenant_id, '|', 'tiktok_ads', '|',
+        ad_account_id, '|', campaign_id, '|',
+        coalesce(adgroup_id, ''), '|', coalesce(ad_id, ''), '|',
+        date::text
+    )) as record_sk,
+
+    -- Source tracking
+    'tiktok_ads' as source_system,
+    concat(
+        ad_account_id, '|', campaign_id, '|',
+        coalesce(adgroup_id, ''), '|', coalesce(ad_id, ''), '|',
+        date::text
+    ) as source_primary_key,
+
+    -- All staging columns
     tenant_id,
     report_date,
     date,
@@ -378,28 +320,18 @@ select
     conversions,
     conversion_value,
     currency,
-    cpm,
-    cpc,
-    ctr,
-    cpa,
-    roas_platform,
     campaign_name,
     adgroup_name,
     ad_name,
     objective,
     reach,
     frequency,
-    cost_per_conversion,
     platform,
     airbyte_record_id,
     airbyte_emitted_at
-from tiktok_ads_final
-where tenant_id is not null
-    and ad_account_id is not null
-    and trim(ad_account_id) != ''
-    and campaign_id is not null
-    and trim(campaign_id) != ''
-    and date is not null
+
+from tiktok_ads_enriched
+where _row_num = 1
     {% if is_incremental() %}
     and date >= current_date - {{ var("tiktok_ads_lookback_days", 3) }}
     {% endif %}

@@ -32,7 +32,7 @@ with meta_ads as (
         airbyte_record_id,
         airbyte_emitted_at,
         tenant_id
-    from {{ ref('stg_meta_ads') }}
+    from {{ ref('stg_facebook_ads_performance') }}
     where tenant_id is not null
         and ad_account_id is not null
         and campaign_id is not null
@@ -65,7 +65,7 @@ google_ads as (
         airbyte_record_id,
         airbyte_emitted_at,
         tenant_id
-    from {{ ref('stg_google_ads') }}
+    from {{ ref('stg_google_ads_performance') }}
     where tenant_id is not null
         and ad_account_id is not null
         and campaign_id is not null
@@ -98,7 +98,7 @@ tiktok_ads as (
         airbyte_record_id,
         airbyte_emitted_at,
         tenant_id
-    from {{ ref('stg_tiktok_ads') }}
+    from {{ ref('stg_tiktok_ads_performance') }}
     where tenant_id is not null
         and ad_account_id is not null
         and campaign_id is not null

@@ -33,7 +33,7 @@ with meta_ads_campaigns as (
         campaign_name,
         min(airbyte_emitted_at) as first_seen_at,
         max(airbyte_emitted_at) as last_seen_at
-    from {{ ref('stg_meta_ads') }}
+    from {{ ref('stg_facebook_ads_performance') }}
     where campaign_id is not null
     group by 1, 2, 3, 4, 5
 ),
@@ -47,7 +47,7 @@ google_ads_campaigns as (
         campaign_name,
         min(airbyte_emitted_at) as first_seen_at,
         max(airbyte_emitted_at) as last_seen_at
-    from {{ ref('stg_google_ads') }}
+    from {{ ref('stg_google_ads_performance') }}
     where campaign_id is not null
     group by 1, 2, 3, 4, 5
 ),

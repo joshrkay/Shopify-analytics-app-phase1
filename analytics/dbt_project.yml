@@ -26,6 +26,12 @@ models:
         +schema: staging
       ads:
         +schema: staging
+      facebook:
+        +schema: staging
+      google:
+        +schema: staging
+      tiktok:
+        +schema: staging
       email:
         +schema: staging
       sms:

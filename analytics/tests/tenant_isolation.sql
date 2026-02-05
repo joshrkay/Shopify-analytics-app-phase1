@@ -52,7 +52,7 @@ union all
 select 'duplicate_meta_ads_across_tenants' as test_name, count(*) as failure_count
 from (
     select ad_account_id, campaign_id, date
-    from {{ ref('stg_meta_ads') }}
+    from {{ ref('stg_facebook_ads_performance') }}
     group by ad_account_id, campaign_id, date
     having count(distinct tenant_id) > 1
 ) duplicates
@@ -65,7 +65,7 @@ union all
 select 'duplicate_google_ads_across_tenants' as test_name, count(*) as failure_count
 from (
     select ad_account_id, campaign_id, date
-    from {{ ref('stg_google_ads') }}
+    from {{ ref('stg_google_ads_performance') }}
     group by ad_account_id, campaign_id, date
     having count(distinct tenant_id) > 1
 ) duplicates
