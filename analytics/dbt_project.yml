@@ -108,7 +108,36 @@ vars:
   ads_rebuild_days: 30
   email_rebuild_days: 30
 
-  # Freshness SLAs are defined in config/data_freshness_sla.yml (per source × billing tier).
-  # dbt sources reference them via the get_freshness_threshold() macro.
+  # Freshness SLAs — mirrors config/data_freshness_sla.yml. Keep both in sync.
+  # dbt sources reference these via the get_freshness_threshold() macro.
   # Override the billing tier at runtime:  dbt source freshness --vars '{billing_tier: enterprise}'
   billing_tier: free
+  freshness_sla:
+    shopify_orders:
+      free: {warn_after_minutes: 1440, error_after_minutes: 2880}
+      growth: {warn_after_minutes: 360, error_after_minutes: 720}
+      enterprise: {warn_after_minutes: 60, error_after_minutes: 120}
+    facebook_ads:
+      free: {warn_after_minutes: 1440, error_after_minutes: 2880}
+      growth: {warn_after_minutes: 360, error_after_minutes: 720}
+      enterprise: {warn_after_minutes: 60, error_after_minutes: 120}
+    google_ads:
+      free: {warn_after_minutes: 1440, error_after_minutes: 2880}
+      growth: {warn_after_minutes: 360, error_after_minutes: 720}
+      enterprise: {warn_after_minutes: 60, error_after_minutes: 120}
+    tiktok_ads:
+      free: {warn_after_minutes: 1440, error_after_minutes: 2880}
+      growth: {warn_after_minutes: 360, error_after_minutes: 720}
+      enterprise: {warn_after_minutes: 60, error_after_minutes: 120}
+    snapchat_ads:
+      free: {warn_after_minutes: 1440, error_after_minutes: 2880}
+      growth: {warn_after_minutes: 360, error_after_minutes: 720}
+      enterprise: {warn_after_minutes: 60, error_after_minutes: 120}
+    email:
+      free: {warn_after_minutes: 1440, error_after_minutes: 2880}
+      growth: {warn_after_minutes: 720, error_after_minutes: 1440}
+      enterprise: {warn_after_minutes: 360, error_after_minutes: 720}
+    sms:
+      free: {warn_after_minutes: 1440, error_after_minutes: 2880}
+      growth: {warn_after_minutes: 720, error_after_minutes: 1440}
+      enterprise: {warn_after_minutes: 360, error_after_minutes: 720}

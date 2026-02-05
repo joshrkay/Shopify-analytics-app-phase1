@@ -1,30 +1,32 @@
 {%- macro get_freshness_threshold(source_name, threshold_type='warn_after_minutes', tier=none) -%}
 {#-
-    Return a freshness threshold (in minutes) from config/data_freshness_sla.yml.
+    Return a freshness threshold (in minutes) from dbt vars.
+
+    Values mirror config/data_freshness_sla.yml — keep both in sync.
+    Backend reads the YAML file; dbt reads the var('freshness_sla') dict.
 
     Args:
         source_name:    Key in the SLA config, e.g. 'shopify_orders', 'email'.
         threshold_type: 'warn_after_minutes' or 'error_after_minutes'.
         tier:           Billing tier override. Falls back to dbt var 'billing_tier',
-                        then to the config's default_tier.
+                        then to 'free'.
 
     Usage in sources.yml:
         freshness:
           warn_after:
-            count: {{ get_freshness_threshold('shopify_orders', 'warn_after_minutes') }}
+            count: "{{ get_freshness_threshold('shopify_orders', 'warn_after_minutes') }}"
             period: minute
 
     Usage in tests / models:
         {{ get_freshness_threshold('email', 'error_after_minutes', 'enterprise') }}
 -#}
 
-{%- set sla_yaml = load_file_contents('../config/data_freshness_sla.yml') -%}
-{%- set sla = fromyaml(sla_yaml) -%}
+{%- set sla = var('freshness_sla', {}) -%}
 
-{#- Resolve billing tier: explicit arg > dbt var > config default -#}
-{%- set effective_tier = tier or var('billing_tier', sla.get('default_tier', 'free')) -%}
+{#- Resolve billing tier: explicit arg > dbt var > free -#}
+{%- set effective_tier = tier or var('billing_tier', 'free') -%}
 
-{%- set source_cfg = sla.get('sources', {}).get(source_name, {}) -%}
+{%- set source_cfg = sla.get(source_name, {}) -%}
 {%- set tier_cfg = source_cfg.get(effective_tier, {}) -%}
 
 {#- Fall back to free tier when the requested tier is missing for this source -#}
