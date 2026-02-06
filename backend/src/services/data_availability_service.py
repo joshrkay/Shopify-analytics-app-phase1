@@ -35,6 +35,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.governance.base import load_yaml_config
+from src.models.data_availability import AvailabilityState, AvailabilityReason
 from src.platform.audit import (
     AuditAction,
     AuditOutcome,
@@ -247,6 +248,14 @@ class DataAvailabilityService:
             error_threshold=error,
         )
 
+        # Override FRESH → STALE when a historical backfill is active
+        # for this source. STALE/UNAVAILABLE are already "worse" states
+        # so no override needed for those.
+        if state == AvailabilityState.FRESH.value:
+            backfill_override = self._check_backfill_override(source_type)
+            if backfill_override:
+                state, reason = backfill_override
+
         existing = self._get_existing(source_type)
         previous_state = existing.state if existing else None
         state_changed = (previous_state != state)
@@ -457,6 +466,52 @@ class DataAvailabilityService:
             AvailabilityState.FRESH.value,
             AvailabilityReason.SYNC_OK.value,
         )
+
+    # ── Backfill override ────────────────────────────────────────────────
+
+    def _check_backfill_override(
+        self,
+        source_type: str,
+    ) -> Optional[Tuple[str, str]]:
+        """
+        Check if a historical backfill is active for this source.
+
+        Returns (STALE, backfill_in_progress) if a backfill is running,
+        None otherwise. Only called when normal state is FRESH.
+        """
+        try:
+            from src.services.backfill_state_guard import BackfillStateGuard
+
+            guard = BackfillStateGuard(self.db, self.tenant_id)
+            if guard.is_source_being_backfilled(source_type):
+                from src.models.data_availability import (
+                    AvailabilityState,
+                    AvailabilityReason,
+                )
+
+                logger.info(
+                    "Backfill override: FRESH → STALE",
+                    extra={
+                        "tenant_id": self.tenant_id,
+                        "source_type": source_type,
+                    },
+                )
+                return (
+                    AvailabilityState.STALE.value,
+                    AvailabilityReason.BACKFILL_IN_PROGRESS.value,
+                )
+        except Exception:
+            # Graceful degradation: if backfill check fails,
+            # don't block normal availability evaluation.
+            logger.warning(
+                "Backfill override check failed, proceeding with normal state",
+                extra={
+                    "tenant_id": self.tenant_id,
+                    "source_type": source_type,
+                },
+                exc_info=True,
+            )
+        return None
 
     # ── Internal helpers ─────────────────────────────────────────────────
 

@@ -629,6 +629,60 @@ AUDITABLE_EVENTS: Final[dict[str, list[str]]] = {
     ],
 
     # =========================================================================
+    # HISTORICAL BACKFILL LIFECYCLE (Story 3.4)
+    # =========================================================================
+    # Track all admin-initiated historical backfill activity for compliance.
+    # Backfills are high-risk operations that re-process tenant data.
+
+    "backfill.requested": [
+        "backfill_id",         # HistoricalBackfillRequest ID
+        "tenant_id",           # Target tenant
+        "source_system",       # shopify, facebook, google
+        "date_range",          # {start, end} date strings
+        "requested_by",        # clerk_user_id of requesting admin
+        "reason",              # Admin-provided justification
+    ],
+
+    "backfill.started": [
+        "backfill_id",
+        "tenant_id",
+        "source_system",
+        "date_range",
+        "requested_by",
+        "total_chunks",        # Number of 7-day slices created
+        "started_at",          # ISO-8601 UTC timestamp
+    ],
+
+    "backfill.paused": [
+        "backfill_id",
+        "tenant_id",
+        "source_system",
+        "date_range",
+        "requested_by",
+        "paused_chunks",       # Number of chunks paused
+        "paused_at",           # ISO-8601 UTC timestamp
+    ],
+
+    "backfill.completed": [
+        "backfill_id",
+        "tenant_id",
+        "source_system",
+        "date_range",
+        "requested_by",
+        "completed_at",        # ISO-8601 UTC timestamp
+    ],
+
+    "backfill.failed": [
+        "backfill_id",
+        "tenant_id",
+        "source_system",
+        "date_range",
+        "requested_by",
+        "reason",              # Failure summary
+        "failed_at",           # ISO-8601 UTC timestamp
+    ],
+
+    # =========================================================================
     # DATASET SYNC & CACHE OPERATIONS
     # =========================================================================
     # Track data pipeline operations for debugging and monitoring.
@@ -1174,6 +1228,13 @@ EVENT_CATEGORIES: Final[dict[str, list[str]]] = {
         "metric.deprecated_query_logged",
         "metric.rollback_executed",
     ],
+    "backfill": [
+        "backfill.requested",
+        "backfill.started",
+        "backfill.paused",
+        "backfill.completed",
+        "backfill.failed",
+    ],
     "operations": [
         "dataset.synced",
         "dataset.sync_failed",
@@ -1277,6 +1338,13 @@ EVENT_SEVERITY: Final[dict[str, str]] = {
     "dashboard.exported": "low",
     "explore.query_executed": "low",
     "cache.cleared": "low",
+
+    # Backfill lifecycle events
+    "backfill.requested": "high",
+    "backfill.started": "medium",
+    "backfill.paused": "medium",
+    "backfill.completed": "low",
+    "backfill.failed": "high",
 
     # OAuth and credential events
     "oauth.duplicate_shop_detected": "critical",  # Data leakage prevention

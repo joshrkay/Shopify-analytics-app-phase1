@@ -35,6 +35,7 @@ class AvailabilityReason(str, Enum):
     GRACE_WINDOW_EXCEEDED = "grace_window_exceeded"  # Error threshold breached
     SYNC_FAILED = "sync_failed"                      # Last sync failed
     NEVER_SYNCED = "never_synced"                    # No sync recorded
+    BACKFILL_IN_PROGRESS = "backfill_in_progress"    # Historical backfill active
 
 
 class DataAvailability(Base, TenantScopedMixin, TimestampMixin):

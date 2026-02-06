@@ -20,6 +20,8 @@ from src.api.routes import debug
 from src.api.routes import billing
 from src.api.routes import webhooks_shopify
 from src.api.routes import admin_plans
+from src.api.routes import admin_backfills
+from src.api.routes import backfills_status
 from src.api.routes import sync
 from src.api.routes import data_health
 from src.api.routes import backfills
@@ -132,6 +134,14 @@ app.include_router(webhooks_shopify.router)
 
 # Include admin routes (requires admin role)
 app.include_router(admin_plans.router)
+
+# Include admin backfill routes (requires super admin)
+# Story 3.4 - Backfill Request API
+app.include_router(admin_backfills.router)
+
+# Include backfill status routes (requires super admin)
+# Story 3.4 - Backfill Status API
+app.include_router(backfills_status.router)
 
 # Include sync routes (requires authentication)
 app.include_router(sync.router)

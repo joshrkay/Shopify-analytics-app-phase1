@@ -123,7 +123,9 @@ class AuditAction(str, Enum):
     ADMIN_CONFIG_CHANGED = "admin.config_changed"
 
     # Backfill events
+    BACKFILL_REQUESTED = "backfill.requested"
     BACKFILL_STARTED = "backfill.started"
+    BACKFILL_PAUSED = "backfill.paused"
     BACKFILL_COMPLETED = "backfill.completed"
     BACKFILL_FAILED = "backfill.failed"
     
@@ -1128,22 +1130,49 @@ AUDITABLE_EVENTS: dict[AuditAction, AuditableEventMetadata] = {
         risk_level="high",
         compliance_tags=("SOC2",),
     ),
-    # Backfill events - MEDIUM RISK
+    # Backfill events - HIGH RISK (admin-initiated, Story 3.4)
+    AuditAction.BACKFILL_REQUESTED: AuditableEventMetadata(
+        description="Historical backfill requested by admin",
+        required_fields=(
+            "backfill_id", "tenant_id", "source_system",
+            "date_range", "requested_by", "reason",
+        ),
+        risk_level="high",
+        compliance_tags=("SOC2",),
+    ),
     AuditAction.BACKFILL_STARTED: AuditableEventMetadata(
-        description="Data backfill started",
-        required_fields=("backfill_type",),
+        description="Historical backfill execution started",
+        required_fields=(
+            "backfill_id", "tenant_id", "source_system",
+            "date_range", "requested_by", "total_chunks", "started_at",
+        ),
+        risk_level="medium",
+        compliance_tags=("SOC2",),
+    ),
+    AuditAction.BACKFILL_PAUSED: AuditableEventMetadata(
+        description="Historical backfill paused by operator",
+        required_fields=(
+            "backfill_id", "tenant_id", "source_system",
+            "date_range", "requested_by", "paused_chunks", "paused_at",
+        ),
         risk_level="medium",
         compliance_tags=("SOC2",),
     ),
     AuditAction.BACKFILL_COMPLETED: AuditableEventMetadata(
-        description="Data backfill completed",
-        required_fields=("backfill_type", "record_count"),
+        description="Historical backfill completed successfully",
+        required_fields=(
+            "backfill_id", "tenant_id", "source_system",
+            "date_range", "requested_by", "completed_at",
+        ),
         risk_level="medium",
         compliance_tags=("SOC2",),
     ),
     AuditAction.BACKFILL_FAILED: AuditableEventMetadata(
-        description="Data backfill failed",
-        required_fields=("backfill_type", "error"),
+        description="Historical backfill failed permanently",
+        required_fields=(
+            "backfill_id", "tenant_id", "source_system",
+            "date_range", "requested_by", "reason", "failed_at",
+        ),
         risk_level="medium",
         compliance_tags=("SOC2",),
     ),
