@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from src.models.dataset_version import DatasetVersion, DatasetVersionStatus
+from src.monitoring.dataset_alerts import alert_version_rolled_back
+from src.services.audit_logger import emit_dataset_version_rolled_back
 
 logger = logging.getLogger(__name__)
 
@@ -300,6 +302,15 @@ class DatasetVersionManager:
         previous.activated_at = now
         previous.deactivated_at = None
         self.db.flush()
+
+        rolled_back_version = current_active.version if current_active else "unknown"
+        emit_dataset_version_rolled_back(
+            self.db,
+            dataset_name,
+            rolled_back_version,
+            previous.version,
+        )
+        alert_version_rolled_back(dataset_name, rolled_back_version, previous.version)
 
         logger.info(
             "dataset_version.rolled_back",

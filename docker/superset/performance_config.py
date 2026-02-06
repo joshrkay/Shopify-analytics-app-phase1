@@ -10,6 +10,7 @@ Other modules MUST import from here rather than defining their own values:
 - guards.py imports for validation
 
 Story 5.1.6 - Performance & Safety Defaults
+Story 5.2.6 - Performance Guardrails (Superset Layer): query timeout 20s, row limit 50k, max group-by 2, cache TTL 30min.
 """
 
 from dataclasses import dataclass

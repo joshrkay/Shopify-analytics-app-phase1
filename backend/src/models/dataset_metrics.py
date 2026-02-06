@@ -1,8 +1,8 @@
 """
 Dataset metrics model for observability.
 
-Tracks health metrics for each canonical dataset exposed through Superset:
-sync timing, schema version, row counts, cache performance, and sync status.
+Tracks health metrics for each canonical dataset (Story 5.2.8): last_sync_time,
+schema_version, row_count, cache_hit_rate, sync_status.
 
 This is a system-level table (no tenant_id) because datasets are shared
 across all tenants (data is isolated via RLS, not separate datasets).

@@ -1,11 +1,11 @@
 """
 Dataset observability service — tracks health metrics for canonical datasets.
 
-Collects and persists:
-- Sync timing and status
-- Schema version information
-- Row counts (approximate, from pg_class)
-- Cache hit rates (from application-level tracking)
+Collects and persists (Story 5.2.8 metrics):
+- last_sync_time (last_sync_at), sync_status
+- schema_version
+- row_count (approximate, from pg_class)
+- cache_hit_rate (from application-level tracking)
 - Query performance (from pg_stat_statements if available)
 
 All writes go through DatasetMetrics; this service never writes tenant data.

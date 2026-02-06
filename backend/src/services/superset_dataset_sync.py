@@ -8,6 +8,7 @@ means no partial apply: we record failure and do not update remaining datasets.
 Story 5.2 — Prompt 5.2.4
 """
 
+import hashlib
 import json
 import logging
 import time
@@ -20,11 +21,19 @@ import httpx
 from sqlalchemy.orm import Session
 
 from src.models.dataset_metrics import DatasetSyncStatus
+from src.monitoring.dataset_alerts import alert_compatibility_failure, alert_sync_failure
+from src.services.audit_logger import (
+    emit_dataset_sync_completed,
+    emit_dataset_sync_failed,
+    emit_dataset_sync_started,
+    emit_dataset_version_activated,
+)
 from src.services.dataset_observability import DatasetObservabilityService
+from src.services.dataset_version_manager import DatasetVersionManager
 from src.services.schema_compatibility_checker import (
     SchemaCompatibilityChecker,
     DatasetSchemaSnapshot,
-    build_snapshot_from_manifest,
+    build_snapshot_from_db,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,6 +99,26 @@ def _get_semantic_models_with_exposed_columns(manifest: dict[str, Any]) -> dict[
         result[name] = columns
 
     return result
+
+
+def _get_column_snapshot_for_version(manifest: dict[str, Any], dataset_name: str) -> list[dict]:
+    """Build full column list for DatasetVersion.column_snapshot (column_name, type, superset_expose)."""
+    node_id = f"model.markinsight.{dataset_name}"
+    node = (manifest.get("nodes", {}) or {}).get(node_id, {})
+    columns_raw = node.get("columns", {})
+    snapshot: list[dict] = []
+    for col_name, col_info in columns_raw.items():
+        if not isinstance(col_info, dict):
+            continue
+        meta = col_info.get("meta", {}) or {}
+        data_type = col_info.get("data_type", "VARCHAR") or "VARCHAR"
+        exposed = bool(meta.get("superset_expose", False))
+        snapshot.append({
+            "column_name": col_name,
+            "type": data_type,
+            "superset_expose": exposed,
+        })
+    return snapshot
 
 
 class SupersetApiClient:
@@ -240,6 +269,7 @@ class SupersetDatasetSync:
         self.db = db
         self.checker = SchemaCompatibilityChecker()
         self.observability = DatasetObservabilityService(db)
+        self.version_manager = DatasetVersionManager(db)
         self.client = SupersetApiClient(
             base_url=superset_url,
             username=superset_username,
@@ -267,7 +297,7 @@ class SupersetDatasetSync:
         """
         Full sync flow: validate compatibility, snapshot, upsert datasets, record status.
 
-        If current_state is None, builds from manifest (first run: no breaking changes).
+        If current_state is None, builds from prior ACTIVE dataset versions in DB (first run: empty baseline).
         Idempotent: running twice with the same manifest yields identical state.
         """
         start = time.perf_counter()
@@ -285,7 +315,7 @@ class SupersetDatasetSync:
             return result
 
         if current_state is None:
-            current_state = build_snapshot_from_manifest(manifest)
+            current_state = build_snapshot_from_db(self.db)
 
         compat = self.checker.validate(current_state, manifest)
         if not compat.compatibility_passed:
@@ -293,6 +323,11 @@ class SupersetDatasetSync:
             result.blocking_reasons = [b.message for b in compat.breaking_changes]
             for b in compat.breaking_changes:
                 self.observability.record_sync_blocked(b.dataset_name, reason=b.message)
+                alert_compatibility_failure(
+                    b.dataset_name,
+                    b.message,
+                    removed_columns=[b.column_name] if b.column_name else [],
+                )
             result.pre_deploy_checks = [
                 {
                     "check_name": "schema_match",
@@ -322,14 +357,28 @@ class SupersetDatasetSync:
             result.duration_seconds = time.perf_counter() - start
             return result
 
+        manifest_hash = hashlib.sha256(
+            json.dumps(manifest, sort_keys=True).encode()
+        ).hexdigest()
         schema_name = "semantic"
+        nodes = manifest.get("nodes", {}) or {}
+
         for dataset_name, columns in models.items():
             t0 = time.perf_counter()
+            column_snapshot = _get_column_snapshot_for_version(manifest, dataset_name)
+            version = self.version_manager.create_pending_version(
+                dataset_name,
+                "v1",
+                column_snapshot,
+                schema_name=schema_name,
+                dbt_manifest_hash=manifest_hash,
+            )
+            emit_dataset_sync_started(self.db, dataset_name, "v1")
             try:
                 existing = self.client.get_dataset(dataset_name, schema_name)
-                description = (manifest.get("nodes", {}) or {}).get(
-                    f"model.markinsight.{dataset_name}", {}
-                ).get("description", "") or f"Semantic view: {dataset_name}"
+                node = nodes.get(f"model.markinsight.{dataset_name}", {})
+                description = node.get("description", "") or f"Semantic view: {dataset_name}"
+                total_column_count = len(node.get("columns", {}))
 
                 if existing:
                     self.client.update_dataset(existing["id"], description)
@@ -344,17 +393,19 @@ class SupersetDatasetSync:
                         columns=[],
                     )
                     result.created.append(dataset_name)
-                    # Refresh after create (Superset may assign IDs to columns)
                     existing = self.client.get_dataset(dataset_name, schema_name)
                     if existing:
                         self.client.refresh_dataset_columns(existing["id"])
 
+                self.version_manager.activate_version(version.id)
                 duration = time.perf_counter() - t0
+                emit_dataset_sync_completed(self.db, dataset_name, "v1", duration)
+                emit_dataset_version_activated(self.db, dataset_name, "v1")
                 self.observability.record_sync_success(
                     dataset_name,
                     version="v1",
                     duration_seconds=duration,
-                    column_count=len(columns) + 10,
+                    column_count=total_column_count,
                     exposed_column_count=len(columns),
                 )
             except Exception as e:
@@ -364,6 +415,9 @@ class SupersetDatasetSync:
                     extra={"dataset_name": dataset_name, "error": str(e)},
                 )
                 result.errors.append({"dataset": dataset_name, "error": str(e)})
+                self.version_manager.mark_failed(version.id, error=str(e))
+                emit_dataset_sync_failed(self.db, dataset_name, "v1", str(e))
+                alert_sync_failure(dataset_name, str(e))
                 self.observability.record_sync_failure(
                     dataset_name,
                     error=str(e),
