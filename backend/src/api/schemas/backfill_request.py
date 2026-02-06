@@ -6,7 +6,7 @@ Story 3.4 - Backfill Request API
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -92,3 +92,55 @@ class BackfillRequestCreatedResponse(BaseModel):
         ..., description="True if newly created, False if existing returned"
     )
     message: str
+
+
+class BackfillChunkStatus(BaseModel):
+    """Status of a single backfill chunk (date slice)."""
+    chunk_index: int
+    chunk_start_date: str
+    chunk_end_date: str
+    status: str
+    attempt: int = 0
+    duration_seconds: Optional[float] = None
+    rows_affected: Optional[int] = None
+    error_message: Optional[str] = None
+
+
+class BackfillStatusResponse(BaseModel):
+    """Detailed status response for a single backfill request."""
+    id: str
+    tenant_id: str
+    source_system: str
+    start_date: str
+    end_date: str
+    status: str = Field(
+        description="Effective status: pending, running, paused, failed, completed"
+    )
+    percent_complete: float = Field(
+        description="Percentage of chunks completed (0-100)"
+    )
+    total_chunks: int
+    completed_chunks: int
+    failed_chunks: int
+    current_chunk: Optional[BackfillChunkStatus] = Field(
+        None, description="Currently executing date slice"
+    )
+    failure_reasons: List[str] = Field(
+        default_factory=list, description="Error messages from failed chunks"
+    )
+    estimated_seconds_remaining: Optional[float] = Field(
+        None, description="Estimated seconds to completion based on avg chunk duration"
+    )
+    reason: str
+    requested_by: str
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BackfillStatusListResponse(BaseModel):
+    """Paginated list of backfill request statuses."""
+    backfills: List[BackfillStatusResponse]
+    total: int

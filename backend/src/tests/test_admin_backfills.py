@@ -1663,3 +1663,522 @@ class TestExecutorCompletionHook:
         ):
             # Should not raise
             executor._on_request_terminal(request)
+
+
+# =====================================================================
+# Backfill Status Service Tests (Story 3.4 - Status API)
+# =====================================================================
+
+
+def _make_mock_request(**overrides):
+    """Helper to build a mock HistoricalBackfillRequest."""
+    req = MagicMock()
+    req.id = overrides.get("id", "req_1")
+    req.tenant_id = overrides.get("tenant_id", "tenant_1")
+    req.source_system = overrides.get("source_system", "shopify")
+    req.start_date = overrides.get("start_date", date(2024, 1, 1))
+    req.end_date = overrides.get("end_date", date(2024, 1, 28))
+    req.status = overrides.get("status", HistoricalBackfillStatus.RUNNING)
+    req.reason = overrides.get("reason", "Data gap after migration")
+    req.requested_by = overrides.get("requested_by", "admin_user")
+    req.idempotency_key = overrides.get("idempotency_key", "key_123")
+    req.started_at = overrides.get("started_at", datetime(2024, 1, 1, tzinfo=timezone.utc))
+    req.completed_at = overrides.get("completed_at", None)
+    req.created_at = overrides.get("created_at", datetime(2024, 1, 1, tzinfo=timezone.utc))
+    return req
+
+
+def _make_mock_job(**overrides):
+    """Helper to build a mock BackfillJob."""
+    job = MagicMock()
+    job.backfill_request_id = overrides.get("backfill_request_id", "req_1")
+    job.chunk_index = overrides.get("chunk_index", 0)
+    job.chunk_start_date = overrides.get("chunk_start_date", date(2024, 1, 1))
+    job.chunk_end_date = overrides.get("chunk_end_date", date(2024, 1, 7))
+    job.status = overrides.get("status", BackfillJobStatus.SUCCESS)
+    job.attempt = overrides.get("attempt", 1)
+    job.duration_seconds = overrides.get("duration_seconds", 120.0)
+    job.rows_affected = overrides.get("rows_affected", 1000)
+    job.error_message = overrides.get("error_message", None)
+    job.is_terminal = overrides.get("is_terminal", True)
+    job.can_retry = overrides.get("can_retry", False)
+    return job
+
+
+class TestBackfillStatusServiceEffectiveStatus:
+    """Tests for _compute_effective_status."""
+
+    def test_pending_status(self):
+        """PENDING request maps to 'pending'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.PENDING)
+        assert service._compute_effective_status(req, []) == "pending"
+
+    def test_approved_maps_to_pending(self):
+        """APPROVED request maps to 'pending'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.APPROVED)
+        assert service._compute_effective_status(req, []) == "pending"
+
+    def test_completed_status(self):
+        """COMPLETED request maps to 'completed'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.COMPLETED)
+        assert service._compute_effective_status(req, []) == "completed"
+
+    def test_cancelled_maps_to_completed(self):
+        """CANCELLED request maps to 'completed'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.CANCELLED)
+        assert service._compute_effective_status(req, []) == "completed"
+
+    def test_failed_status(self):
+        """FAILED request maps to 'failed'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.FAILED)
+        assert service._compute_effective_status(req, []) == "failed"
+
+    def test_rejected_maps_to_failed(self):
+        """REJECTED request maps to 'failed'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.REJECTED)
+        assert service._compute_effective_status(req, []) == "failed"
+
+    def test_running_status(self):
+        """RUNNING request with active jobs maps to 'running'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.RUNNING)
+        jobs = [
+            _make_mock_job(status=BackfillJobStatus.SUCCESS, is_terminal=True),
+            _make_mock_job(status=BackfillJobStatus.QUEUED, is_terminal=False),
+        ]
+        assert service._compute_effective_status(req, jobs) == "running"
+
+    def test_running_with_all_paused_maps_to_paused(self):
+        """RUNNING request where all non-terminal jobs are PAUSED → 'paused'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.RUNNING)
+        jobs = [
+            _make_mock_job(status=BackfillJobStatus.SUCCESS, is_terminal=True),
+            _make_mock_job(status=BackfillJobStatus.PAUSED, is_terminal=False),
+            _make_mock_job(status=BackfillJobStatus.PAUSED, is_terminal=False),
+        ]
+        assert service._compute_effective_status(req, jobs) == "paused"
+
+    def test_running_with_no_jobs(self):
+        """RUNNING request with no jobs yet → 'running'."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.RUNNING)
+        assert service._compute_effective_status(req, []) == "running"
+
+
+class TestBackfillStatusServicePercentComplete:
+    """Tests for percent_complete calculation."""
+
+    def test_zero_chunks(self):
+        """No chunks → 0% complete."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.PENDING)
+        result = service._build_status(req, [])
+        assert result["percent_complete"] == 0.0
+
+    def test_all_chunks_complete(self):
+        """All chunks succeeded → 100%."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.COMPLETED)
+        jobs = [
+            _make_mock_job(chunk_index=0, status=BackfillJobStatus.SUCCESS),
+            _make_mock_job(chunk_index=1, status=BackfillJobStatus.SUCCESS),
+            _make_mock_job(chunk_index=2, status=BackfillJobStatus.SUCCESS),
+            _make_mock_job(chunk_index=3, status=BackfillJobStatus.SUCCESS),
+        ]
+        result = service._build_status(req, jobs)
+        assert result["percent_complete"] == 100.0
+
+    def test_partial_progress(self):
+        """2 of 4 chunks done → 50%."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        req = _make_mock_request(status=HistoricalBackfillStatus.RUNNING)
+        jobs = [
+            _make_mock_job(chunk_index=0, status=BackfillJobStatus.SUCCESS),
+            _make_mock_job(chunk_index=1, status=BackfillJobStatus.SUCCESS),
+            _make_mock_job(chunk_index=2, status=BackfillJobStatus.RUNNING, is_terminal=False),
+            _make_mock_job(chunk_index=3, status=BackfillJobStatus.QUEUED, is_terminal=False),
+        ]
+        result = service._build_status(req, jobs)
+        assert result["percent_complete"] == 50.0
+
+
+class TestBackfillStatusServiceCurrentChunk:
+    """Tests for current_chunk tracking."""
+
+    def test_running_chunk_returned(self):
+        """Currently RUNNING chunk is returned."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(chunk_index=0, status=BackfillJobStatus.SUCCESS),
+            _make_mock_job(
+                chunk_index=1,
+                status=BackfillJobStatus.RUNNING,
+                chunk_start_date=date(2024, 1, 8),
+                chunk_end_date=date(2024, 1, 14),
+                attempt=1,
+            ),
+        ]
+        result = service._get_current_chunk(jobs)
+        assert result is not None
+        assert result["chunk_index"] == 1
+        assert result["chunk_start_date"] == "2024-01-08"
+        assert result["chunk_end_date"] == "2024-01-14"
+        assert result["status"] == "running"
+
+    def test_no_running_chunk(self):
+        """No RUNNING chunk → None."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(chunk_index=0, status=BackfillJobStatus.SUCCESS),
+            _make_mock_job(chunk_index=1, status=BackfillJobStatus.QUEUED),
+        ]
+        result = service._get_current_chunk(jobs)
+        assert result is None
+
+
+class TestBackfillStatusServiceFailureReasons:
+    """Tests for failure_reasons collection."""
+
+    def test_collects_error_messages(self):
+        """Failed chunks have their error messages collected."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(
+                chunk_index=0, status=BackfillJobStatus.FAILED,
+                error_message="Connection timeout",
+                chunk_start_date=date(2024, 1, 1),
+                chunk_end_date=date(2024, 1, 7),
+            ),
+            _make_mock_job(chunk_index=1, status=BackfillJobStatus.SUCCESS),
+            _make_mock_job(
+                chunk_index=2, status=BackfillJobStatus.FAILED,
+                error_message="Rate limited",
+                chunk_start_date=date(2024, 1, 15),
+                chunk_end_date=date(2024, 1, 21),
+            ),
+        ]
+        reasons = service._collect_failure_reasons(jobs)
+        assert len(reasons) == 2
+        assert "Chunk 0" in reasons[0]
+        assert "Connection timeout" in reasons[0]
+        assert "Chunk 2" in reasons[1]
+        assert "Rate limited" in reasons[1]
+
+    def test_no_failures(self):
+        """No failed chunks → empty list."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(chunk_index=0, status=BackfillJobStatus.SUCCESS),
+        ]
+        assert service._collect_failure_reasons(jobs) == []
+
+    def test_failed_without_message_skipped(self):
+        """Failed chunk with None error_message is skipped."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(
+                chunk_index=0, status=BackfillJobStatus.FAILED,
+                error_message=None,
+            ),
+        ]
+        assert service._collect_failure_reasons(jobs) == []
+
+
+class TestBackfillStatusServiceETA:
+    """Tests for estimated_seconds_remaining calculation."""
+
+    def test_eta_based_on_avg_duration(self):
+        """ETA = avg_chunk_duration × remaining_chunks."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(
+                chunk_index=0, status=BackfillJobStatus.SUCCESS,
+                duration_seconds=100.0,
+            ),
+            _make_mock_job(
+                chunk_index=1, status=BackfillJobStatus.SUCCESS,
+                duration_seconds=200.0,
+            ),
+            _make_mock_job(
+                chunk_index=2, status=BackfillJobStatus.QUEUED,
+                is_terminal=False,
+            ),
+            _make_mock_job(
+                chunk_index=3, status=BackfillJobStatus.QUEUED,
+                is_terminal=False,
+            ),
+        ]
+        # avg = 150, remaining = 2
+        result = service._estimate_remaining(jobs, 4, 2, 0)
+        assert result == 300.0
+
+    def test_eta_none_when_no_completed(self):
+        """No completed chunks → None ETA."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(chunk_index=0, status=BackfillJobStatus.QUEUED),
+        ]
+        result = service._estimate_remaining(jobs, 4, 0, 0)
+        assert result is None
+
+    def test_eta_none_when_no_remaining(self):
+        """All done → None ETA."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(
+                chunk_index=0, status=BackfillJobStatus.SUCCESS,
+                duration_seconds=100.0,
+            ),
+        ]
+        result = service._estimate_remaining(jobs, 1, 1, 0)
+        assert result is None
+
+    def test_eta_excludes_failed_chunks(self):
+        """Failed chunks reduce remaining count."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        service = BackfillStatusService(MagicMock())
+        jobs = [
+            _make_mock_job(
+                chunk_index=0, status=BackfillJobStatus.SUCCESS,
+                duration_seconds=60.0,
+            ),
+            _make_mock_job(
+                chunk_index=1, status=BackfillJobStatus.FAILED,
+                can_retry=False, is_terminal=True,
+            ),
+            _make_mock_job(
+                chunk_index=2, status=BackfillJobStatus.QUEUED,
+                is_terminal=False,
+            ),
+        ]
+        # total=3, completed=1, failed=1, remaining=1
+        result = service._estimate_remaining(jobs, 3, 1, 1)
+        assert result == 60.0
+
+
+class TestBackfillStatusServiceGetRequestStatus:
+    """Tests for get_request_status."""
+
+    def test_request_not_found(self):
+        """Returns None when request doesn't exist."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        service = BackfillStatusService(mock_db)
+
+        assert service.get_request_status("nonexistent") is None
+
+    def test_full_status_response(self):
+        """Returns complete status dict for a running request."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        req = _make_mock_request()
+        jobs = [
+            _make_mock_job(
+                chunk_index=0, status=BackfillJobStatus.SUCCESS,
+                duration_seconds=100.0,
+            ),
+            _make_mock_job(
+                chunk_index=1, status=BackfillJobStatus.RUNNING,
+                is_terminal=False,
+                chunk_start_date=date(2024, 1, 8),
+                chunk_end_date=date(2024, 1, 14),
+            ),
+            _make_mock_job(
+                chunk_index=2, status=BackfillJobStatus.QUEUED,
+                is_terminal=False,
+            ),
+            _make_mock_job(
+                chunk_index=3, status=BackfillJobStatus.QUEUED,
+                is_terminal=False,
+            ),
+        ]
+
+        mock_db = MagicMock()
+        # First call: query for request (filter.first)
+        # Second call: query for jobs (filter.order_by.all)
+        mock_db.query.return_value.filter.return_value.first.return_value = req
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = jobs
+
+        service = BackfillStatusService(mock_db)
+        result = service.get_request_status("req_1")
+
+        assert result is not None
+        assert result["id"] == "req_1"
+        assert result["status"] == "running"
+        assert result["percent_complete"] == 25.0
+        assert result["total_chunks"] == 4
+        assert result["completed_chunks"] == 1
+        assert result["failed_chunks"] == 0
+        assert result["current_chunk"]["chunk_index"] == 1
+        assert result["estimated_seconds_remaining"] is not None
+
+
+class TestBackfillStatusServiceListRequests:
+    """Tests for list_requests."""
+
+    def test_empty_list(self):
+        """Returns empty list when no requests exist."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.order_by.return_value.all.return_value = []
+        service = BackfillStatusService(mock_db)
+
+        result = service.list_requests()
+        assert result == []
+
+    def test_filters_by_tenant_id(self):
+        """Applies tenant_id filter to query."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        mock_db = MagicMock()
+        query_mock = mock_db.query.return_value
+        filter_mock = query_mock.filter.return_value
+        filter_mock.order_by.return_value.all.return_value = []
+
+        service = BackfillStatusService(mock_db)
+        service.list_requests(tenant_id="tenant_1")
+
+        # Verify filter was called (tenant_id filtering)
+        query_mock.filter.assert_called_once()
+
+    def test_status_filter_applied(self):
+        """Status filter excludes non-matching requests."""
+        from src.services.backfill_status_service import BackfillStatusService
+
+        req_pending = _make_mock_request(
+            id="req_1", status=HistoricalBackfillStatus.PENDING
+        )
+        req_running = _make_mock_request(
+            id="req_2", status=HistoricalBackfillStatus.RUNNING
+        )
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.order_by.return_value.all.return_value = [
+            req_pending, req_running,
+        ]
+        # Jobs query returns empty for batch
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+
+        service = BackfillStatusService(mock_db)
+        result = service.list_requests(status_filter="pending")
+
+        # Only the pending one should pass the filter
+        assert len(result) == 1
+        assert result[0]["status"] == "pending"
+
+
+class TestBackfillStatusSchemas:
+    """Tests for the status Pydantic schemas."""
+
+    def test_backfill_status_response_valid(self):
+        """BackfillStatusResponse accepts valid data."""
+        from src.api.schemas.backfill_request import BackfillStatusResponse
+
+        data = BackfillStatusResponse(
+            id="req_1",
+            tenant_id="t1",
+            source_system="shopify",
+            start_date="2024-01-01",
+            end_date="2024-01-28",
+            status="running",
+            percent_complete=50.0,
+            total_chunks=4,
+            completed_chunks=2,
+            failed_chunks=0,
+            failure_reasons=[],
+            reason="Data gap",
+            requested_by="admin",
+        )
+        assert data.status == "running"
+        assert data.percent_complete == 50.0
+        assert data.current_chunk is None
+        assert data.estimated_seconds_remaining is None
+
+    def test_backfill_chunk_status_valid(self):
+        """BackfillChunkStatus accepts valid data."""
+        from src.api.schemas.backfill_request import BackfillChunkStatus
+
+        chunk = BackfillChunkStatus(
+            chunk_index=1,
+            chunk_start_date="2024-01-08",
+            chunk_end_date="2024-01-14",
+            status="running",
+            attempt=2,
+            duration_seconds=120.5,
+            rows_affected=500,
+        )
+        assert chunk.chunk_index == 1
+        assert chunk.attempt == 2
+
+    def test_backfill_status_list_response(self):
+        """BackfillStatusListResponse wraps list correctly."""
+        from src.api.schemas.backfill_request import (
+            BackfillStatusResponse,
+            BackfillStatusListResponse,
+        )
+
+        resp = BackfillStatusListResponse(
+            backfills=[
+                BackfillStatusResponse(
+                    id="r1", tenant_id="t1", source_system="shopify",
+                    start_date="2024-01-01", end_date="2024-01-28",
+                    status="completed", percent_complete=100.0,
+                    total_chunks=4, completed_chunks=4, failed_chunks=0,
+                    failure_reasons=[], reason="Gap", requested_by="admin",
+                ),
+            ],
+            total=1,
+        )
+        assert resp.total == 1
+        assert len(resp.backfills) == 1

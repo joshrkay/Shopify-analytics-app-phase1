@@ -19,6 +19,9 @@ from src.api.schemas.backfill_request import (
     CreateBackfillRequest,
     BackfillRequestResponse,
     BackfillRequestCreatedResponse,
+    BackfillChunkStatus,
+    BackfillStatusResponse,
+    BackfillStatusListResponse,
     SourceSystem,
 )
 
@@ -36,5 +39,8 @@ __all__ = [
     "CreateBackfillRequest",
     "BackfillRequestResponse",
     "BackfillRequestCreatedResponse",
+    "BackfillChunkStatus",
+    "BackfillStatusResponse",
+    "BackfillStatusListResponse",
     "SourceSystem",
 ]
