@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/repositories/base_repo.py
+# hypothesis_version: 6.150.0
+
+['Entity created', 'Entity deleted', 'Entity updated', 'T', 'count', 'create', 'delete', 'entity_id', 'entity_type', 'error', 'get_all', 'get_by_id', 'id', 'operation', 'provided_tenant_id', 'removed_tenant_id', 'repository_tenant_id', 'tenant_id', 'update']

@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/ai_insight.py
+# hypothesis_version: 6.150.0
+
+[255, 'DESC', 'ai_insights', 'aov_change', 'cac_anomaly', 'channel_mix_shift', 'content_hash', 'critical', 'generated_at', 'info', 'insight_type', 'period_end', 'postgresql', 'roas_change', 'spend_anomaly', 'tenant_id', 'uq_ai_insights_dedup', 'warning']

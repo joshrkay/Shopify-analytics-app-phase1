@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/repositories/__init__.py
+# hypothesis_version: 6.150.0
+
+['Base', 'BaseRepository', 'PlanNotFoundError', 'PlanRepositoryError', 'PlansRepository', 'TenantIsolationError']

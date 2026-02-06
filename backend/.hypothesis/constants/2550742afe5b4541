@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/plan.py
+# hypothesis_version: 6.150.0
+
+[255, 'CASCADE', 'Plan', 'Plan description', 'PlanFeature', 'all, delete-orphan', 'feature_key', 'features', 'plan', 'plan_features', 'plan_id', 'plans', 'plans.id']

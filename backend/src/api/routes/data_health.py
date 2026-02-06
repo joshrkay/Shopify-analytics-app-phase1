@@ -89,6 +89,31 @@ class FreshnessSLAConfigResponse(BaseModel):
 from src.models.merchant_data_health import MerchantDataHealthResponse
 
 
+class DatasetHealthEntry(BaseModel):
+    """Health entry for a single Superset dataset (Story 5.2)."""
+    dataset_name: str
+    sync_status: str
+    sync_error: Optional[str] = None
+    last_sync_at: Optional[str] = None
+    last_sync_attempted_at: Optional[str] = None
+    sync_duration_seconds: Optional[float] = None
+    schema_version: Optional[str] = None
+    column_count: Optional[int] = None
+    exposed_column_count: Optional[int] = None
+    row_count: Optional[int] = None
+    query_count_24h: Optional[int] = None
+    avg_query_latency_ms: Optional[float] = None
+    p95_query_latency_ms: Optional[float] = None
+    cache_hit_rate: Optional[float] = None
+    cache_entries: Optional[int] = None
+
+
+class DatasetHealthResponse(BaseModel):
+    """Dataset sync status for monitoring (Story 5.2)."""
+    datasets: List[DatasetHealthEntry]
+    unhealthy_count: int
+
+
 # =============================================================================
 # Dependencies
 # =============================================================================
@@ -106,6 +131,15 @@ def get_data_health_service(
 
     tenant_ctx = get_tenant_context(request)
     return DataHealthService(db_session, tenant_ctx.tenant_id)
+
+
+def get_dataset_observability_service(
+    db_session=Depends(get_db_session),
+):
+    """Get dataset observability service (platform-level, no tenant)."""
+    from src.services.dataset_observability import DatasetObservabilityService
+
+    return DatasetObservabilityService(db_session)
 
 
 # =============================================================================
@@ -430,4 +464,37 @@ async def get_merchant_data_health(
         ai_insights_enabled=result.ai_insights_enabled,
         dashboards_enabled=result.dashboards_enabled,
         exports_enabled=result.exports_enabled,
+    )
+
+
+# =============================================================================
+# Dataset Sync Health (Story 5.2)
+# =============================================================================
+
+@router.get(
+    "/dataset-health",
+    response_model=DatasetHealthResponse,
+)
+async def get_dataset_health(
+    request: Request,
+    observability=Depends(get_dataset_observability_service),
+):
+    """
+    Get Superset dataset sync status for monitoring.
+
+    Returns sync status, last sync time, and optional metrics for each
+    canonical dataset. Used by operators and CI to detect blocked/failed syncs.
+
+    SECURITY: Authentication required. Datasets are platform-level (no tenant).
+    """
+    tenant_ctx = get_tenant_context(request)
+    logger.info(
+        "Dataset health requested",
+        extra={"tenant_id": tenant_ctx.tenant_id},
+    )
+    all_health = observability.get_all_dataset_health()
+    unhealthy = observability.get_unhealthy_datasets()
+    return DatasetHealthResponse(
+        datasets=[DatasetHealthEntry(**h) for h in all_health],
+        unhealthy_count=len(unhealthy),
     )

@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/data_availability.py
+# hypothesis_version: 6.150.0
+
+[100, 255, 'Primary key (UUID)', 'backfill_in_progress', 'data_availability', 'free', 'fresh', 'never_synced', 'sla_exceeded', 'source_type', 'stale', 'state', 'sync_failed', 'sync_ok', 'tenant_id', 'unavailable']

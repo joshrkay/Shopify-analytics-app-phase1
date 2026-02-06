@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: dataset_sync_status
+    description: |
+      Observability table for Superset dataset sync state (Story 5.2).
+      Schema matches backend DatasetMetrics; populated by SupersetDatasetSync.
+      This model creates the table in the analytics DB for optional mirroring.
+    columns:
+      - name: dataset_name
+        description: Logical dataset name (e.g. fact_orders_current)
+      - name: schema_name
+        description: Database schema containing the dataset
+      - name: current_version
+        description: Schema/metric version tag
+      - name: column_count
+        description: Total columns in the dataset
+      - name: exposed_column_count
+        description: Columns with superset_expose true
+      - name: last_sync_at
+        description: Last successful sync timestamp
+      - name: last_sync_attempted_at
+        description: Last sync attempt timestamp
+      - name: sync_status
+        description: ok | failed | blocked
+      - name: sync_error
+        description: Error message when sync failed
+      - name: last_schema_check_at
+        description: Last compatibility check timestamp
+      - name: schema_compatible
+        description: Whether schema passed compatibility check
+      - name: breaking_changes_json
+        description: JSON list of breaking changes when blocked
+      - name: query_count_24h
+        description: Query count in last 24h (from pg_stat_statements)
+      - name: avg_query_latency_ms
+        description: Average query latency in ms
+      - name: dbt_updated_at
+        description: dbt model update timestamp

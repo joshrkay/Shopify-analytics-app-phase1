@@ -13,7 +13,7 @@ snapshot-paths: ["snapshots"]
 
 target-path: "target"
 
-on-run-end: "{{ dq_result_emitter() }}"
+on-run-end: "{{ dq_result_emitter() }}{{ trigger_superset_sync() }}"
 
 clean-targets:
   - "target"

@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/action_proposal_job.py
+# hypothesis_version: 6.150.0
+
+[255, 'Current job status', 'action_proposal_jobs', 'daily', 'failed', 'hourly', 'postgresql', 'queued', 'running', 'skip_reason', 'skipped', 'success']

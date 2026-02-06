@@ -2,7 +2,7 @@
 Dataset Loader for YAML-defined Superset datasets.
 
 Reads dataset YAML configs and registers them in Superset via API.
-Distinct from dataset_sync.py (which syncs from dbt manifest).
+Canonical dataset sync from dbt manifest is in backend (src.services.superset_dataset_sync).
 This loader enforces column allow-lists: only columns defined in YAML are exposed.
 
 Usage:

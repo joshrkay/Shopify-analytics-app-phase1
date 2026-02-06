@@ -81,6 +81,20 @@ PERFORMANCE_GUARDRAILS = PerformanceGuardrails(
 # =============================================================================
 
 @dataclass(frozen=True)
+class DatasetGuardrailOverrides:
+    """
+    Per-dataset guardrail overrides loaded from YAML configs.
+
+    Values set here override the global PERFORMANCE_GUARDRAILS for this
+    dataset only. None means "use global default".
+    """
+    max_date_range_days: Optional[int] = None
+    query_timeout_seconds: Optional[int] = None
+    row_limit: Optional[int] = None
+    cache_ttl_minutes: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class DatasetExploreConfig:
     """Configuration for a single explorable dataset."""
     enabled: bool
@@ -90,6 +104,7 @@ class DatasetExploreConfig:
     restricted_columns: FrozenSet[str]  # Columns to never expose
     description: str
     date_column: str  # Primary date column for date range filtering
+    guardrail_overrides: Optional[DatasetGuardrailOverrides] = None
 
 
 # Dataset configurations by name
@@ -124,6 +139,12 @@ DATASET_EXPLORE_CONFIGS: Dict[str, DatasetExploreConfig] = {
         ]),
         description="Explore merchant orders with guardrails",
         date_column='order_date',
+        guardrail_overrides=DatasetGuardrailOverrides(
+            max_date_range_days=90,
+            query_timeout_seconds=20,
+            row_limit=50000,
+            cache_ttl_minutes=30,
+        ),
     ),
     'fact_marketing_spend': DatasetExploreConfig(
         enabled=True,
@@ -151,6 +172,12 @@ DATASET_EXPLORE_CONFIGS: Dict[str, DatasetExploreConfig] = {
         ]),
         description="Explore marketing spend with guardrails",
         date_column='spend_date',
+        guardrail_overrides=DatasetGuardrailOverrides(
+            max_date_range_days=90,
+            query_timeout_seconds=20,
+            row_limit=50000,
+            cache_ttl_minutes=30,
+        ),
     ),
     'fact_campaign_performance': DatasetExploreConfig(
         enabled=True,
@@ -178,6 +205,12 @@ DATASET_EXPLORE_CONFIGS: Dict[str, DatasetExploreConfig] = {
         ]),
         description="Explore campaign performance with guardrails",
         date_column='campaign_date',
+        guardrail_overrides=DatasetGuardrailOverrides(
+            max_date_range_days=90,
+            query_timeout_seconds=20,
+            row_limit=50000,
+            cache_ttl_minutes=30,
+        ),
     ),
     # Disabled datasets (PII or sensitive data)
     'dim_customers': DatasetExploreConfig(
@@ -295,6 +328,44 @@ class ExplorePermissionValidator:
         self.persona = persona
         self.persona_config = PERSONA_CONFIGS[persona]
         self.guardrails = guardrails
+
+    def _get_effective_guardrails(
+        self,
+        dataset_name: str,
+    ) -> PerformanceGuardrails:
+        """
+        Return guardrails for a specific dataset.
+
+        If the dataset has per-dataset overrides, return a PerformanceGuardrails
+        with those overrides applied on top of the global defaults. Per-dataset
+        limits can only be stricter than (or equal to) global defaults.
+        """
+        config = DATASET_EXPLORE_CONFIGS.get(dataset_name)
+        if config is None or config.guardrail_overrides is None:
+            return self.guardrails
+
+        overrides = config.guardrail_overrides
+        return PerformanceGuardrails(
+            max_date_range_days=min(
+                overrides.max_date_range_days or self.guardrails.max_date_range_days,
+                self.guardrails.max_date_range_days,
+            ),
+            query_timeout_seconds=min(
+                overrides.query_timeout_seconds or self.guardrails.query_timeout_seconds,
+                self.guardrails.query_timeout_seconds,
+            ),
+            row_limit=min(
+                overrides.row_limit or self.guardrails.row_limit,
+                self.guardrails.row_limit,
+            ),
+            cache_ttl_minutes=min(
+                overrides.cache_ttl_minutes or self.guardrails.cache_ttl_minutes,
+                self.guardrails.cache_ttl_minutes,
+            ),
+            max_group_by_dimensions=self.guardrails.max_group_by_dimensions,
+            max_filters=self.guardrails.max_filters,
+            max_metrics_per_query=self.guardrails.max_metrics_per_query,
+        )
 
     def validate_dataset(self, dataset_name: str) -> ValidationResult:
         """Check if dataset is allowed for this persona."""
@@ -486,6 +557,9 @@ class ExplorePermissionValidator:
         """
         Comprehensive query validation.
 
+        Uses per-dataset guardrail overrides when available, falling back
+        to global PERFORMANCE_GUARDRAILS.
+
         Args:
             dataset_name: Name of the dataset being queried
             query_params: Dictionary containing:
@@ -500,6 +574,9 @@ class ExplorePermissionValidator:
         Returns:
             ValidationResult with is_valid=True if query passes all checks
         """
+        # Resolve per-dataset guardrails (may differ from global defaults)
+        effective = self._get_effective_guardrails(dataset_name)
+
         # 1. Validate dataset access
         result = self.validate_dataset(dataset_name)
         if not result.is_valid:
@@ -511,25 +588,50 @@ class ExplorePermissionValidator:
         if not result.is_valid:
             return result
 
-        # 3. Validate metrics
+        # 3. Validate metrics (uses effective guardrails for max count)
         metrics = query_params.get('metrics', [])
+        if len(metrics) > effective.max_metrics_per_query:
+            return ValidationResult(
+                is_valid=False,
+                error_message=f"Maximum {effective.max_metrics_per_query} metrics per query",
+                error_code="TOO_MANY_METRICS",
+            )
         result = self.validate_metrics(dataset_name, metrics)
         if not result.is_valid:
             return result
 
-        # 4. Validate date range
+        # 4. Validate date range (uses effective guardrails for max days)
         start_date = query_params.get('start_date')
         end_date = query_params.get('end_date')
         if start_date and end_date:
-            result = self.validate_date_range(start_date, end_date)
-            if not result.is_valid:
-                return result
+            if end_date < start_date:
+                return ValidationResult(
+                    is_valid=False,
+                    error_message="End date must be after start date",
+                    error_code="INVALID_DATE_RANGE",
+                )
+            date_range_days = (end_date - start_date).days
+            if date_range_days > effective.max_date_range_days:
+                return ValidationResult(
+                    is_valid=False,
+                    error_message=(
+                        f"Date range of {date_range_days} days exceeds maximum "
+                        f"of {effective.max_date_range_days} days"
+                    ),
+                    error_code="DATE_RANGE_EXCEEDED",
+                )
 
-        # 5. Validate group-by count
+        # 5. Validate group-by count (uses effective guardrails)
         group_by = query_params.get('group_by', [])
-        result = self.validate_group_by_count(group_by)
-        if not result.is_valid:
-            return result
+        if len(group_by) > effective.max_group_by_dimensions:
+            return ValidationResult(
+                is_valid=False,
+                error_message=(
+                    f"Maximum {effective.max_group_by_dimensions} group-by "
+                    f"dimensions allowed, got {len(group_by)}"
+                ),
+                error_code="TOO_MANY_GROUP_BY",
+            )
 
         # 6. Validate visualization type
         viz_type = query_params.get('viz_type')
@@ -538,11 +640,14 @@ class ExplorePermissionValidator:
             if not result.is_valid:
                 return result
 
-        # 7. Validate filters count
+        # 7. Validate filters count (uses effective guardrails)
         filters = query_params.get('filters', [])
-        result = self.validate_filters_count(filters)
-        if not result.is_valid:
-            return result
+        if len(filters) > effective.max_filters:
+            return ValidationResult(
+                is_valid=False,
+                error_message=f"Maximum {effective.max_filters} filters allowed",
+                error_code="TOO_MANY_FILTERS",
+            )
 
         return ValidationResult(is_valid=True)
 

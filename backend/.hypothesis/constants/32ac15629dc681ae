@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/platform/secrets.py
+# hypothesis_version: 6.150.0
+
+[b'shopify-analytics-salt', 100000, '(access[_-]?token)', '(api[_-]?key)', '(auth[_-]?token)', '(bearer[_-]?token)', '(client[_-]?secret)', '(credentials)', '(database[_-]?url)', '(encryption[_-]?key)', '(hmac[_-]?secret)', '(jwt[_-]?token)', '(password)', '(private[_-]?key)', '(refresh[_-]?token)', '(secret[_-]?key)', '(session[_-]?token)', '(signing[_-]?key)', '(webhook[_-]?secret)', '*', 'ENCRYPTION_KEY', '[REDACTED]', '__dict__', 'error', 'has_value', 'key', 'sha256', 'utf-8']

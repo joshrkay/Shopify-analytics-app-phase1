@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/constants/permissions.py
+# hypothesis_version: 6.150.0
+
+['actions:audit', 'actions:execute', 'actions:rollback', 'actions:view', 'admin', 'admin:audit:view', 'admin:plans:manage', 'admin:plans:view', 'admin:system:config', 'agency', 'agency:reports:view', 'agency:stores:switch', 'agency:stores:view', 'agency_admin', 'agency_viewer', 'ai:actions:execute', 'ai:config:manage', 'ai:insights:view', 'analytics:explore', 'analytics:export', 'analytics:view', 'automation:approve', 'automation:create', 'automation:execute', 'automation:view', 'billing:manage', 'billing:view', 'editor', 'enterprise', 'free', 'growth', 'merchant', 'merchant_admin', 'merchant_viewer', 'multi_tenant:access', 'owner', 'platform', 'settings:manage', 'settings:view', 'store:create', 'store:delete', 'store:update', 'store:view', 'super_admin', 'team:invite', 'team:manage', 'team:view', 'viewer']

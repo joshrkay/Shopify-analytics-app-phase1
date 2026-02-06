@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/changelog_entry.py
+# hypothesis_version: 6.150.0
+
+[255, 500, 1000, 'approvals', 'billing', 'changelog_entries', 'connectors', 'dashboard', 'deprecation', 'feature', 'fix', 'improvement', 'insights', 'is_published', 'notifications', 'postgresql', 'published_at', 'recommendations', 'reports', 'security', 'settings', 'sync_health']

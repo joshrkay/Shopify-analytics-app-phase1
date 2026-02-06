@@ -226,6 +226,13 @@ class AuditAction(str, Enum):
     ANALYTICS_TOKEN_REFRESHED = "analytics.token.refreshed"
     ANALYTICS_TOKEN_EXPIRED = "analytics.token.expired"
 
+    # Dataset Sync Lifecycle events (Story 5.2.10)
+    DATASET_SYNC_STARTED = "dataset.sync.started"
+    DATASET_SYNC_COMPLETED = "dataset.sync.completed"
+    DATASET_SYNC_FAILED = "dataset.sync.failed"
+    DATASET_VERSION_ACTIVATED = "dataset.version.activated"
+    DATASET_VERSION_ROLLED_BACK = "dataset.version.rolled_back"
+
 
 class AuditOutcome(str, Enum):
     """Outcome of the audited action."""
@@ -1298,6 +1305,37 @@ AUDITABLE_EVENTS: dict[AuditAction, AuditableEventMetadata] = {
             "update_type", "highest_confidence",
         ),
         risk_level="low",
+        compliance_tags=("SOC2",),
+    ),
+    # Dataset Sync Lifecycle events (Story 5.2.10)
+    AuditAction.DATASET_SYNC_STARTED: AuditableEventMetadata(
+        description="Dataset sync job started",
+        required_fields=("dataset_name", "version"),
+        risk_level="low",
+        compliance_tags=("SOC2",),
+    ),
+    AuditAction.DATASET_SYNC_COMPLETED: AuditableEventMetadata(
+        description="Dataset sync completed successfully",
+        required_fields=("dataset_name", "version", "duration_seconds"),
+        risk_level="low",
+        compliance_tags=("SOC2",),
+    ),
+    AuditAction.DATASET_SYNC_FAILED: AuditableEventMetadata(
+        description="Dataset sync failed",
+        required_fields=("dataset_name", "version", "error"),
+        risk_level="high",
+        compliance_tags=("SOC2",),
+    ),
+    AuditAction.DATASET_VERSION_ACTIVATED: AuditableEventMetadata(
+        description="New dataset version activated (promoted to ACTIVE)",
+        required_fields=("dataset_name", "version"),
+        risk_level="medium",
+        compliance_tags=("SOC2",),
+    ),
+    AuditAction.DATASET_VERSION_ROLLED_BACK: AuditableEventMetadata(
+        description="Dataset version rolled back to previous known-good version",
+        required_fields=("dataset_name", "rolled_back_version", "restored_version"),
+        risk_level="high",
         compliance_tags=("SOC2",),
     ),
 }

@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/llm_routing.py
+# hypothesis_version: 6.150.0
+
+[100, 255, 2048, 4096, '0', '0.7', 'DESC', 'Log entry ID (UUID)', 'Template ID (UUID)', 'created_at', 'error', 'llm_model_registry', 'llm_org_config', 'llm_prompt_template', 'llm_usage_log', 'postgresql', 'rate_limited', 'success', 'template_key', 'tenant_id', 'timeout', 'version', '{{', '}}']

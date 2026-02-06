@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/integrations/airbyte/exceptions.py
+# hypothesis_version: 6.150.0
+
+[401, 404, 429, 'Resource not found']

@@ -24,6 +24,8 @@ models:
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + order_id)
+        meta:
+          superset_expose: false
         tests:
           - not_null
           - unique
@@ -50,6 +52,8 @@ models:
           superset_expose: true
       - name: order_number
         description: Order number as integer
+        meta:
+          superset_expose: false
       - name: customer_key
         description: Pseudonymized customer identifier (MD5 hash, no PII exposed)
         meta:
@@ -72,10 +76,16 @@ models:
           - not_null
       - name: order_updated_at
         description: Order last update timestamp (UTC)
+        meta:
+          superset_expose: false
       - name: order_cancelled_at
         description: Order cancellation timestamp (UTC, nullable)
+        meta:
+          superset_expose: false
       - name: order_closed_at
         description: Order closure timestamp (UTC, nullable)
+        meta:
+          superset_expose: false
       - name: date
         description: Order date in tenant's local timezone (canonical per User Story 7.7.1)
         meta:
@@ -96,6 +106,8 @@ models:
           - not_null
       - name: total_tax
         description: Total tax amount (numeric)
+        meta:
+          superset_expose: false
       - name: currency
         description: ISO 4217 currency code (uppercase, 3-letter)
         meta:
@@ -108,18 +120,30 @@ models:
                 where: "currency is not null"
       - name: financial_status
         description: Financial status (paid, pending, refunded, etc.)
+        meta:
+          superset_expose: false
       - name: fulfillment_status
         description: Fulfillment status (fulfilled, unfulfilled, etc.)
+        meta:
+          superset_expose: false
       - name: tags
         description: Order tags (comma-separated)
+        meta:
+          superset_expose: false
       - name: note
         description: Order notes
+        meta:
+          superset_expose: false
       - name: dbt_updated_at
         description: Timestamp when the backing table was last refreshed by dbt
+        meta:
+          superset_expose: false
         tests:
           - not_null
       - name: schema_version
         description: Version tag (always 'v1' for this model)
+        meta:
+          superset_expose: false
         tests:
           - not_null
           - accepted_values:
@@ -142,6 +166,8 @@ models:
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + platform + account + campaign + ad + date)
+        meta:
+          superset_expose: false
         tests:
           - not_null
           - unique
@@ -252,10 +278,14 @@ models:
           superset_expose: true
       - name: dbt_updated_at
         description: Timestamp when the backing table was last refreshed by dbt
+        meta:
+          superset_expose: false
         tests:
           - not_null
       - name: schema_version
         description: Version tag (always 'v1' for this model)
+        meta:
+          superset_expose: false
         tests:
           - not_null
           - accepted_values:
@@ -278,6 +308,8 @@ models:
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + platform + account + campaign + date)
+        meta:
+          superset_expose: false
         tests:
           - not_null
           - unique
@@ -378,10 +410,14 @@ models:
                 where: "currency is not null"
       - name: dbt_updated_at
         description: Timestamp when the backing table was last refreshed by dbt
+        meta:
+          superset_expose: false
         tests:
           - not_null
       - name: schema_version
         description: Version tag (always 'v1' for this model)
+        meta:
+          superset_expose: false
         tests:
           - not_null
           - accepted_values:

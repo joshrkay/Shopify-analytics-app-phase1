@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/usage.py
+# hypothesis_version: 6.150.0
+
+[255, 'API endpoint path', 'CASCADE', 'ShopifyStore', 'ai_tokens', 'api_call', 'daily', 'export_count', 'hourly', 'monthly', 'period_start', 'period_type', 'recorded_at', 'report_generation', 'shopify_stores.id', 'storage_mb', 'store_id', 'tenant_id', 'uq_usage_aggregate', 'usage_aggregates', 'usage_records', 'usage_type']

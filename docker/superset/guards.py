@@ -158,6 +158,32 @@ class StartupGuards:
             )
 
     @staticmethod
+    def check_dataset_sync_status() -> GuardResult:
+        """
+        Warn if last dataset sync was blocked or failed.
+
+        Reads from SUPERSET_DATASET_SYNC_STATUS (set by CI/backend after sync).
+        Values: ok, failed, blocked. If blocked or failed, logs WARN so
+        operators know dashboards may be stale or incompatible.
+        """
+        status = os.getenv("SUPERSET_DATASET_SYNC_STATUS", "ok").lower().strip()
+        if status in ("blocked", "failed"):
+            return GuardResult(
+                check_name="dataset_sync_status",
+                result=GuardCheckResult.WARN,
+                message=(
+                    f"Last dataset sync status is '{status}' — "
+                    "Superset datasets may be stale or incompatible; check sync pipeline"
+                ),
+                severity="high",
+            )
+        return GuardResult(
+            check_name="dataset_sync_status",
+            result=GuardCheckResult.PASS,
+            message="Dataset sync status ok or not set",
+        )
+
+    @staticmethod
     def check_rls_enforcement(superset_client=None) -> GuardResult:
         """CRITICAL: All datasets must have RLS rules.
 
@@ -220,6 +246,7 @@ class StartupGuards:
             cls.check_metadata_db_configured(),
             cls.check_performance_limits_frozen(),
             cls.check_feature_flags_safe(),
+            cls.check_dataset_sync_status(),
             cls.check_rls_enforcement(superset_client),
         ]
 

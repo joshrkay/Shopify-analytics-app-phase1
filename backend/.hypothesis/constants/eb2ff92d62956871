@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/monitoring/audit_alerts.py
+# hypothesis_version: 6.150.0
+
+['AuditAlertManager', 'alert_type', 'correlation_id', 'critical', 'cross_tenant_access', 'error', 'error_type', 'failure_count', 'global', 'info', 'requesting_tenant', 'retention_job_failed', 'severity', 'target_tenant', 'tenant_id', 'tenants_processed', 'title', 'total_deleted', 'unknown', 'user_id', 'warning', 'window_minutes']

@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/data_change_event.py
+# hypothesis_version: 6.150.0
+
+[100, 255, 500, 'Human-readable title', 'Type of change event', 'ad_spend', 'ai_action_approved', 'ai_action_executed', 'ai_action_rejected', 'aov', 'backfill_completed', 'cac', 'connector_added', 'connector_removed', 'conversion_rate', 'data_change_events', 'event_type', 'ltv', 'mrr', 'occurred_at', 'orders', 'postgresql', 'revenue', 'roas', 'sessions', 'sync_completed', 'sync_failed', 'tenant_id']

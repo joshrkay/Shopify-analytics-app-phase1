@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/services/ad_ingestion.py
+# hypothesis_version: 6.150.0
+
+[3600, 'Ad account connected', 'Ad account disabled', 'Ad account enabled', 'Ad sync completed', 'Ad sync triggered', 'account_id', 'advertiser_id', 'api_key_encrypted', 'app_id', 'app_secret_encrypted', 'attentive', 'can_sync', 'client_id', 'connection_id', 'customer_id', 'error', 'failure_reason', 'google_ads', 'is_active', 'is_enabled', 'job_id', 'klaviyo', 'last_sync_at', 'last_sync_status', 'meta_ads', 'organization_id', 'platform', 'postscript', 'records_synced', 'running', 'shopify_email', 'smsbump', 'snapchat_ads', 'snapchat_client_id', 'source', 'source-attentive', 'source-google-ads', 'source-klaviyo', 'source-postscript', 'source-shopify', 'source-smsbump', 'status', 'tenant_id', 'tiktok_ads', 'tiktok_app_id', 'unknown']

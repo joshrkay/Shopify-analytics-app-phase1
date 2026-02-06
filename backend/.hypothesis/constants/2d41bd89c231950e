@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/services/airbyte_service.py
+# hypothesis_version: 6.150.0
+
+['/', 'Connection activated', 'Connection deleted', 'attempted_tenant_id', 'connection_id', 'count', 'critical', 'destination', 'error_message', 'event', 'existing_tenant_id', 'failed', 'http://', 'https://', 'severity', 'shop_domain', 'shopify', 'source', 'source-shopify', 'source_type', 'success', 'tenant_id', 'total']
