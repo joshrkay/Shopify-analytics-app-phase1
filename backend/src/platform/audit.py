@@ -211,6 +211,7 @@ class AuditAction(str, Enum):
 
     # Root Cause Signal events (Story 4.2)
     ROOT_CAUSE_SIGNAL_GENERATED = "data.quality.root_cause_generated"
+    ROOT_CAUSE_SIGNAL_UPDATED = "data.quality.root_cause_updated"
 
 
 class AuditOutcome(str, Enum):
@@ -1262,6 +1263,15 @@ AUDITABLE_EVENTS: dict[AuditAction, AuditableEventMetadata] = {
             "top_cause_type", "hypothesis_count",
         ),
         risk_level="medium",
+        compliance_tags=("SOC2",),
+    ),
+    AuditAction.ROOT_CAUSE_SIGNAL_UPDATED: AuditableEventMetadata(
+        description="Root cause signal updated (resolved or re-analyzed)",
+        required_fields=(
+            "tenant_id", "dataset", "signal_id",
+            "update_type", "highest_confidence",
+        ),
+        risk_level="low",
         compliance_tags=("SOC2",),
     ),
 }

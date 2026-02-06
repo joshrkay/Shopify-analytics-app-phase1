@@ -22,6 +22,7 @@ import { DataHealthProvider } from './contexts/DataHealthContext';
 import { AppHeader } from './components/layout/AppHeader';
 import { useClerkToken } from './hooks/useClerkToken';
 import AdminPlans from './pages/AdminPlans';
+import RootCausePanel from './pages/admin/RootCausePanel';
 import Analytics from './pages/Analytics';
 import Paywall from './pages/Paywall';
 import InsightsFeed from './pages/InsightsFeed';
@@ -41,6 +42,7 @@ function AuthenticatedApp() {
       <AppHeader />
       <Routes>
         <Route path="/admin/plans" element={<AdminPlans />} />
+        <Route path="/admin/diagnostics" element={<RootCausePanel />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/paywall" element={<Paywall />} />
         <Route path="/insights" element={<InsightsFeed />} />

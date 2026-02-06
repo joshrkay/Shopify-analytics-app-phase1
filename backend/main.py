@@ -41,6 +41,7 @@ from src.api.routes import tenant_members
 from src.api.routes import user_tenants
 from src.api.routes import dashboard_bindings
 from src.api.dq import routes as sync_health
+from src.api.routes import admin_diagnostics
 
 # Configure structured logging
 logging.basicConfig(
@@ -211,6 +212,10 @@ app.include_router(user_tenants.router)
 # Include dashboard metric binding routes (requires authentication)
 # Story 2.3 - Metric → Dashboard Binding, Consumption & Safety
 app.include_router(dashboard_bindings.router)
+
+# Include admin diagnostics routes (requires admin role)
+# Story 4.2 - Data Quality Root Cause Signals
+app.include_router(admin_diagnostics.router)
 
 
 # Global exception handler for tenant isolation errors
