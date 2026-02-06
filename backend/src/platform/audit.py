@@ -204,6 +204,11 @@ class AuditAction(str, Enum):
     DATA_FRESHNESS_UNAVAILABLE = "data.freshness.unavailable"
     DATA_FRESHNESS_RECOVERED = "data.freshness.recovered"
 
+    # Data Quality events (Story 4.1)
+    DATA_QUALITY_WARN = "data.quality.warn"
+    DATA_QUALITY_FAIL = "data.quality.fail"
+    DATA_QUALITY_RECOVERED = "data.quality.recovered"
+
 
 class AuditOutcome(str, Enum):
     """Outcome of the audited action."""
@@ -1224,6 +1229,25 @@ AUDITABLE_EVENTS: dict[AuditAction, AuditableEventMetadata] = {
     AuditAction.DATA_FRESHNESS_RECOVERED: AuditableEventMetadata(
         description="Data source recovered to FRESH state",
         required_fields=("source", "previous_state", "new_state", "detected_at"),
+        risk_level="low",
+        compliance_tags=(),
+    ),
+    # Data Quality events (Story 4.1)
+    AuditAction.DATA_QUALITY_WARN: AuditableEventMetadata(
+        description="Data quality degraded to WARN state",
+        required_fields=("tenant_id", "dataset", "rule_type", "severity", "detected_at"),
+        risk_level="medium",
+        compliance_tags=("SOC2",),
+    ),
+    AuditAction.DATA_QUALITY_FAIL: AuditableEventMetadata(
+        description="Data quality degraded to FAIL state",
+        required_fields=("tenant_id", "dataset", "rule_type", "severity", "detected_at"),
+        risk_level="high",
+        compliance_tags=("SOC2",),
+    ),
+    AuditAction.DATA_QUALITY_RECOVERED: AuditableEventMetadata(
+        description="Data quality recovered to PASS state",
+        required_fields=("tenant_id", "dataset", "rule_type", "severity", "detected_at"),
         risk_level="low",
         compliance_tags=(),
     ),

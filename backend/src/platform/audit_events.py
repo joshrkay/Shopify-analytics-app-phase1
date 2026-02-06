@@ -1115,6 +1115,36 @@ AUDITABLE_EVENTS: Final[dict[str, list[str]]] = {
     ],
 
     # =========================================================================
+    # DATA QUALITY EVENTS (Story 4.1)
+    # =========================================================================
+    # Track data quality state transitions (PASS/WARN/FAIL) for compliance
+    # and operational monitoring.
+
+    "data.quality.warn": [
+        "tenant_id",           # Affected tenant
+        "dataset",             # Dataset or connector affected
+        "rule_type",           # DQ check type (freshness, volume_anomaly, metric_inconsistency)
+        "severity",            # Severity level (warning, high, critical)
+        "detected_at",         # ISO-8601 UTC timestamp
+    ],
+
+    "data.quality.fail": [
+        "tenant_id",           # Affected tenant
+        "dataset",             # Dataset or connector affected
+        "rule_type",           # DQ check type
+        "severity",            # Severity level
+        "detected_at",         # ISO-8601 UTC timestamp
+    ],
+
+    "data.quality.recovered": [
+        "tenant_id",           # Affected tenant
+        "dataset",             # Dataset or connector that recovered
+        "rule_type",           # DQ check type that recovered
+        "severity",            # Previous severity before recovery
+        "detected_at",         # ISO-8601 UTC timestamp
+    ],
+
+    # =========================================================================
     # AUTHORIZATION ENFORCEMENT EVENTS
     # =========================================================================
     # Track mid-session authorization enforcement when access is revoked,
@@ -1302,6 +1332,11 @@ EVENT_CATEGORIES: Final[dict[str, list[str]]] = {
         "data.freshness.unavailable",
         "data.freshness.recovered",
     ],
+    "data_quality": [
+        "data.quality.warn",
+        "data.quality.fail",
+        "data.quality.recovered",
+    ],
 }
 
 
@@ -1411,6 +1446,11 @@ EVENT_SEVERITY: Final[dict[str, str]] = {
     "data.freshness.stale": "medium",
     "data.freshness.unavailable": "high",
     "data.freshness.recovered": "low",
+
+    # Data Quality events (Story 4.1)
+    "data.quality.warn": "medium",
+    "data.quality.fail": "high",
+    "data.quality.recovered": "low",
 }
 
 
