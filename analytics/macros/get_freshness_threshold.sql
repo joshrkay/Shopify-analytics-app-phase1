@@ -11,11 +11,8 @@
         tier:           Billing tier override. Falls back to dbt var 'billing_tier',
                         then to 'free'.
 
-    Usage in sources.yml:
-        freshness:
-          warn_after:
-            count: "{{ get_freshness_threshold('shopify_orders', 'warn_after_minutes') }}"
-            period: minute
+    Note: Custom macros are NOT available during source YAML parsing in dbt 1.11+.
+    Sources use inline var() lookups. This macro is for tests and models only.
 
     Usage in tests / models:
         {{ get_freshness_threshold('email', 'error_after_minutes', 'enterprise') }}

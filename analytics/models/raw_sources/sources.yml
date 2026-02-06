@@ -6,10 +6,10 @@ sources:
     schema: "{{ var('raw_shopify_schema', 'airbyte_raw') }}"
     freshness:
       warn_after:
-        count: "{{ get_freshness_threshold('shopify_orders', 'warn_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('shopify_orders', {}).get(var('billing_tier', 'free'), {}).get('warn_after_minutes', 1440) }}"
         period: minute
       error_after:
-        count: "{{ get_freshness_threshold('shopify_orders', 'error_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('shopify_orders', {}).get(var('billing_tier', 'free'), {}).get('error_after_minutes', 2880) }}"
         period: minute
     tables:
       - name: orders
@@ -53,10 +53,10 @@ sources:
     schema: "{{ var('raw_facebook_ads_schema', 'airbyte_raw') }}"
     freshness:
       warn_after:
-        count: "{{ get_freshness_threshold('facebook_ads', 'warn_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('facebook_ads', {}).get(var('billing_tier', 'free'), {}).get('warn_after_minutes', 1440) }}"
         period: minute
       error_after:
-        count: "{{ get_freshness_threshold('facebook_ads', 'error_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('facebook_ads', {}).get(var('billing_tier', 'free'), {}).get('error_after_minutes', 2880) }}"
         period: minute
     tables:
       - name: ad_insights
@@ -82,10 +82,10 @@ sources:
     schema: "{{ var('raw_google_ads_schema', 'airbyte_raw') }}"
     freshness:
       warn_after:
-        count: "{{ get_freshness_threshold('google_ads', 'warn_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('google_ads', {}).get(var('billing_tier', 'free'), {}).get('warn_after_minutes', 1440) }}"
         period: minute
       error_after:
-        count: "{{ get_freshness_threshold('google_ads', 'error_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('google_ads', {}).get(var('billing_tier', 'free'), {}).get('error_after_minutes', 2880) }}"
         period: minute
     tables:
       - name: ad_stats
@@ -111,10 +111,10 @@ sources:
     schema: "{{ var('raw_tiktok_ads_schema', 'airbyte_raw') }}"
     freshness:
       warn_after:
-        count: "{{ get_freshness_threshold('tiktok_ads', 'warn_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('tiktok_ads', {}).get(var('billing_tier', 'free'), {}).get('warn_after_minutes', 1440) }}"
         period: minute
       error_after:
-        count: "{{ get_freshness_threshold('tiktok_ads', 'error_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('tiktok_ads', {}).get(var('billing_tier', 'free'), {}).get('error_after_minutes', 2880) }}"
         period: minute
     tables:
       - name: ad_reports
@@ -134,10 +134,10 @@ sources:
     schema: "{{ var('raw_snapchat_ads_schema', 'airbyte_raw') }}"
     freshness:
       warn_after:
-        count: "{{ get_freshness_threshold('snapchat_ads', 'warn_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('snapchat_ads', {}).get(var('billing_tier', 'free'), {}).get('warn_after_minutes', 1440) }}"
         period: minute
       error_after:
-        count: "{{ get_freshness_threshold('snapchat_ads', 'error_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('snapchat_ads', {}).get(var('billing_tier', 'free'), {}).get('error_after_minutes', 2880) }}"
         period: minute
     tables:
       - name: ad_reports
@@ -157,10 +157,10 @@ sources:
     schema: "{{ var('raw_email_schema', 'airbyte_raw') }}"
     freshness:
       warn_after:
-        count: "{{ get_freshness_threshold('email', 'warn_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('email', {}).get(var('billing_tier', 'free'), {}).get('warn_after_minutes', 1440) }}"
         period: minute
       error_after:
-        count: "{{ get_freshness_threshold('email', 'error_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('email', {}).get(var('billing_tier', 'free'), {}).get('error_after_minutes', 2880) }}"
         period: minute
     tables:
       - name: klaviyo_events
@@ -192,10 +192,10 @@ sources:
     schema: "{{ var('raw_sms_schema', 'airbyte_raw') }}"
     freshness:
       warn_after:
-        count: "{{ get_freshness_threshold('sms', 'warn_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('sms', {}).get(var('billing_tier', 'free'), {}).get('warn_after_minutes', 1440) }}"
         period: minute
       error_after:
-        count: "{{ get_freshness_threshold('sms', 'error_after_minutes') }}"
+        count: "{{ var('freshness_sla', {}).get('sms', {}).get(var('billing_tier', 'free'), {}).get('error_after_minutes', 2880) }}"
         period: minute
     tables:
       - name: attentive_events
