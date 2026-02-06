@@ -26,6 +26,30 @@ from sqlalchemy.pool import StaticPool
 os.environ.setdefault("ENV", "test")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _httpx_app_kwarg_patch():
+    """
+    Compatibility patch for httpx>=0.28 where Client(app=...) is not supported.
+
+    Starlette's TestClient (used by FastAPI) passes app= into httpx.Client.
+    This patch removes the app kwarg to avoid TypeError in environments
+    with newer httpx while remaining safe for older versions.
+    """
+    import httpx
+
+    original_init = httpx.Client.__init__
+
+    def patched_init(self, *args, **kwargs):
+        kwargs.pop("app", None)
+        return original_init(self, *args, **kwargs)
+
+    httpx.Client.__init__ = patched_init
+    try:
+        yield
+    finally:
+        httpx.Client.__init__ = original_init
+
+
 def _get_test_database_url() -> str:
     """Get database URL for tests."""
     database_url = os.getenv("DATABASE_URL")

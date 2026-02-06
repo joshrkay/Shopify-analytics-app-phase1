@@ -50,6 +50,9 @@ Thumbs.db
 *.local.bak
 *.mybackup
 
+# Nested app config (avoids submodule/add conflict when no commit checked out)
+shopify-analytics/
+
 # Node.js / Frontend
 node_modules/
 .npm
