@@ -85,6 +85,10 @@ class FreshnessSLAConfigResponse(BaseModel):
     sources: Dict[str, Dict[str, Dict[str, int]]]
 
 
+# Merchant data health response (Story 4.3)
+from src.models.merchant_data_health import MerchantDataHealthResponse
+
+
 # =============================================================================
 # Dependencies
 # =============================================================================
@@ -372,3 +376,58 @@ async def get_source_freshness_sla(
         all_tiers = {tier: all_tiers[tier]}
 
     return SourceSLAResponse(source_name=source_name, tiers=all_tiers)
+
+
+# =============================================================================
+# Merchant Data Health Endpoint (Story 4.3)
+# =============================================================================
+
+@router.get(
+    "/merchant",
+    response_model=MerchantDataHealthResponse,
+)
+async def get_merchant_data_health(
+    request: Request,
+    db_session=Depends(get_db_session),
+):
+    """
+    Get the merchant-facing data health state.
+
+    Returns a simplified trust indicator combining data availability
+    and data quality into one of three states:
+    - healthy: All data current, all features enabled
+    - delayed: Some data delayed, AI insights paused
+    - unavailable: Data temporarily unavailable
+
+    Response fields are merchant-safe and never expose internal
+    system details, SLA thresholds, or error codes.
+
+    SECURITY: tenant_id from JWT only. Response scoped to tenant.
+    """
+    from src.services.merchant_data_health import MerchantDataHealthService
+
+    tenant_ctx = get_tenant_context(request)
+
+    logger.info(
+        "Merchant data health requested",
+        extra={
+            "tenant_id": tenant_ctx.tenant_id,
+            "user_id": tenant_ctx.user_id,
+        },
+    )
+
+    service = MerchantDataHealthService(
+        db_session=db_session,
+        tenant_id=tenant_ctx.tenant_id,
+        billing_tier=getattr(tenant_ctx, "billing_tier", "free"),
+    )
+    result = service.evaluate()
+
+    return MerchantDataHealthResponse(
+        health_state=result.state.value,
+        last_updated=result.evaluated_at.isoformat(),
+        user_safe_message=result.message,
+        ai_insights_enabled=result.ai_insights_enabled,
+        dashboards_enabled=result.dashboards_enabled,
+        exports_enabled=result.exports_enabled,
+    )

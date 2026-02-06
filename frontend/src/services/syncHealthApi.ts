@@ -125,6 +125,19 @@ export interface ActiveIncidentsResponse {
 }
 
 // =============================================================================
+// Merchant Data Health Types (Story 4.3)
+// =============================================================================
+
+export interface MerchantDataHealthResponse {
+  health_state: 'healthy' | 'delayed' | 'unavailable';
+  last_updated: string;
+  user_safe_message: string;
+  ai_insights_enabled: boolean;
+  dashboards_enabled: boolean;
+  exports_enabled: boolean;
+}
+
+// =============================================================================
 // API Configuration
 // =============================================================================
 
@@ -428,4 +441,25 @@ export function calculateBackfillDateRange(
     days,
     message: `${days} day${days > 1 ? 's' : ''} selected`,
   };
+}
+
+
+// =============================================================================
+// Merchant Data Health API (Story 4.3)
+// =============================================================================
+
+/**
+ * Get the merchant-facing data health state.
+ *
+ * Returns a simplified trust indicator combining availability
+ * and quality into HEALTHY / DELAYED / UNAVAILABLE.
+ *
+ * Story 4.3 - Merchant Data Health Trust Layer
+ */
+export async function getMerchantDataHealth(): Promise<MerchantDataHealthResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/data-health/merchant`, {
+    method: 'GET',
+    headers: createHeaders(),
+  });
+  return handleResponse<MerchantDataHealthResponse>(response);
 }

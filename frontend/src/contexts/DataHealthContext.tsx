@@ -22,11 +22,14 @@ import {
 import {
   getCompactHealth,
   getActiveIncidents,
+  getMerchantDataHealth,
   acknowledgeIncident as acknowledgeIncidentApi,
   formatTimeSinceSync,
   type CompactHealth,
   type ActiveIncidentBanner,
+  type MerchantDataHealthResponse,
 } from '../services/syncHealthApi';
+import type { MerchantHealthState } from '../utils/data_health_copy';
 
 // =============================================================================
 // Types
@@ -40,6 +43,8 @@ interface DataHealthState {
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
+  /** Merchant-facing health state (Story 4.3) */
+  merchantHealth: MerchantDataHealthResponse | null;
 }
 
 interface DataHealthContextValue extends DataHealthState {
@@ -60,6 +65,10 @@ interface DataHealthContextValue extends DataHealthState {
   mostSevereIncident: ActiveIncidentBanner | null;
   /** Human-readable freshness label */
   freshnessLabel: string;
+  /** Merchant-facing health state (Story 4.3) */
+  merchantHealthState: MerchantHealthState | null;
+  /** Merchant-facing health message (Story 4.3) */
+  merchantHealthMessage: string | null;
 }
 
 // Poll intervals based on health status
@@ -77,6 +86,7 @@ const initialState: DataHealthState = {
   loading: true,
   error: null,
   lastUpdated: null,
+  merchantHealth: null,
 };
 
 const DataHealthContext = createContext<DataHealthContextValue | null>(null);
@@ -106,9 +116,10 @@ export function DataHealthProvider({
     isPendingRef.current = true;
 
     try {
-      const [healthData, incidentsData] = await Promise.all([
+      const [healthData, incidentsData, merchantHealthData] = await Promise.all([
         getCompactHealth(),
         getActiveIncidents(),
+        getMerchantDataHealth().catch(() => null),
       ]);
 
       setState({
@@ -119,6 +130,7 @@ export function DataHealthProvider({
         loading: false,
         error: null,
         lastUpdated: new Date(),
+        merchantHealth: merchantHealthData,
       });
     } catch (err) {
       console.error('Failed to fetch data health:', err);
@@ -229,6 +241,12 @@ export function DataHealthProvider({
     ? formatTimeSinceSync(state.health?.oldest_sync_minutes ?? null)
     : 'All data fresh';
 
+  // Merchant health state (Story 4.3)
+  const merchantHealthState: MerchantHealthState | null =
+    (state.merchantHealth?.health_state as MerchantHealthState) ?? null;
+  const merchantHealthMessage: string | null =
+    state.merchantHealth?.user_safe_message ?? null;
+
   const value: DataHealthContextValue = {
     ...state,
     refresh,
@@ -239,6 +257,8 @@ export function DataHealthProvider({
     shouldShowBanner,
     mostSevereIncident,
     freshnessLabel,
+    merchantHealthState,
+    merchantHealthMessage,
   };
 
   return (
@@ -302,6 +322,30 @@ export function useActiveIncidents(): {
     shouldShowBanner,
     mostSevereIncident,
     acknowledgeIncident,
+  };
+}
+
+/**
+ * Hook to get merchant-facing health state (Story 4.3).
+ *
+ * Returns the simplified trust indicator for merchant UI.
+ */
+export function useMerchantHealth(): {
+  healthState: MerchantHealthState | null;
+  message: string | null;
+  aiInsightsEnabled: boolean;
+  dashboardsEnabled: boolean;
+  exportsEnabled: boolean;
+  loading: boolean;
+} {
+  const { merchantHealth, loading } = useDataHealth();
+  return {
+    healthState: (merchantHealth?.health_state as MerchantHealthState) ?? null,
+    message: merchantHealth?.user_safe_message ?? null,
+    aiInsightsEnabled: merchantHealth?.ai_insights_enabled ?? true,
+    dashboardsEnabled: merchantHealth?.dashboards_enabled ?? true,
+    exportsEnabled: merchantHealth?.exports_enabled ?? true,
+    loading,
   };
 }
 

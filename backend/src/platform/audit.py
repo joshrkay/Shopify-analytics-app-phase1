@@ -209,6 +209,10 @@ class AuditAction(str, Enum):
     DATA_QUALITY_FAIL = "data.quality.fail"
     DATA_QUALITY_RECOVERED = "data.quality.recovered"
 
+    # Merchant Data Health events (Story 4.3)
+    MERCHANT_DATA_HEALTH_CHANGED = "merchant.data_health.changed"
+    MERCHANT_DATA_HEALTH_UNAVAILABLE = "merchant.data_health.unavailable"
+
     # Root Cause Signal events (Story 4.2)
     ROOT_CAUSE_SIGNAL_GENERATED = "data.quality.root_cause_generated"
     ROOT_CAUSE_SIGNAL_UPDATED = "data.quality.root_cause_updated"
@@ -1253,6 +1257,19 @@ AUDITABLE_EVENTS: dict[AuditAction, AuditableEventMetadata] = {
         description="Data quality recovered to PASS state",
         required_fields=("tenant_id", "dataset", "rule_type", "severity", "detected_at"),
         risk_level="low",
+        compliance_tags=(),
+    ),
+    # Merchant Data Health events (Story 4.3)
+    AuditAction.MERCHANT_DATA_HEALTH_CHANGED: AuditableEventMetadata(
+        description="Merchant-visible data health state changed",
+        required_fields=("tenant_id", "previous_state", "new_state"),
+        risk_level="low",
+        compliance_tags=(),
+    ),
+    AuditAction.MERCHANT_DATA_HEALTH_UNAVAILABLE: AuditableEventMetadata(
+        description="Merchant data health degraded to UNAVAILABLE",
+        required_fields=("tenant_id", "previous_state"),
+        risk_level="medium",
         compliance_tags=(),
     ),
     # Root Cause Signal events (Story 4.2)

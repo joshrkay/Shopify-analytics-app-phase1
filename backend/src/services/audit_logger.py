@@ -423,6 +423,88 @@ def emit_root_cause_signal_updated(
         )
 
 
+# ---------------------------------------------------------------------------
+# Merchant data health audit event emitters (Story 4.3)
+# ---------------------------------------------------------------------------
+
+_MERCHANT_HEALTH_RESOURCE_TYPE = "merchant_data_health"
+
+
+def emit_merchant_health_changed(
+    db: Session,
+    tenant_id: str,
+    previous_state: str,
+    new_state: str,
+) -> None:
+    """Emit merchant.data_health.changed when merchant health state transitions."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.MERCHANT_DATA_HEALTH_CHANGED,
+            resource_type=_MERCHANT_HEALTH_RESOURCE_TYPE,
+            metadata={
+                "tenant_id": tenant_id,
+                "previous_state": previous_state,
+                "new_state": new_state,
+            },
+            source="system",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_merchant_health_changed_failed",
+            extra={
+                "tenant_id": tenant_id,
+                "previous_state": previous_state,
+                "new_state": new_state,
+            },
+            exc_info=True,
+        )
+
+
+def emit_merchant_health_unavailable(
+    db: Session,
+    tenant_id: str,
+    previous_state: str,
+) -> None:
+    """Emit merchant.data_health.unavailable when health degrades to UNAVAILABLE."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.MERCHANT_DATA_HEALTH_UNAVAILABLE,
+            resource_type=_MERCHANT_HEALTH_RESOURCE_TYPE,
+            metadata={
+                "tenant_id": tenant_id,
+                "previous_state": previous_state,
+            },
+            source="system",
+            outcome=AuditOutcome.FAILURE,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_merchant_health_unavailable_failed",
+            extra={
+                "tenant_id": tenant_id,
+                "previous_state": previous_state,
+            },
+            exc_info=True,
+        )
+
+
 def emit_quality_recovered(
     db: Session,
     tenant_id: str,

@@ -50,10 +50,12 @@ const createMockIncidentsResponse = (
 const mockGetCompactHealth = vi.fn();
 const mockGetActiveIncidents = vi.fn();
 const mockAcknowledgeIncident = vi.fn();
+const mockGetMerchantDataHealth = vi.fn();
 
 vi.mock('../services/syncHealthApi', () => ({
   getCompactHealth: () => mockGetCompactHealth(),
   getActiveIncidents: () => mockGetActiveIncidents(),
+  getMerchantDataHealth: () => mockGetMerchantDataHealth(),
   acknowledgeIncident: (id: string) => mockAcknowledgeIncident(id),
   formatTimeSinceSync: (minutes: number | null) => {
     if (minutes === null) return 'Never synced';
@@ -117,6 +119,14 @@ describe('DataHealthContext', () => {
     vi.clearAllMocks();
     mockGetCompactHealth.mockResolvedValue(createMockCompactHealth());
     mockGetActiveIncidents.mockResolvedValue(createMockIncidentsResponse());
+    mockGetMerchantDataHealth.mockResolvedValue({
+      health_state: 'healthy',
+      last_updated: new Date().toISOString(),
+      user_safe_message: 'Your data is up to date.',
+      ai_insights_enabled: true,
+      dashboards_enabled: true,
+      exports_enabled: true,
+    });
   });
 
   afterEach(() => {
