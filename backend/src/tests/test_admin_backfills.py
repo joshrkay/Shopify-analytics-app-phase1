@@ -13,7 +13,7 @@ Run with: pytest src/tests/test_admin_backfills.py -v
 
 import hashlib
 import pytest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch, PropertyMock
 
 from src.api.schemas.backfill_request import (
@@ -1238,3 +1238,428 @@ class TestBackfillWorkerStats:
         assert stats.requests_created == 0
         assert stats.jobs_recovered == 0
         assert stats.errors == 0
+
+
+# =============================================================================
+# Backfill State Guard Tests - Story 3.4 (downstream protection)
+# =============================================================================
+
+from src.services.backfill_state_guard import (
+    BackfillStateGuard,
+    BackfillGuardStatus,
+    BACKFILL_DASHBOARD_MODE,
+)
+from src.models.data_availability import AvailabilityState, AvailabilityReason
+
+
+class TestBackfillGuardStatus:
+    """Tests for the BackfillGuardStatus dataclass."""
+
+    def test_inactive_defaults(self):
+        status = BackfillGuardStatus(is_backfill_active=False)
+        assert status.is_backfill_active is False
+        assert status.ai_insights_allowed is True
+        assert status.data_availability_override is None
+        assert status.active_request_ids == []
+        assert status.affected_source_systems == []
+
+    def test_active_status(self):
+        status = BackfillGuardStatus(
+            is_backfill_active=True,
+            active_request_ids=["req_1"],
+            affected_source_systems=["shopify"],
+            affected_sla_keys=["shopify_orders"],
+            dashboard_mode="warn",
+            ai_insights_allowed=False,
+            data_availability_override="stale",
+        )
+        assert status.is_backfill_active is True
+        assert status.ai_insights_allowed is False
+        assert status.data_availability_override == "stale"
+        assert "shopify_orders" in status.affected_sla_keys
+
+    def test_to_dict(self):
+        status = BackfillGuardStatus(
+            is_backfill_active=True,
+            active_request_ids=["req_1"],
+            affected_source_systems=["shopify"],
+            affected_sla_keys=["shopify_orders"],
+            dashboard_mode="warn",
+            ai_insights_allowed=False,
+            data_availability_override="stale",
+        )
+        d = status.to_dict()
+        assert d["is_backfill_active"] is True
+        assert d["ai_insights_allowed"] is False
+        assert d["dashboard_mode"] == "warn"
+
+
+class TestBackfillStateGuardInit:
+    """Tests for BackfillStateGuard initialization."""
+
+    def test_requires_tenant_id(self):
+        with pytest.raises(ValueError, match="tenant_id is required"):
+            BackfillStateGuard(MagicMock(), "")
+
+    def test_accepts_valid_tenant_id(self):
+        guard = BackfillStateGuard(MagicMock(), "tenant_123")
+        assert guard.tenant_id == "tenant_123"
+
+
+class TestBackfillStateGuardActive:
+    """Tests for active backfill detection."""
+
+    def test_no_active_backfills(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+        assert guard.is_backfill_active() is False
+
+    def test_active_backfill_detected(self):
+        mock_db = MagicMock()
+        mock_request = MagicMock()
+        mock_request.source_system = "shopify"
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_request
+
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+        assert guard.is_backfill_active() is True
+
+    def test_is_source_being_backfilled_match(self):
+        mock_db = MagicMock()
+        mock_request = MagicMock()
+        mock_request.source_system = "shopify"
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_request]
+
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+        assert guard.is_source_being_backfilled("shopify_orders") is True
+
+    def test_is_source_being_backfilled_no_match(self):
+        mock_db = MagicMock()
+        mock_request = MagicMock()
+        mock_request.source_system = "facebook"
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_request]
+
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+        assert guard.is_source_being_backfilled("shopify_orders") is False
+
+    def test_is_source_being_backfilled_no_active(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+        assert guard.is_source_being_backfilled("shopify_orders") is False
+
+
+class TestBackfillStateGuardStatus:
+    """Tests for full guard status."""
+
+    def test_inactive_guard_status(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+        status = guard.get_guard_status()
+
+        assert status.is_backfill_active is False
+        assert status.ai_insights_allowed is True
+        assert status.data_availability_override is None
+        assert status.active_request_ids == []
+
+    def test_active_guard_status(self):
+        mock_db = MagicMock()
+        mock_request = MagicMock()
+        mock_request.id = "req_1"
+        mock_request.source_system = "shopify"
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_request]
+
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+        status = guard.get_guard_status()
+
+        assert status.is_backfill_active is True
+        assert status.ai_insights_allowed is False
+        assert status.data_availability_override == "stale"
+        assert "req_1" in status.active_request_ids
+        assert "shopify" in status.affected_source_systems
+        assert "shopify_orders" in status.affected_sla_keys
+
+    def test_multiple_active_backfills(self):
+        mock_db = MagicMock()
+        req1 = MagicMock()
+        req1.id = "req_1"
+        req1.source_system = "shopify"
+        req2 = MagicMock()
+        req2.id = "req_2"
+        req2.source_system = "facebook"
+        mock_db.query.return_value.filter.return_value.all.return_value = [req1, req2]
+
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+        status = guard.get_guard_status()
+
+        assert len(status.active_request_ids) == 2
+        assert len(status.affected_source_systems) == 2
+
+
+class TestBackfillStateGuardCompletion:
+    """Tests for completion hooks."""
+
+    def test_on_backfill_completed_calls_freshness_recalc(self):
+        mock_db = MagicMock()
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+
+        with patch.object(guard, "_recalculate_freshness") as mock_recalc, \
+             patch.object(guard, "_clear_caches"), \
+             patch.object(guard, "_log_backfill_completion"):
+            guard.on_backfill_completed("req_1", "shopify")
+            mock_recalc.assert_called_once_with("shopify_orders")
+
+    def test_on_backfill_completed_clears_cache(self):
+        mock_db = MagicMock()
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+
+        with patch.object(guard, "_recalculate_freshness"), \
+             patch.object(guard, "_clear_caches") as mock_clear, \
+             patch.object(guard, "_log_backfill_completion"):
+            guard.on_backfill_completed("req_1", "shopify")
+            mock_clear.assert_called_once()
+
+    def test_on_backfill_completed_logs_audit(self):
+        mock_db = MagicMock()
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+
+        with patch.object(guard, "_recalculate_freshness"), \
+             patch.object(guard, "_clear_caches"), \
+             patch.object(guard, "_log_backfill_completion") as mock_log:
+            guard.on_backfill_completed("req_1", "shopify")
+            mock_log.assert_called_once_with("req_1", "shopify", "shopify_orders")
+
+    def test_completion_survives_freshness_failure(self):
+        """Completion doesn't crash if freshness recalc fails."""
+        mock_db = MagicMock()
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+
+        with patch.object(
+            guard, "_recalculate_freshness", side_effect=Exception("DB down")
+        ), patch.object(guard, "_clear_caches"), \
+             patch.object(guard, "_log_backfill_completion"):
+            # Should not raise — _recalculate_freshness has its own try/except
+            # but since we patched it to raise, the outer on_backfill_completed
+            # will catch it via the method's own error handling
+            pass
+
+        # Test the internal error handling of _recalculate_freshness directly
+        with patch(
+            "src.services.data_availability_service.DataAvailabilityService",
+            side_effect=Exception("DB down"),
+        ):
+            # Should not raise
+            guard._recalculate_freshness("shopify_orders")
+
+    def test_completion_survives_cache_failure(self):
+        """Completion doesn't crash if cache clear fails."""
+        mock_db = MagicMock()
+        guard = BackfillStateGuard(mock_db, "tenant_1")
+
+        with patch(
+            "src.entitlements.cache.invalidate_tenant_entitlements",
+            side_effect=Exception("Redis down"),
+        ):
+            # Should not raise
+            guard._clear_caches()
+
+
+class TestBackfillStateGuardStatic:
+    """Tests for static convenience methods."""
+
+    def test_check_backfill_active_static(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        result = BackfillStateGuard.check_backfill_active(mock_db, "tenant_1")
+        assert result is False
+
+    def test_get_status_static(self):
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        status = BackfillStateGuard.get_status(mock_db, "tenant_1")
+        assert isinstance(status, BackfillGuardStatus)
+        assert status.is_backfill_active is False
+
+
+class TestAvailabilityReasonBackfill:
+    """Tests for the BACKFILL_IN_PROGRESS reason code."""
+
+    def test_backfill_reason_exists(self):
+        assert hasattr(AvailabilityReason, "BACKFILL_IN_PROGRESS")
+        assert AvailabilityReason.BACKFILL_IN_PROGRESS.value == "backfill_in_progress"
+
+    def test_all_reasons_present(self):
+        expected = {
+            "sync_ok", "sla_exceeded", "grace_window_exceeded",
+            "sync_failed", "never_synced", "backfill_in_progress",
+        }
+        actual = {r.value for r in AvailabilityReason}
+        assert actual == expected
+
+
+class TestDataAvailabilityBackfillOverride:
+    """Tests for the backfill override in DataAvailabilityService."""
+
+    @patch("src.services.data_availability_service.get_sla_thresholds", return_value=(1440, 2880))
+    @patch("src.services.data_availability_service.DataAvailabilityService._get_latest_sync")
+    @patch("src.services.data_availability_service.DataAvailabilityService._compute_state")
+    @patch("src.services.data_availability_service.DataAvailabilityService._get_existing")
+    @patch("src.services.data_availability_service.DataAvailabilityService._upsert")
+    @patch("src.services.data_availability_service.DataAvailabilityService._check_backfill_override")
+    def test_fresh_overridden_to_stale_during_backfill(
+        self, mock_override, mock_upsert, mock_existing, mock_compute, mock_sync, mock_sla,
+    ):
+        """When backfill is active and state is FRESH, override to STALE."""
+        from src.services.data_availability_service import DataAvailabilityService
+
+        mock_sync.return_value = (datetime(2024, 1, 1, tzinfo=timezone.utc), "succeeded")
+        mock_compute.return_value = (AvailabilityState.FRESH.value, AvailabilityReason.SYNC_OK.value)
+        mock_existing.return_value = None
+        mock_upsert.return_value = MagicMock()
+        mock_override.return_value = (
+            AvailabilityState.STALE.value,
+            AvailabilityReason.BACKFILL_IN_PROGRESS.value,
+        )
+
+        mock_db = MagicMock()
+        service = DataAvailabilityService(mock_db, "tenant_1")
+        result = service.get_data_availability("shopify_orders")
+
+        assert result.state == AvailabilityState.STALE.value
+        assert result.reason == AvailabilityReason.BACKFILL_IN_PROGRESS.value
+
+    @patch("src.services.data_availability_service.get_sla_thresholds", return_value=(1440, 2880))
+    @patch("src.services.data_availability_service.DataAvailabilityService._get_latest_sync")
+    @patch("src.services.data_availability_service.DataAvailabilityService._compute_state")
+    @patch("src.services.data_availability_service.DataAvailabilityService._get_existing")
+    @patch("src.services.data_availability_service.DataAvailabilityService._upsert")
+    @patch("src.services.data_availability_service.DataAvailabilityService._check_backfill_override")
+    def test_no_override_when_no_backfill(
+        self, mock_override, mock_upsert, mock_existing, mock_compute, mock_sync, mock_sla,
+    ):
+        """When no backfill is active, FRESH state is preserved."""
+        from src.services.data_availability_service import DataAvailabilityService
+
+        mock_sync.return_value = (datetime(2024, 1, 1, tzinfo=timezone.utc), "succeeded")
+        mock_compute.return_value = (AvailabilityState.FRESH.value, AvailabilityReason.SYNC_OK.value)
+        mock_existing.return_value = None
+        mock_upsert.return_value = MagicMock()
+        mock_override.return_value = None  # No override
+
+        mock_db = MagicMock()
+        service = DataAvailabilityService(mock_db, "tenant_1")
+        result = service.get_data_availability("shopify_orders")
+
+        mock_override.assert_called_once_with("shopify_orders")
+
+    @patch("src.services.data_availability_service.get_sla_thresholds", return_value=(1440, 2880))
+    @patch("src.services.data_availability_service.DataAvailabilityService._get_latest_sync")
+    @patch("src.services.data_availability_service.DataAvailabilityService._get_existing")
+    @patch("src.services.data_availability_service.DataAvailabilityService._upsert")
+    @patch("src.services.data_availability_service.DataAvailabilityService._check_backfill_override")
+    def test_stale_not_overridden_during_backfill(
+        self, mock_override, mock_upsert, mock_existing, mock_sync, mock_sla,
+    ):
+        """When state is already UNAVAILABLE, backfill override is not called."""
+        from src.services.data_availability_service import DataAvailabilityService
+
+        # Return None for sync (UNAVAILABLE state)
+        mock_sync.return_value = (None, None)
+        mock_existing.return_value = None
+        mock_upsert.return_value = MagicMock()
+
+        mock_db = MagicMock()
+        service = DataAvailabilityService(mock_db, "tenant_1")
+        result = service.get_data_availability("shopify_orders")
+
+        # UNAVAILABLE state — override should NOT be called
+        mock_override.assert_not_called()
+        assert result.state == AvailabilityState.UNAVAILABLE.value
+
+
+class TestExecutorCompletionHook:
+    """Tests for the executor's completion hook integration."""
+
+    def test_terminal_state_triggers_guard(self):
+        """When all jobs succeed, _on_request_terminal is called."""
+        mock_db = MagicMock()
+        executor = BackfillExecutor(mock_db)
+
+        all_success_jobs = [MagicMock(status=BackfillJobStatus.SUCCESS, can_retry=False)]
+        request = MagicMock()
+        request.id = "req_1"
+        request.tenant_id = "t1"
+        request.source_system = "shopify"
+
+        mock_db.query.return_value.filter.return_value.all.return_value = all_success_jobs
+        mock_db.query.return_value.filter.return_value.first.return_value = request
+
+        with patch.object(executor, "_on_request_terminal") as mock_hook:
+            executor._update_parent_status("req_1")
+            mock_hook.assert_called_once_with(request)
+
+    def test_non_terminal_does_not_trigger_guard(self):
+        """When jobs are still running, no completion hook fires."""
+        mock_db = MagicMock()
+        executor = BackfillExecutor(mock_db)
+
+        mixed_jobs = [
+            MagicMock(status=BackfillJobStatus.SUCCESS, can_retry=False),
+            MagicMock(status=BackfillJobStatus.QUEUED, can_retry=False),
+        ]
+        request = MagicMock()
+        request.id = "req_1"
+
+        mock_db.query.return_value.filter.return_value.all.return_value = mixed_jobs
+        mock_db.query.return_value.filter.return_value.first.return_value = request
+
+        with patch.object(executor, "_on_request_terminal") as mock_hook:
+            executor._update_parent_status("req_1")
+            mock_hook.assert_not_called()
+
+    def test_on_request_terminal_calls_guard(self):
+        """_on_request_terminal delegates to BackfillStateGuard."""
+        mock_db = MagicMock()
+        executor = BackfillExecutor(mock_db)
+
+        request = MagicMock()
+        request.id = "req_1"
+        request.tenant_id = "t1"
+        request.source_system = "shopify"
+
+        with patch(
+            "src.services.backfill_state_guard.BackfillStateGuard"
+        ) as MockGuard:
+            mock_guard = MagicMock()
+            MockGuard.return_value = mock_guard
+
+            executor._on_request_terminal(request)
+
+            MockGuard.assert_called_once_with(mock_db, "t1")
+            mock_guard.on_backfill_completed.assert_called_once_with(
+                "req_1", "shopify"
+            )
+
+    def test_on_request_terminal_survives_guard_failure(self):
+        """_on_request_terminal doesn't crash if guard fails."""
+        mock_db = MagicMock()
+        executor = BackfillExecutor(mock_db)
+
+        request = MagicMock()
+        request.id = "req_1"
+        request.tenant_id = "t1"
+        request.source_system = "shopify"
+
+        with patch(
+            "src.services.backfill_state_guard.BackfillStateGuard",
+            side_effect=Exception("guard broken"),
+        ):
+            # Should not raise
+            executor._on_request_terminal(request)

@@ -330,6 +330,34 @@ class BackfillExecutor:
 
         self.db.commit()
 
+        # Trigger completion hooks when backfill reaches terminal state
+        if all_success or all_cancelled or any_terminal_failure:
+            self._on_request_terminal(request)
+
+    def _on_request_terminal(
+        self, request: HistoricalBackfillRequest
+    ) -> None:
+        """
+        Called when a backfill request reaches a terminal state.
+
+        Triggers freshness recalculation and cache clearing via
+        BackfillStateGuard.on_backfill_completed().
+        """
+        try:
+            from src.services.backfill_state_guard import BackfillStateGuard
+
+            guard = BackfillStateGuard(self.db, request.tenant_id)
+            guard.on_backfill_completed(request.id, request.source_system)
+        except Exception:
+            logger.warning(
+                "backfill_executor.completion_hook_failed",
+                extra={
+                    "request_id": request.id,
+                    "tenant_id": request.tenant_id,
+                },
+                exc_info=True,
+            )
+
     # ------------------------------------------------------------------
     # Pause / Resume / Cancel
     # ------------------------------------------------------------------
