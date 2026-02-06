@@ -21,7 +21,7 @@ select
     revenue_net,
     currency
 from {{ ref('sem_orders_v1') }}
-limit 0
+where false
 
 union all
 
@@ -47,7 +47,7 @@ select
     cpa,
     roas
 from {{ ref('sem_marketing_spend_v1') }}
-limit 0
+where false
 
 union all
 
@@ -69,4 +69,4 @@ select
     cpa,
     currency
 from {{ ref('sem_campaign_performance_v1') }}
-limit 0
+where false
