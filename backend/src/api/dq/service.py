@@ -24,6 +24,7 @@ Severity Multipliers:
 """
 
 import logging
+import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta, date
@@ -800,6 +801,287 @@ class DQService:
             observed_value=observed_value,
             expected_value=expected_value,
             message=f"Metric consistency check passed: {description}",
+            merchant_message="",
+            support_details="",
+            metadata=metadata,
+        )
+
+    @staticmethod
+    def _jensen_shannon_divergence(
+        p: Dict[str, float],
+        q: Dict[str, float],
+    ) -> float:
+        """
+        Compute Jensen-Shannon divergence between two categorical distributions.
+
+        Args:
+            p: Baseline distribution {category: proportion} (sums to ~1.0)
+            q: Current distribution {category: proportion} (sums to ~1.0)
+
+        Returns:
+            JSD value in [0, 1]. 0 = identical, 1 = maximally different.
+        """
+        all_keys = set(p) | set(q)
+        if not all_keys:
+            return 0.0
+
+        # Build aligned vectors with smoothing for missing categories
+        epsilon = 1e-10
+        p_vec = [p.get(k, 0.0) + epsilon for k in all_keys]
+        q_vec = [q.get(k, 0.0) + epsilon for k in all_keys]
+
+        # Normalize
+        p_sum = sum(p_vec)
+        q_sum = sum(q_vec)
+        p_vec = [x / p_sum for x in p_vec]
+        q_vec = [x / q_sum for x in q_vec]
+
+        # M = (P + Q) / 2
+        m_vec = [(pi + qi) / 2 for pi, qi in zip(p_vec, q_vec)]
+
+        # JSD = (KL(P||M) + KL(Q||M)) / 2
+        def _kl(a, b):
+            return sum(ai * math.log2(ai / bi) for ai, bi in zip(a, b))
+
+        return (_kl(p_vec, m_vec) + _kl(q_vec, m_vec)) / 2
+
+    def check_distribution_drift(
+        self,
+        connector_id: str,
+        dimension: str,
+        baseline_dist: Dict[str, float],
+        current_dist: Dict[str, float],
+        billing_tier: str = "free",
+    ) -> AnomalyCheckResult:
+        """
+        Detect distribution drift for a categorical dimension using JSD.
+
+        Compares current period distribution against historical baseline.
+        Examples: channel mix shift, campaign type distribution change.
+
+        Args:
+            connector_id: Connector ID
+            dimension: Dimension name (e.g. 'channel', 'campaign_type')
+            baseline_dist: Historical distribution {category: proportion}
+            current_dist: Current period distribution {category: proportion}
+            billing_tier: 'free', 'growth', or 'enterprise'
+
+        Returns:
+            AnomalyCheckResult with JSD and top movers in metadata
+        """
+        connector = self.db.query(TenantAirbyteConnection).filter(
+            TenantAirbyteConnection.tenant_id == self.tenant_id,
+            TenantAirbyteConnection.id == connector_id,
+        ).first()
+
+        connector_name = connector.connection_name if connector else "Unknown"
+
+        loader = get_quality_thresholds_loader()
+        threshold = loader.get_distribution_drift_threshold(billing_tier)
+
+        # Both empty → nothing to compare
+        if not baseline_dist and not current_dist:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.DISTRIBUTION_DRIFT,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=None,
+                expected_value=None,
+                message=f"No distribution data for dimension '{dimension}'",
+                merchant_message="",
+                support_details="",
+                metadata={
+                    "jsd": 0.0,
+                    "anomaly_score": 0.0,
+                    "threshold": threshold,
+                    "billing_tier": billing_tier,
+                    "dimension": dimension,
+                },
+            )
+
+        jsd = self._jensen_shannon_divergence(baseline_dist, current_dist)
+        anomaly_score = min(jsd / threshold, 1.0) if threshold > 0 else 1.0
+        is_anomaly = jsd >= threshold
+
+        # Compute top movers (top 3 categories by absolute proportion change)
+        all_keys = set(baseline_dist) | set(current_dist)
+        changes = [
+            (k, current_dist.get(k, 0.0) - baseline_dist.get(k, 0.0))
+            for k in all_keys
+        ]
+        changes.sort(key=lambda x: abs(x[1]), reverse=True)
+        top_movers = [
+            {"category": k, "change": round(v, 4)} for k, v in changes[:3]
+        ]
+
+        severity_label = loader.resolve_severity_label(anomaly_score)
+        severity = DQSeverity.HIGH if severity_label == "high" else DQSeverity.WARNING
+
+        metadata = {
+            "jsd": round(jsd, 6),
+            "anomaly_score": round(anomaly_score, 3),
+            "severity_label": severity_label,
+            "threshold": threshold,
+            "billing_tier": billing_tier,
+            "dimension": dimension,
+            "top_movers": top_movers,
+        }
+
+        if is_anomaly:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.DISTRIBUTION_DRIFT,
+                is_anomaly=True,
+                severity=severity,
+                observed_value=Decimal(str(round(jsd, 6))),
+                expected_value=Decimal(str(threshold)),
+                message=(
+                    f"Distribution drift detected for '{dimension}': "
+                    f"JSD={jsd:.4f} exceeds threshold {threshold} "
+                    f"(tier: {billing_tier})"
+                ),
+                merchant_message=(
+                    f"We noticed a significant change in the {dimension} distribution "
+                    f"for {connector_name}. This may indicate a shift in your data mix."
+                ),
+                support_details=(
+                    f"Distribution drift for {connector_name} ({connector_id}), "
+                    f"dimension '{dimension}': JSD={jsd:.4f}, threshold={threshold}, "
+                    f"tier={billing_tier}"
+                ),
+                metadata=metadata,
+            )
+
+        return AnomalyCheckResult(
+            connector_id=connector_id,
+            connector_name=connector_name,
+            check_type=DQCheckType.DISTRIBUTION_DRIFT,
+            is_anomaly=False,
+            severity=DQSeverity.WARNING,
+            observed_value=Decimal(str(round(jsd, 6))),
+            expected_value=Decimal(str(threshold)),
+            message=f"Distribution stable for dimension '{dimension}'",
+            merchant_message="",
+            support_details="",
+            metadata=metadata,
+        )
+
+    def check_cardinality_shift(
+        self,
+        connector_id: str,
+        dimension: str,
+        baseline_count: int,
+        current_count: int,
+        billing_tier: str = "free",
+    ) -> AnomalyCheckResult:
+        """
+        Detect cardinality shift for a dimension (distinct value count change).
+
+        Examples: campaign count explosion, SKU count collapse.
+
+        Args:
+            connector_id: Connector ID
+            dimension: Dimension name (e.g. 'campaign_id', 'sku')
+            baseline_count: Historical distinct value count
+            current_count: Current distinct value count
+            billing_tier: 'free', 'growth', or 'enterprise'
+
+        Returns:
+            AnomalyCheckResult with pct_change in metadata
+        """
+        connector = self.db.query(TenantAirbyteConnection).filter(
+            TenantAirbyteConnection.tenant_id == self.tenant_id,
+            TenantAirbyteConnection.id == connector_id,
+        ).first()
+
+        connector_name = connector.connection_name if connector else "Unknown"
+
+        loader = get_quality_thresholds_loader()
+        threshold_pct = loader.get_cardinality_shift_threshold(billing_tier)
+
+        if baseline_count == 0:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.CARDINALITY_SHIFT,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=Decimal(current_count),
+                expected_value=Decimal(0),
+                message=f"No baseline for cardinality comparison on '{dimension}'",
+                merchant_message="",
+                support_details="Cannot calculate cardinality shift with zero baseline",
+                metadata={
+                    "pct_change": 0.0,
+                    "anomaly_score": 0.0,
+                    "threshold_pct": threshold_pct,
+                    "billing_tier": billing_tier,
+                    "dimension": dimension,
+                    "baseline_count": baseline_count,
+                    "current_count": current_count,
+                },
+            )
+
+        pct_change = abs(current_count - baseline_count) / baseline_count * 100
+        anomaly_score = min(pct_change / threshold_pct, 1.0) if threshold_pct > 0 else 1.0
+        is_anomaly = pct_change >= threshold_pct
+
+        severity_label = loader.resolve_severity_label(anomaly_score)
+        severity = DQSeverity.HIGH if severity_label == "high" else DQSeverity.WARNING
+
+        direction = "exploded" if current_count > baseline_count else "collapsed"
+
+        metadata = {
+            "pct_change": round(pct_change, 2),
+            "anomaly_score": round(anomaly_score, 3),
+            "severity_label": severity_label,
+            "threshold_pct": threshold_pct,
+            "billing_tier": billing_tier,
+            "dimension": dimension,
+            "baseline_count": baseline_count,
+            "current_count": current_count,
+        }
+
+        if is_anomaly:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.CARDINALITY_SHIFT,
+                is_anomaly=True,
+                severity=severity,
+                observed_value=Decimal(current_count),
+                expected_value=Decimal(baseline_count),
+                message=(
+                    f"Cardinality {direction} for '{dimension}': "
+                    f"{baseline_count} → {current_count} "
+                    f"({pct_change:.1f}% change, threshold: {threshold_pct}%, "
+                    f"tier: {billing_tier})"
+                ),
+                merchant_message=(
+                    f"We noticed a significant change in the number of distinct "
+                    f"{dimension} values for {connector_name}. "
+                    "This may indicate a data issue."
+                ),
+                support_details=(
+                    f"Cardinality {direction} for {connector_name} ({connector_id}), "
+                    f"dimension '{dimension}': {baseline_count} → {current_count} "
+                    f"({pct_change:.1f}%), threshold={threshold_pct}%, tier={billing_tier}"
+                ),
+                metadata=metadata,
+            )
+
+        return AnomalyCheckResult(
+            connector_id=connector_id,
+            connector_name=connector_name,
+            check_type=DQCheckType.CARDINALITY_SHIFT,
+            is_anomaly=False,
+            severity=DQSeverity.WARNING,
+            observed_value=Decimal(current_count),
+            expected_value=Decimal(baseline_count),
+            message=f"Cardinality stable for dimension '{dimension}'",
             merchant_message="",
             support_details="",
             metadata=metadata,

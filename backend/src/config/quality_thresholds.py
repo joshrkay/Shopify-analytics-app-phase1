@@ -160,6 +160,30 @@ class QualityThresholdsLoader:
         """
         return self._raw.get("metric_constraints", {})
 
+    def get_distribution_drift_threshold(self, billing_tier: Optional[str] = None) -> float:
+        """
+        Return JSD threshold for distribution drift by billing tier.
+
+        Returns:
+            JSD threshold (e.g. 0.15, 0.10, 0.05)
+        """
+        effective_tier = billing_tier or self._default_tier
+        drift_config = self._raw.get("distribution_drift", {})
+        tier_config = drift_config.get(effective_tier) or drift_config.get("free", {})
+        return float(tier_config.get("jsd_threshold", 0.15))
+
+    def get_cardinality_shift_threshold(self, billing_tier: Optional[str] = None) -> float:
+        """
+        Return cardinality shift threshold_pct by billing tier.
+
+        Returns:
+            Threshold percentage (e.g. 50, 30, 15)
+        """
+        effective_tier = billing_tier or self._default_tier
+        card_config = self._raw.get("cardinality_shift", {})
+        tier_config = card_config.get(effective_tier) or card_config.get("free", {})
+        return float(tier_config.get("threshold_pct", 50))
+
     def get_all(self) -> Dict[str, Any]:
         """Return the full config for API exposure."""
         return {

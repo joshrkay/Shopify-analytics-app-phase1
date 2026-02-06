@@ -37,6 +37,8 @@ class DQCheckType(str, Enum):
     NEGATIVE_VALUES = "negative_values"
     DUPLICATE_PRIMARY_KEY = "duplicate_primary_key"
     METRIC_INCONSISTENCY = "metric_inconsistency"
+    DISTRIBUTION_DRIFT = "distribution_drift"
+    CARDINALITY_SHIFT = "cardinality_shift"
 
 
 class DQSeverity(str, Enum):

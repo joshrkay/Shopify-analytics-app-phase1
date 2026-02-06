@@ -70,3 +70,21 @@ metric_constraints:
     type: non_negative
     description: "Revenue must not be negative"
     metric: revenue_gross
+
+distribution_drift:
+  # JSD threshold by plan tier (0-1 scale, 1 = maximally different)
+  free:
+    jsd_threshold: 0.15
+  growth:
+    jsd_threshold: 0.10
+  enterprise:
+    jsd_threshold: 0.05
+
+cardinality_shift:
+  # Max allowed % change in distinct-value count by plan tier
+  free:
+    threshold_pct: 50
+  growth:
+    threshold_pct: 30
+  enterprise:
+    threshold_pct: 15
