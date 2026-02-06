@@ -41,6 +41,7 @@ from src.models.dq_models import (
     FRESHNESS_THRESHOLDS, get_freshness_threshold, is_critical_source,
 )
 from src.models.airbyte_connection import TenantAirbyteConnection
+from src.config.quality_thresholds import get_quality_thresholds_loader
 
 logger = logging.getLogger(__name__)
 
@@ -504,6 +505,290 @@ class DQService:
             message="Row count within normal range",
             merchant_message="",
             support_details="",
+        )
+
+    def check_volume_anomaly(
+        self,
+        connector_id: str,
+        daily_counts: List[int],
+        today_count: int,
+        billing_tier: str = "free",
+    ) -> AnomalyCheckResult:
+        """
+        Detect abnormal changes in row volume vs rolling 7-day baseline.
+
+        Compares today's row count against the rolling average of the
+        provided daily_counts. Threshold varies by billing plan tier.
+
+        Args:
+            connector_id: Connector ID
+            daily_counts: Row counts for the last N days (oldest first, excluding today)
+            today_count: Today's row count
+            billing_tier: 'free', 'growth', or 'enterprise'
+
+        Returns:
+            AnomalyCheckResult with anomaly_score in metadata
+        """
+        connector = self.db.query(TenantAirbyteConnection).filter(
+            TenantAirbyteConnection.tenant_id == self.tenant_id,
+            TenantAirbyteConnection.id == connector_id,
+        ).first()
+
+        connector_name = connector.connection_name if connector else "Unknown"
+
+        # Load plan-tier threshold
+        loader = get_quality_thresholds_loader()
+        threshold_pct = loader.get_volume_anomaly_threshold(billing_tier)
+
+        # Need at least 2 days of baseline data
+        if len(daily_counts) < 2:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.VOLUME_ANOMALY,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=Decimal(today_count),
+                expected_value=None,
+                message="Insufficient baseline data for volume anomaly detection",
+                merchant_message="",
+                support_details="Need at least 2 days of historical data for comparison",
+                metadata={"anomaly_score": 0.0, "billing_tier": billing_tier},
+            )
+
+        # Compute rolling average
+        avg_count = sum(daily_counts) / len(daily_counts)
+
+        if avg_count == 0:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.VOLUME_ANOMALY,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=Decimal(today_count),
+                expected_value=Decimal(0),
+                message="No baseline for comparison (rolling average is 0)",
+                merchant_message="",
+                support_details="Cannot calculate deviation with zero baseline",
+                metadata={"anomaly_score": 0.0, "billing_tier": billing_tier},
+            )
+
+        # Compute deviation
+        pct_change = ((avg_count - today_count) / avg_count) * 100
+        anomaly_score = min(abs(pct_change) / threshold_pct, 1.0)
+        is_anomaly = abs(pct_change) >= threshold_pct
+
+        # Map anomaly score to severity
+        if anomaly_score >= 0.8:
+            severity = DQSeverity.HIGH
+        else:
+            severity = DQSeverity.WARNING
+
+        metadata = {
+            "anomaly_score": round(anomaly_score, 3),
+            "pct_change": round(pct_change, 2),
+            "threshold_pct": threshold_pct,
+            "billing_tier": billing_tier,
+            "lookback_days": len(daily_counts),
+            "rolling_avg": round(avg_count, 2),
+        }
+
+        if is_anomaly:
+            direction = "dropped" if pct_change > 0 else "spiked"
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.VOLUME_ANOMALY,
+                is_anomaly=True,
+                severity=severity,
+                observed_value=Decimal(today_count),
+                expected_value=Decimal(int(avg_count)),
+                message=(
+                    f"Volume {direction} {abs(pct_change):.1f}% vs 7-day avg "
+                    f"(threshold: {threshold_pct}%, tier: {billing_tier})"
+                ),
+                merchant_message=(
+                    f"We noticed an unusual change in data volume for {connector_name}. "
+                    "This may indicate a sync issue or a real change in activity."
+                ),
+                support_details=(
+                    f"Volume anomaly for {connector_name} ({connector_id}): "
+                    f"{direction} {abs(pct_change):.1f}% (today: {today_count}, "
+                    f"7-day avg: {avg_count:.0f}, threshold: {threshold_pct}%, "
+                    f"tier: {billing_tier})"
+                ),
+                metadata=metadata,
+            )
+
+        return AnomalyCheckResult(
+            connector_id=connector_id,
+            connector_name=connector_name,
+            check_type=DQCheckType.VOLUME_ANOMALY,
+            is_anomaly=False,
+            severity=DQSeverity.WARNING,
+            observed_value=Decimal(today_count),
+            expected_value=Decimal(int(avg_count)),
+            message="Volume within normal range",
+            merchant_message="",
+            support_details="",
+            metadata=metadata,
+        )
+
+    def check_metric_consistency(
+        self,
+        constraint_name: str,
+        observed_value: Decimal,
+        expected_value: Decimal,
+        tolerance_pct: Optional[float] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> AnomalyCheckResult:
+        """
+        Check whether a derived metric is consistent with its expected relationship.
+
+        Validates metric relationships (e.g. ROAS = revenue / spend) within
+        configurable tolerance bands. Constraint definitions come from
+        config/quality_thresholds.yml.
+
+        Args:
+            constraint_name: Name of the constraint (key in metric_constraints config)
+            observed_value: The actual computed metric value
+            expected_value: The expected value derived from the relationship
+            tolerance_pct: Override tolerance %. If None, uses config value.
+            context: Additional context for the violation message
+
+        Returns:
+            AnomalyCheckResult with violation details in metadata
+        """
+        # Load constraint config
+        loader = get_quality_thresholds_loader()
+        constraints = loader.get_metric_constraints()
+        constraint_config = constraints.get(constraint_name, {})
+
+        description = constraint_config.get("description", constraint_name)
+        constraint_type = constraint_config.get("type", "ratio")
+
+        if tolerance_pct is None:
+            tolerance_pct = float(constraint_config.get("tolerance_pct", 1.0))
+
+        # Handle non_negative type
+        if constraint_type == "non_negative":
+            is_violation = observed_value < 0
+            metadata = {
+                "constraint_name": constraint_name,
+                "constraint_type": constraint_type,
+                "description": description,
+                "observed_value": float(observed_value),
+            }
+            if context:
+                metadata["context"] = context
+
+            if is_violation:
+                return AnomalyCheckResult(
+                    connector_id="",
+                    connector_name="metric_check",
+                    check_type=DQCheckType.METRIC_INCONSISTENCY,
+                    is_anomaly=True,
+                    severity=DQSeverity.HIGH,
+                    observed_value=observed_value,
+                    expected_value=Decimal(0),
+                    message=f"Metric consistency violation: {description} — value is negative ({observed_value})",
+                    merchant_message="We detected an inconsistency in your metrics. Our team is investigating.",
+                    support_details=f"Non-negative constraint '{constraint_name}' violated: value={observed_value}",
+                    metadata=metadata,
+                )
+
+            return AnomalyCheckResult(
+                connector_id="",
+                connector_name="metric_check",
+                check_type=DQCheckType.METRIC_INCONSISTENCY,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=observed_value,
+                expected_value=Decimal(0),
+                message=f"Metric consistency check passed: {description}",
+                merchant_message="",
+                support_details="",
+                metadata=metadata,
+            )
+
+        # Handle ratio and sum_match types
+        if expected_value == 0 and observed_value == 0:
+            return AnomalyCheckResult(
+                connector_id="",
+                connector_name="metric_check",
+                check_type=DQCheckType.METRIC_INCONSISTENCY,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=observed_value,
+                expected_value=expected_value,
+                message=f"Metric consistency check passed: {description} (both zero)",
+                merchant_message="",
+                support_details="",
+                metadata={
+                    "constraint_name": constraint_name,
+                    "constraint_type": constraint_type,
+                    "deviation_pct": 0.0,
+                },
+            )
+
+        # Calculate deviation
+        if expected_value != 0:
+            deviation_pct = abs(float(observed_value - expected_value) / float(expected_value)) * 100
+        else:
+            # expected is 0 but observed is not
+            deviation_pct = 100.0
+
+        is_violation = deviation_pct > tolerance_pct
+
+        metadata = {
+            "constraint_name": constraint_name,
+            "constraint_type": constraint_type,
+            "description": description,
+            "observed_value": float(observed_value),
+            "expected_value": float(expected_value),
+            "deviation_pct": round(deviation_pct, 4),
+            "tolerance_pct": tolerance_pct,
+        }
+        if context:
+            metadata["context"] = context
+
+        if is_violation:
+            severity = DQSeverity.HIGH if deviation_pct > tolerance_pct * 5 else DQSeverity.WARNING
+
+            return AnomalyCheckResult(
+                connector_id="",
+                connector_name="metric_check",
+                check_type=DQCheckType.METRIC_INCONSISTENCY,
+                is_anomaly=True,
+                severity=severity,
+                observed_value=observed_value,
+                expected_value=expected_value,
+                message=(
+                    f"Metric consistency violation: {description} — "
+                    f"deviation {deviation_pct:.2f}% exceeds tolerance {tolerance_pct}%"
+                ),
+                merchant_message="We detected an inconsistency in your metrics. Our team is investigating.",
+                support_details=(
+                    f"Constraint '{constraint_name}' violated: observed={observed_value}, "
+                    f"expected={expected_value}, deviation={deviation_pct:.2f}%, "
+                    f"tolerance={tolerance_pct}%"
+                ),
+                metadata=metadata,
+            )
+
+        return AnomalyCheckResult(
+            connector_id="",
+            connector_name="metric_check",
+            check_type=DQCheckType.METRIC_INCONSISTENCY,
+            is_anomaly=False,
+            severity=DQSeverity.WARNING,
+            observed_value=observed_value,
+            expected_value=expected_value,
+            message=f"Metric consistency check passed: {description}",
+            merchant_message="",
+            support_details="",
+            metadata=metadata,
         )
 
     def check_zero_spend(

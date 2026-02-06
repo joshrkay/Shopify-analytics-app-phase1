@@ -12,6 +12,9 @@ macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
 target-path: "target"
+
+on-run-end: "{{ dq_result_emitter() }}"
+
 clean-targets:
   - "target"
   - "dbt_packages"

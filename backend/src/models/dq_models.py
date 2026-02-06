@@ -30,11 +30,13 @@ class DQCheckType(str, Enum):
     """Types of data quality checks."""
     FRESHNESS = "freshness"
     ROW_COUNT_DROP = "row_count_drop"
+    VOLUME_ANOMALY = "volume_anomaly"
     ZERO_SPEND = "zero_spend"
     ZERO_ORDERS = "zero_orders"
     MISSING_DAYS = "missing_days"
     NEGATIVE_VALUES = "negative_values"
     DUPLICATE_PRIMARY_KEY = "duplicate_primary_key"
+    METRIC_INCONSISTENCY = "metric_inconsistency"
 
 
 class DQSeverity(str, Enum):

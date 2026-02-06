@@ -1,0 +1,72 @@
+# Data Quality Thresholds
+# Plan-tier-aware thresholds for anomaly detection and metric consistency.
+#
+# Consumers:
+#   - Backend DQ service: backend/src/api/dq/service.py
+#   - dbt tests use the most conservative (free) threshold at compile time.
+#
+# Volume anomaly thresholds represent the maximum allowed deviation (%)
+# from the rolling 7-day average before flagging an anomaly.
+
+version: 1
+default_tier: free
+
+volume_anomaly:
+  # Threshold = max allowed % deviation from rolling 7-day baseline
+  free:
+    threshold_pct: 50
+  growth:
+    threshold_pct: 30
+  enterprise:
+    threshold_pct: 15
+
+severity_mapping:
+  # Anomaly score ranges (score = actual_deviation / threshold)
+  low:
+    max_score: 0.5
+  medium:
+    max_score: 0.8
+  high:
+    min_score: 0.8
+
+metric_constraints:
+  # Expected metric relationships with tolerance bands.
+  # Each constraint defines a rule that must hold between metric values.
+  #
+  # Types:
+  #   - ratio: lhs / rhs must equal expected_value within tolerance_pct
+  #   - sum_match: lhs must equal sum(rhs components) within tolerance_pct
+  #   - non_negative: value must be >= 0
+
+  roas_equals_revenue_over_spend:
+    type: ratio
+    description: "ROAS = revenue / spend"
+    numerator_metric: revenue
+    denominator_metric: spend
+    expected_metric: roas
+    tolerance_pct: 1.0
+
+  cac_equals_spend_over_new_customers:
+    type: ratio
+    description: "CAC = spend / new_customers"
+    numerator_metric: spend
+    denominator_metric: new_customers
+    expected_metric: cac
+    tolerance_pct: 1.0
+
+  revenue_sum_match:
+    type: sum_match
+    description: "Total revenue ≈ sum(order line revenue)"
+    aggregate_metric: revenue_gross
+    component_metric: order_line_revenue
+    tolerance_pct: 0.5
+
+  spend_non_negative:
+    type: non_negative
+    description: "Ad spend must not be negative"
+    metric: spend
+
+  revenue_non_negative:
+    type: non_negative
+    description: "Revenue must not be negative"
+    metric: revenue_gross
