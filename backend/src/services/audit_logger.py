@@ -325,6 +325,56 @@ def emit_quality_fail(
         )
 
 
+def emit_root_cause_signal_generated(
+    db: Session,
+    tenant_id: str,
+    dataset: str,
+    anomaly_type: str,
+    signal_id: str,
+    top_cause_type: str | None,
+    hypothesis_count: int,
+    detected_at: str,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit data.quality.root_cause_generated when a root cause signal is persisted.
+
+    Story 4.2 - Data Quality Root Cause Signals
+    """
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.ROOT_CAUSE_SIGNAL_GENERATED,
+            resource_type="root_cause_signal",
+            resource_id=signal_id,
+            metadata={
+                "tenant_id": tenant_id,
+                "dataset": dataset,
+                "anomaly_type": anomaly_type,
+                "signal_id": signal_id,
+                "top_cause_type": top_cause_type or "none",
+                "hypothesis_count": hypothesis_count,
+                "detected_at": detected_at,
+            },
+            correlation_id=correlation_id,
+            source="system",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_root_cause_signal_generated_failed",
+            extra={"tenant_id": tenant_id, "signal_id": signal_id},
+            exc_info=True,
+        )
+
+
 def emit_quality_recovered(
     db: Session,
     tenant_id: str,

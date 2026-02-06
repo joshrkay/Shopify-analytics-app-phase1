@@ -209,6 +209,9 @@ class AuditAction(str, Enum):
     DATA_QUALITY_FAIL = "data.quality.fail"
     DATA_QUALITY_RECOVERED = "data.quality.recovered"
 
+    # Root Cause Signal events (Story 4.2)
+    ROOT_CAUSE_SIGNAL_GENERATED = "data.quality.root_cause_generated"
+
 
 class AuditOutcome(str, Enum):
     """Outcome of the audited action."""
@@ -1250,6 +1253,16 @@ AUDITABLE_EVENTS: dict[AuditAction, AuditableEventMetadata] = {
         required_fields=("tenant_id", "dataset", "rule_type", "severity", "detected_at"),
         risk_level="low",
         compliance_tags=(),
+    ),
+    # Root Cause Signal events (Story 4.2)
+    AuditAction.ROOT_CAUSE_SIGNAL_GENERATED: AuditableEventMetadata(
+        description="Root cause signal generated for data quality anomaly",
+        required_fields=(
+            "tenant_id", "dataset", "anomaly_type", "signal_id",
+            "top_cause_type", "hypothesis_count",
+        ),
+        risk_level="medium",
+        compliance_tags=("SOC2",),
     ),
 }
 
