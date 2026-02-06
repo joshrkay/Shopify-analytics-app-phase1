@@ -218,10 +218,80 @@ except Exception:
     pass
 # endregion
 
-from .merchant_data_health import (
-    MerchantHealthState,
-    MerchantDataHealthResponse,
-)
+# region agent log helper (Debug Mode - HTTP first, local fallback)
+try:
+    import json
+    import os
+    import sys
+    import time
+    from pathlib import Path
+    import urllib.request
+
+    def _agent_log_models_http(payload: dict):
+        """Send debug log to HTTP endpoint first; fallback to local debug.log."""
+        # HTTP first
+        try:
+            req = urllib.request.Request(
+                "http://127.0.0.1:7242/ingest/c1515561-3278-4fa4-b574-7082f5f827eb",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=2)
+            return
+        except Exception:
+            pass
+        # Local fallback (module directory)
+        try:
+            local_path = Path(__file__).resolve().parent / "debug.log"
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(local_path, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(payload) + "\n")
+        except Exception:
+            pass
+
+    # Emit baseline logs
+    _agent_log_models_http({
+        "sessionId": "debug-session",
+        "runId": "baseline",
+        "hypothesisId": "A",
+        "location": "src/models/__init__.py:agent-log-HTTP-1",
+        "message": "sys.path snapshot",
+        "data": {"sys_path": sys.path, "cwd": os.getcwd(), "__file__": __file__},
+        "timestamp": int(time.time() * 1000),
+    })
+    _agent_log_models_http({
+        "sessionId": "debug-session",
+        "runId": "baseline",
+        "hypothesisId": "B",
+        "location": "src/models/__init__.py:agent-log-HTTP-2",
+        "message": "merchant_data_health existence",
+        "data": {
+            "file_exists": os.path.exists(os.path.join(os.path.dirname(__file__), "merchant_data_health.py")),
+            "file_dir": os.path.dirname(__file__),
+        },
+        "timestamp": int(time.time() * 1000) + 1,
+    })
+except Exception:
+    pass
+# endregion
+
+try:
+    from .merchant_data_health import (
+        MerchantHealthState,
+        MerchantDataHealthResponse,
+    )
+except ModuleNotFoundError:
+    # Fallback: ensure backend/src is on sys.path when running in CI
+    import sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from .merchant_data_health import (
+        MerchantHealthState,
+        MerchantDataHealthResponse,
+    )
 
 __all__ = [
     "TimestampMixin",

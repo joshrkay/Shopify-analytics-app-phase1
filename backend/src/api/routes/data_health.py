@@ -146,6 +146,44 @@ _write_log({
     },
 })
 
+# Additional HTTP-first logger (reliable in CI)
+try:
+    import urllib.request
+    def _agent_log_http(payload: dict):
+        try:
+            req = urllib.request.Request(
+                "http://127.0.0.1:7242/ingest/c1515561-3278-4fa4-b574-7082f5f827eb",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=2)
+        except Exception:
+            # Local fallback in this module directory
+            try:
+                local_path = Path(__file__).resolve().parent / "debug.log"
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(local_path, "a", encoding="utf-8") as _f:
+                    _f.write(json.dumps(payload) + "\n")
+            except Exception:
+                pass
+
+    _agent_log_http({
+        "sessionId": "debug-session",
+        "runId": "baseline",
+        "hypothesisId": "D",
+        "location": "src/api/routes/data_health.py:agent-log-HTTP-1",
+        "message": "pre-import http log",
+        "data": {
+            "sys_path": sys.path,
+            "cwd": os.getcwd(),
+            "__file__": __file__,
+        },
+        "timestamp": int(time.time() * 1000),
+    })
+except Exception:
+    pass
+
 try:
     from ...models.merchant_data_health import MerchantDataHealthResponse
 except ModuleNotFoundError as exc:
@@ -162,22 +200,11 @@ except ModuleNotFoundError as exc:
         },
     }
     _write_log(payload)
-    # Retry by adding repo roots to sys.path
-    repo_roots = []
-    if len(_parents) >= 3:
-        repo_roots.append(str(_parents[2]))
-    if len(_parents) >= 4:
-        repo_roots.append(str(_parents[3]))
-    for root in repo_roots:
-        if root not in sys.path:
-            sys.path.insert(0, root)
-    try:
-        from ...models.merchant_data_health import MerchantDataHealthResponse
-    except ModuleNotFoundError:
-        _write_log({**payload, "message": "retry_import_failed"})
-        raise
-    else:
-        _write_log({**payload, "message": "retry_import_succeeded"})
+    # Retry by adding backend/src to sys.path
+    candidate = Path(__file__).resolve().parents[2]
+    if str(candidate) not in sys.path:
+        sys.path.insert(0, str(candidate))
+    from ...models.merchant_data_health import MerchantDataHealthResponse
 
 
 # =============================================================================
