@@ -12,6 +12,7 @@ from src.api.dq.service import (
     AnomalyCheckResult,
     ConnectorSyncHealth,
     SyncHealthSummary,
+    DataQualityVerdict,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "AnomalyCheckResult",
     "ConnectorSyncHealth",
     "SyncHealthSummary",
+    "DataQualityVerdict",
 ]

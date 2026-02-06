@@ -1,18 +1,22 @@
 """
-Backfill audit event emitters — standardized audit logging for backfill lifecycle.
+Audit event emitters — standardized audit logging for backfill and data quality lifecycle.
 
 Each function builds the required metadata per the AUDITABLE_EVENTS registry
 and delegates to log_system_audit_event_sync. All calls are wrapped in
 try/except so audit failures never crash the caller.
 
 Events:
-- backfill.requested  — admin submits a backfill request
-- backfill.started    — executor begins processing (creates chunk jobs)
-- backfill.paused     — operator pauses queued chunks
-- backfill.failed     — request reaches terminal failure
-- backfill.completed  — all chunks finished successfully
+- backfill.requested     — admin submits a backfill request
+- backfill.started       — executor begins processing (creates chunk jobs)
+- backfill.paused        — operator pauses queued chunks
+- backfill.failed        — request reaches terminal failure
+- backfill.completed     — all chunks finished successfully
+- data.quality.warn      — data quality degraded to WARN state
+- data.quality.fail      — data quality degraded to FAIL state
+- data.quality.recovered — data quality recovered to PASS state
 
 Story 3.4 - Backfill Audit
+Story 4.1 - Data Quality Rules
 """
 
 import logging
@@ -223,5 +227,134 @@ def emit_backfill_completed(
         logger.warning(
             "audit_logger.emit_backfill_completed_failed",
             extra={"backfill_id": request.id},
+            exc_info=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Data quality audit event emitters (Story 4.1)
+# ---------------------------------------------------------------------------
+
+_DQ_RESOURCE_TYPE = "data_quality"
+
+
+def _build_dq_metadata(
+    tenant_id: str,
+    dataset: str,
+    rule_type: str,
+    severity: str,
+    detected_at: str,
+) -> dict:
+    """Build metadata dict for data quality audit events."""
+    return {
+        "tenant_id": tenant_id,
+        "dataset": dataset,
+        "rule_type": rule_type,
+        "severity": severity,
+        "detected_at": detected_at,
+    }
+
+
+def emit_quality_warn(
+    db: Session,
+    tenant_id: str,
+    dataset: str,
+    rule_type: str,
+    severity: str,
+    detected_at: str,
+) -> None:
+    """Emit data.quality.warn when quality degrades to WARN state."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.DATA_QUALITY_WARN,
+            resource_type=_DQ_RESOURCE_TYPE,
+            metadata=_build_dq_metadata(
+                tenant_id, dataset, rule_type, severity, detected_at,
+            ),
+            source="system",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_quality_warn_failed",
+            extra={"tenant_id": tenant_id, "dataset": dataset},
+            exc_info=True,
+        )
+
+
+def emit_quality_fail(
+    db: Session,
+    tenant_id: str,
+    dataset: str,
+    rule_type: str,
+    severity: str,
+    detected_at: str,
+) -> None:
+    """Emit data.quality.fail when quality degrades to FAIL state."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.DATA_QUALITY_FAIL,
+            resource_type=_DQ_RESOURCE_TYPE,
+            metadata=_build_dq_metadata(
+                tenant_id, dataset, rule_type, severity, detected_at,
+            ),
+            source="system",
+            outcome=AuditOutcome.FAILURE,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_quality_fail_failed",
+            extra={"tenant_id": tenant_id, "dataset": dataset},
+            exc_info=True,
+        )
+
+
+def emit_quality_recovered(
+    db: Session,
+    tenant_id: str,
+    dataset: str,
+    rule_type: str,
+    severity: str,
+    detected_at: str,
+) -> None:
+    """Emit data.quality.recovered when quality returns to PASS state."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.DATA_QUALITY_RECOVERED,
+            resource_type=_DQ_RESOURCE_TYPE,
+            metadata=_build_dq_metadata(
+                tenant_id, dataset, rule_type, severity, detected_at,
+            ),
+            source="system",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_quality_recovered_failed",
+            extra={"tenant_id": tenant_id, "dataset": dataset},
             exc_info=True,
         )

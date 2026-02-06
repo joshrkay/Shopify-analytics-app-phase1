@@ -24,23 +24,25 @@ Severity Multipliers:
 """
 
 import logging
+import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta, date
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Union
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
 from src.models.dq_models import (
     DQCheck, DQResult, DQIncident, SyncRun,
-    DQCheckType, DQSeverity, DQResultStatus, DQIncidentStatus,
+    DQCheckType, DQSeverity, DataQualityState, DQResultStatus, DQIncidentStatus,
     SyncRunStatus, ConnectorSourceType,
     FRESHNESS_THRESHOLDS, get_freshness_threshold, is_critical_source,
 )
 from src.models.airbyte_connection import TenantAirbyteConnection
+from src.config.quality_thresholds import get_quality_thresholds_loader
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +159,21 @@ class SyncHealthSummary:
     health_score: float  # 0-100
     connectors: List[ConnectorSyncHealth]
     has_blocking_issues: bool
+
+
+DQCheckResult = Union[FreshnessCheckResult, AnomalyCheckResult]
+
+
+@dataclass
+class DataQualityVerdict:
+    """Aggregated quality state across all check types."""
+    state: DataQualityState
+    total_checks: int
+    passed_count: int
+    warning_count: int
+    failure_count: int
+    failing_checks: List[str]
+    message: str
 
 
 class DQServiceError(Exception):
@@ -504,6 +521,570 @@ class DQService:
             message="Row count within normal range",
             merchant_message="",
             support_details="",
+        )
+
+    def check_volume_anomaly(
+        self,
+        connector_id: str,
+        daily_counts: List[int],
+        today_count: int,
+        billing_tier: str = "free",
+    ) -> AnomalyCheckResult:
+        """
+        Detect abnormal changes in row volume vs rolling 7-day baseline.
+
+        Compares today's row count against the rolling average of the
+        provided daily_counts. Threshold varies by billing plan tier.
+
+        Args:
+            connector_id: Connector ID
+            daily_counts: Row counts for the last N days (oldest first, excluding today)
+            today_count: Today's row count
+            billing_tier: 'free', 'growth', or 'enterprise'
+
+        Returns:
+            AnomalyCheckResult with anomaly_score in metadata
+        """
+        connector = self.db.query(TenantAirbyteConnection).filter(
+            TenantAirbyteConnection.tenant_id == self.tenant_id,
+            TenantAirbyteConnection.id == connector_id,
+        ).first()
+
+        connector_name = connector.connection_name if connector else "Unknown"
+
+        # Load plan-tier threshold
+        loader = get_quality_thresholds_loader()
+        threshold_pct = loader.get_volume_anomaly_threshold(billing_tier)
+
+        # Need at least 2 days of baseline data
+        if len(daily_counts) < 2:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.VOLUME_ANOMALY,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=Decimal(today_count),
+                expected_value=None,
+                message="Insufficient baseline data for volume anomaly detection",
+                merchant_message="",
+                support_details="Need at least 2 days of historical data for comparison",
+                metadata={"anomaly_score": 0.0, "billing_tier": billing_tier},
+            )
+
+        # Compute rolling average
+        avg_count = sum(daily_counts) / len(daily_counts)
+
+        if avg_count == 0:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.VOLUME_ANOMALY,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=Decimal(today_count),
+                expected_value=Decimal(0),
+                message="No baseline for comparison (rolling average is 0)",
+                merchant_message="",
+                support_details="Cannot calculate deviation with zero baseline",
+                metadata={"anomaly_score": 0.0, "billing_tier": billing_tier},
+            )
+
+        # Compute deviation
+        pct_change = ((avg_count - today_count) / avg_count) * 100
+        anomaly_score = min(abs(pct_change) / threshold_pct, 1.0)
+        is_anomaly = abs(pct_change) >= threshold_pct
+
+        # Map anomaly score to severity via config (low / medium / high)
+        severity_label = loader.resolve_severity_label(anomaly_score)
+        severity = DQSeverity.HIGH if severity_label == "high" else DQSeverity.WARNING
+
+        metadata = {
+            "anomaly_score": round(anomaly_score, 3),
+            "severity_label": severity_label,
+            "pct_change": round(pct_change, 2),
+            "threshold_pct": threshold_pct,
+            "billing_tier": billing_tier,
+            "lookback_days": len(daily_counts),
+            "rolling_avg": round(avg_count, 2),
+        }
+
+        if is_anomaly:
+            direction = "dropped" if pct_change > 0 else "spiked"
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.VOLUME_ANOMALY,
+                is_anomaly=True,
+                severity=severity,
+                observed_value=Decimal(today_count),
+                expected_value=Decimal(int(avg_count)),
+                message=(
+                    f"Volume {direction} {abs(pct_change):.1f}% vs 7-day avg "
+                    f"(threshold: {threshold_pct}%, tier: {billing_tier})"
+                ),
+                merchant_message=(
+                    f"We noticed an unusual change in data volume for {connector_name}. "
+                    "This may indicate a sync issue or a real change in activity."
+                ),
+                support_details=(
+                    f"Volume anomaly for {connector_name} ({connector_id}): "
+                    f"{direction} {abs(pct_change):.1f}% (today: {today_count}, "
+                    f"7-day avg: {avg_count:.0f}, threshold: {threshold_pct}%, "
+                    f"tier: {billing_tier})"
+                ),
+                metadata=metadata,
+            )
+
+        return AnomalyCheckResult(
+            connector_id=connector_id,
+            connector_name=connector_name,
+            check_type=DQCheckType.VOLUME_ANOMALY,
+            is_anomaly=False,
+            severity=DQSeverity.WARNING,
+            observed_value=Decimal(today_count),
+            expected_value=Decimal(int(avg_count)),
+            message="Volume within normal range",
+            merchant_message="",
+            support_details="",
+            metadata=metadata,
+        )
+
+    def check_metric_consistency(
+        self,
+        constraint_name: str,
+        observed_value: Decimal,
+        expected_value: Decimal,
+        tolerance_pct: Optional[float] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> AnomalyCheckResult:
+        """
+        Check whether a derived metric is consistent with its expected relationship.
+
+        Validates metric relationships (e.g. ROAS = revenue / spend) within
+        configurable tolerance bands. Constraint definitions come from
+        config/quality_thresholds.yml.
+
+        Args:
+            constraint_name: Name of the constraint (key in metric_constraints config)
+            observed_value: The actual computed metric value
+            expected_value: The expected value derived from the relationship
+            tolerance_pct: Override tolerance %. If None, uses config value.
+            context: Additional context for the violation message
+
+        Returns:
+            AnomalyCheckResult with violation details in metadata
+        """
+        # Load constraint config
+        loader = get_quality_thresholds_loader()
+        constraints = loader.get_metric_constraints()
+        constraint_config = constraints.get(constraint_name, {})
+
+        description = constraint_config.get("description", constraint_name)
+        constraint_type = constraint_config.get("type", "ratio")
+
+        if tolerance_pct is None:
+            tolerance_pct = float(constraint_config.get("tolerance_pct", 1.0))
+
+        # Handle non_negative type
+        if constraint_type == "non_negative":
+            is_violation = observed_value < 0
+            metadata = {
+                "constraint_name": constraint_name,
+                "constraint_type": constraint_type,
+                "description": description,
+                "observed_value": float(observed_value),
+            }
+            if context:
+                metadata["context"] = context
+
+            if is_violation:
+                return AnomalyCheckResult(
+                    connector_id="",
+                    connector_name="metric_check",
+                    check_type=DQCheckType.METRIC_INCONSISTENCY,
+                    is_anomaly=True,
+                    severity=DQSeverity.HIGH,
+                    observed_value=observed_value,
+                    expected_value=Decimal(0),
+                    message=f"Metric consistency violation: {description} — value is negative ({observed_value})",
+                    merchant_message="We detected an inconsistency in your metrics. Our team is investigating.",
+                    support_details=f"Non-negative constraint '{constraint_name}' violated: value={observed_value}",
+                    metadata=metadata,
+                )
+
+            return AnomalyCheckResult(
+                connector_id="",
+                connector_name="metric_check",
+                check_type=DQCheckType.METRIC_INCONSISTENCY,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=observed_value,
+                expected_value=Decimal(0),
+                message=f"Metric consistency check passed: {description}",
+                merchant_message="",
+                support_details="",
+                metadata=metadata,
+            )
+
+        # Handle ratio and sum_match types
+        if expected_value == 0 and observed_value == 0:
+            return AnomalyCheckResult(
+                connector_id="",
+                connector_name="metric_check",
+                check_type=DQCheckType.METRIC_INCONSISTENCY,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=observed_value,
+                expected_value=expected_value,
+                message=f"Metric consistency check passed: {description} (both zero)",
+                merchant_message="",
+                support_details="",
+                metadata={
+                    "constraint_name": constraint_name,
+                    "constraint_type": constraint_type,
+                    "deviation_pct": 0.0,
+                },
+            )
+
+        # Calculate deviation
+        if expected_value != 0:
+            deviation_pct = abs(float(observed_value - expected_value) / float(expected_value)) * 100
+        else:
+            # expected is 0 but observed is not
+            deviation_pct = 100.0
+
+        is_violation = deviation_pct > tolerance_pct
+
+        metadata = {
+            "constraint_name": constraint_name,
+            "constraint_type": constraint_type,
+            "description": description,
+            "observed_value": float(observed_value),
+            "expected_value": float(expected_value),
+            "deviation_pct": round(deviation_pct, 4),
+            "tolerance_pct": tolerance_pct,
+        }
+        if context:
+            metadata["context"] = context
+
+        if is_violation:
+            severity = DQSeverity.HIGH if deviation_pct > tolerance_pct * 5 else DQSeverity.WARNING
+
+            return AnomalyCheckResult(
+                connector_id="",
+                connector_name="metric_check",
+                check_type=DQCheckType.METRIC_INCONSISTENCY,
+                is_anomaly=True,
+                severity=severity,
+                observed_value=observed_value,
+                expected_value=expected_value,
+                message=(
+                    f"Metric consistency violation: {description} — "
+                    f"deviation {deviation_pct:.2f}% exceeds tolerance {tolerance_pct}%"
+                ),
+                merchant_message="We detected an inconsistency in your metrics. Our team is investigating.",
+                support_details=(
+                    f"Constraint '{constraint_name}' violated: observed={observed_value}, "
+                    f"expected={expected_value}, deviation={deviation_pct:.2f}%, "
+                    f"tolerance={tolerance_pct}%"
+                ),
+                metadata=metadata,
+            )
+
+        return AnomalyCheckResult(
+            connector_id="",
+            connector_name="metric_check",
+            check_type=DQCheckType.METRIC_INCONSISTENCY,
+            is_anomaly=False,
+            severity=DQSeverity.WARNING,
+            observed_value=observed_value,
+            expected_value=expected_value,
+            message=f"Metric consistency check passed: {description}",
+            merchant_message="",
+            support_details="",
+            metadata=metadata,
+        )
+
+    @staticmethod
+    def _jensen_shannon_divergence(
+        p: Dict[str, float],
+        q: Dict[str, float],
+    ) -> float:
+        """
+        Compute Jensen-Shannon divergence between two categorical distributions.
+
+        Args:
+            p: Baseline distribution {category: proportion} (sums to ~1.0)
+            q: Current distribution {category: proportion} (sums to ~1.0)
+
+        Returns:
+            JSD value in [0, 1]. 0 = identical, 1 = maximally different.
+        """
+        all_keys = set(p) | set(q)
+        if not all_keys:
+            return 0.0
+
+        # Build aligned vectors with smoothing for missing categories
+        epsilon = 1e-10
+        p_vec = [p.get(k, 0.0) + epsilon for k in all_keys]
+        q_vec = [q.get(k, 0.0) + epsilon for k in all_keys]
+
+        # Normalize
+        p_sum = sum(p_vec)
+        q_sum = sum(q_vec)
+        p_vec = [x / p_sum for x in p_vec]
+        q_vec = [x / q_sum for x in q_vec]
+
+        # M = (P + Q) / 2
+        m_vec = [(pi + qi) / 2 for pi, qi in zip(p_vec, q_vec)]
+
+        # JSD = (KL(P||M) + KL(Q||M)) / 2
+        def _kl(a, b):
+            return sum(ai * math.log2(ai / bi) for ai, bi in zip(a, b))
+
+        return (_kl(p_vec, m_vec) + _kl(q_vec, m_vec)) / 2
+
+    def check_distribution_drift(
+        self,
+        connector_id: str,
+        dimension: str,
+        baseline_dist: Dict[str, float],
+        current_dist: Dict[str, float],
+        billing_tier: str = "free",
+    ) -> AnomalyCheckResult:
+        """
+        Detect distribution drift for a categorical dimension using JSD.
+
+        Compares current period distribution against historical baseline.
+        Examples: channel mix shift, campaign type distribution change.
+
+        Args:
+            connector_id: Connector ID
+            dimension: Dimension name (e.g. 'channel', 'campaign_type')
+            baseline_dist: Historical distribution {category: proportion}
+            current_dist: Current period distribution {category: proportion}
+            billing_tier: 'free', 'growth', or 'enterprise'
+
+        Returns:
+            AnomalyCheckResult with JSD and top movers in metadata
+        """
+        connector = self.db.query(TenantAirbyteConnection).filter(
+            TenantAirbyteConnection.tenant_id == self.tenant_id,
+            TenantAirbyteConnection.id == connector_id,
+        ).first()
+
+        connector_name = connector.connection_name if connector else "Unknown"
+
+        loader = get_quality_thresholds_loader()
+        threshold = loader.get_distribution_drift_threshold(billing_tier)
+
+        # Both empty → nothing to compare
+        if not baseline_dist and not current_dist:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.DISTRIBUTION_DRIFT,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=None,
+                expected_value=None,
+                message=f"No distribution data for dimension '{dimension}'",
+                merchant_message="",
+                support_details="",
+                metadata={
+                    "jsd": 0.0,
+                    "anomaly_score": 0.0,
+                    "threshold": threshold,
+                    "billing_tier": billing_tier,
+                    "dimension": dimension,
+                },
+            )
+
+        jsd = self._jensen_shannon_divergence(baseline_dist, current_dist)
+        anomaly_score = min(jsd / threshold, 1.0) if threshold > 0 else 1.0
+        is_anomaly = jsd >= threshold
+
+        # Compute top movers (top 3 categories by absolute proportion change)
+        all_keys = set(baseline_dist) | set(current_dist)
+        changes = [
+            (k, current_dist.get(k, 0.0) - baseline_dist.get(k, 0.0))
+            for k in all_keys
+        ]
+        changes.sort(key=lambda x: abs(x[1]), reverse=True)
+        top_movers = [
+            {"category": k, "change": round(v, 4)} for k, v in changes[:3]
+        ]
+
+        severity_label = loader.resolve_severity_label(anomaly_score)
+        severity = DQSeverity.HIGH if severity_label == "high" else DQSeverity.WARNING
+
+        metadata = {
+            "jsd": round(jsd, 6),
+            "anomaly_score": round(anomaly_score, 3),
+            "severity_label": severity_label,
+            "threshold": threshold,
+            "billing_tier": billing_tier,
+            "dimension": dimension,
+            "top_movers": top_movers,
+        }
+
+        if is_anomaly:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.DISTRIBUTION_DRIFT,
+                is_anomaly=True,
+                severity=severity,
+                observed_value=Decimal(str(round(jsd, 6))),
+                expected_value=Decimal(str(threshold)),
+                message=(
+                    f"Distribution drift detected for '{dimension}': "
+                    f"JSD={jsd:.4f} exceeds threshold {threshold} "
+                    f"(tier: {billing_tier})"
+                ),
+                merchant_message=(
+                    f"We noticed a significant change in the {dimension} distribution "
+                    f"for {connector_name}. This may indicate a shift in your data mix."
+                ),
+                support_details=(
+                    f"Distribution drift for {connector_name} ({connector_id}), "
+                    f"dimension '{dimension}': JSD={jsd:.4f}, threshold={threshold}, "
+                    f"tier={billing_tier}"
+                ),
+                metadata=metadata,
+            )
+
+        return AnomalyCheckResult(
+            connector_id=connector_id,
+            connector_name=connector_name,
+            check_type=DQCheckType.DISTRIBUTION_DRIFT,
+            is_anomaly=False,
+            severity=DQSeverity.WARNING,
+            observed_value=Decimal(str(round(jsd, 6))),
+            expected_value=Decimal(str(threshold)),
+            message=f"Distribution stable for dimension '{dimension}'",
+            merchant_message="",
+            support_details="",
+            metadata=metadata,
+        )
+
+    def check_cardinality_shift(
+        self,
+        connector_id: str,
+        dimension: str,
+        baseline_count: int,
+        current_count: int,
+        billing_tier: str = "free",
+    ) -> AnomalyCheckResult:
+        """
+        Detect cardinality shift for a dimension (distinct value count change).
+
+        Examples: campaign count explosion, SKU count collapse.
+
+        Args:
+            connector_id: Connector ID
+            dimension: Dimension name (e.g. 'campaign_id', 'sku')
+            baseline_count: Historical distinct value count
+            current_count: Current distinct value count
+            billing_tier: 'free', 'growth', or 'enterprise'
+
+        Returns:
+            AnomalyCheckResult with pct_change in metadata
+        """
+        connector = self.db.query(TenantAirbyteConnection).filter(
+            TenantAirbyteConnection.tenant_id == self.tenant_id,
+            TenantAirbyteConnection.id == connector_id,
+        ).first()
+
+        connector_name = connector.connection_name if connector else "Unknown"
+
+        loader = get_quality_thresholds_loader()
+        threshold_pct = loader.get_cardinality_shift_threshold(billing_tier)
+
+        if baseline_count == 0:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.CARDINALITY_SHIFT,
+                is_anomaly=False,
+                severity=DQSeverity.WARNING,
+                observed_value=Decimal(current_count),
+                expected_value=Decimal(0),
+                message=f"No baseline for cardinality comparison on '{dimension}'",
+                merchant_message="",
+                support_details="Cannot calculate cardinality shift with zero baseline",
+                metadata={
+                    "pct_change": 0.0,
+                    "anomaly_score": 0.0,
+                    "threshold_pct": threshold_pct,
+                    "billing_tier": billing_tier,
+                    "dimension": dimension,
+                    "baseline_count": baseline_count,
+                    "current_count": current_count,
+                },
+            )
+
+        pct_change = abs(current_count - baseline_count) / baseline_count * 100
+        anomaly_score = min(pct_change / threshold_pct, 1.0) if threshold_pct > 0 else 1.0
+        is_anomaly = pct_change >= threshold_pct
+
+        severity_label = loader.resolve_severity_label(anomaly_score)
+        severity = DQSeverity.HIGH if severity_label == "high" else DQSeverity.WARNING
+
+        direction = "exploded" if current_count > baseline_count else "collapsed"
+
+        metadata = {
+            "pct_change": round(pct_change, 2),
+            "anomaly_score": round(anomaly_score, 3),
+            "severity_label": severity_label,
+            "threshold_pct": threshold_pct,
+            "billing_tier": billing_tier,
+            "dimension": dimension,
+            "baseline_count": baseline_count,
+            "current_count": current_count,
+        }
+
+        if is_anomaly:
+            return AnomalyCheckResult(
+                connector_id=connector_id,
+                connector_name=connector_name,
+                check_type=DQCheckType.CARDINALITY_SHIFT,
+                is_anomaly=True,
+                severity=severity,
+                observed_value=Decimal(current_count),
+                expected_value=Decimal(baseline_count),
+                message=(
+                    f"Cardinality {direction} for '{dimension}': "
+                    f"{baseline_count} → {current_count} "
+                    f"({pct_change:.1f}% change, threshold: {threshold_pct}%, "
+                    f"tier: {billing_tier})"
+                ),
+                merchant_message=(
+                    f"We noticed a significant change in the number of distinct "
+                    f"{dimension} values for {connector_name}. "
+                    "This may indicate a data issue."
+                ),
+                support_details=(
+                    f"Cardinality {direction} for {connector_name} ({connector_id}), "
+                    f"dimension '{dimension}': {baseline_count} → {current_count} "
+                    f"({pct_change:.1f}%), threshold={threshold_pct}%, tier={billing_tier}"
+                ),
+                metadata=metadata,
+            )
+
+        return AnomalyCheckResult(
+            connector_id=connector_id,
+            connector_name=connector_name,
+            check_type=DQCheckType.CARDINALITY_SHIFT,
+            is_anomaly=False,
+            severity=DQSeverity.WARNING,
+            observed_value=Decimal(current_count),
+            expected_value=Decimal(baseline_count),
+            message=f"Cardinality stable for dimension '{dimension}'",
+            merchant_message="",
+            support_details="",
+            metadata=metadata,
         )
 
     def check_zero_spend(
@@ -1091,6 +1672,79 @@ class DQService:
             health_score=round(health_score, 1),
             connectors=connector_health_list,
             has_blocking_issues=blocking_count > 0,
+        )
+
+    @staticmethod
+    def aggregate_quality_state(
+        freshness_results: List[FreshnessCheckResult],
+        anomaly_results: List[AnomalyCheckResult],
+    ) -> DataQualityVerdict:
+        """
+        Aggregate all quality signals into a single PASS/WARN/FAIL state.
+
+        Rules:
+            - Any CRITICAL or HIGH severity failure → FAIL
+            - Any WARNING severity → WARN
+            - All checks pass → PASS
+
+        Args:
+            freshness_results: Results from freshness checks
+            anomaly_results: Results from volume/metric anomaly checks
+
+        Returns:
+            DataQualityVerdict with aggregated state and diagnostics
+        """
+        failure_count = 0
+        warning_count = 0
+        passed_count = 0
+        failing_checks: List[str] = []
+
+        for fr in freshness_results:
+            if not fr.is_fresh and fr.severity in (DQSeverity.CRITICAL, DQSeverity.HIGH):
+                failure_count += 1
+                failing_checks.append(f"Freshness: {fr.connector_name} - {fr.message}")
+            elif not fr.is_fresh and fr.severity == DQSeverity.WARNING:
+                warning_count += 1
+            else:
+                passed_count += 1
+
+        for ar in anomaly_results:
+            if ar.is_anomaly and ar.severity in (DQSeverity.CRITICAL, DQSeverity.HIGH):
+                failure_count += 1
+                failing_checks.append(
+                    f"{ar.check_type.value}: {ar.connector_name} - {ar.message}"
+                )
+            elif ar.is_anomaly and ar.severity == DQSeverity.WARNING:
+                warning_count += 1
+            else:
+                passed_count += 1
+
+        total_checks = failure_count + warning_count + passed_count
+
+        if failure_count > 0:
+            state = DataQualityState.FAIL
+            message = (
+                f"FAIL: {failure_count} critical failure(s) detected"
+                f" across {total_checks} checks"
+            )
+        elif warning_count > 0:
+            state = DataQualityState.WARN
+            message = (
+                f"WARN: {warning_count} warning(s) detected"
+                f" across {total_checks} checks"
+            )
+        else:
+            state = DataQualityState.PASS_STATE
+            message = f"PASS: all {total_checks} checks passed"
+
+        return DataQualityVerdict(
+            state=state,
+            total_checks=total_checks,
+            passed_count=passed_count,
+            warning_count=warning_count,
+            failure_count=failure_count,
+            failing_checks=failing_checks,
+            message=message,
         )
 
     def is_dashboard_blocked(self) -> Tuple[bool, List[str]]:

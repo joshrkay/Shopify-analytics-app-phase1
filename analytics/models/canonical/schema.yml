@@ -31,6 +31,7 @@ models:
             date_column: order_created_at
             min_daily_records: 1
             lookback_days: 7
+            threshold_pct: 50
           config:
             severity: warn
       - test_tenant_has_rows:
@@ -177,6 +178,7 @@ models:
             date_column: date
             min_daily_records: 1
             lookback_days: 7
+            threshold_pct: 50
           config:
             severity: warn
       - test_tenant_has_rows:
@@ -357,6 +359,7 @@ models:
             date_column: date
             min_daily_records: 1
             lookback_days: 7
+            threshold_pct: 50
           config:
             severity: warn
       - test_tenant_has_rows:
@@ -512,6 +515,27 @@ models:
       Grain: One row per order.
 
       SECURITY: All rows are tenant-isolated via tenant_id.
+    tests:
+      - test_freshness:
+          arguments:
+            column_name: dbt_updated_at
+            error_after_hours: 48
+          config:
+            severity: error
+      - test_volume_anomaly:
+          arguments:
+            date_column: order_date
+            min_daily_records: 1
+            lookback_days: 7
+            threshold_pct: 50
+          config:
+            severity: warn
+      - test_tenant_has_rows:
+          arguments:
+            tenant_id_column: tenant_id
+            min_rows: 1
+          config:
+            severity: warn
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + order_id)
@@ -593,6 +617,27 @@ models:
       Grain: One row per tenant + source_system + campaign + ad_set + ad + date.
 
       SECURITY: All rows are tenant-isolated via tenant_id.
+    tests:
+      - test_freshness:
+          arguments:
+            column_name: dbt_updated_at
+            error_after_hours: 48
+          config:
+            severity: error
+      - test_volume_anomaly:
+          arguments:
+            date_column: spend_date
+            min_daily_records: 1
+            lookback_days: 7
+            threshold_pct: 50
+          config:
+            severity: warn
+      - test_tenant_has_rows:
+          arguments:
+            tenant_id_column: tenant_id
+            min_rows: 1
+          config:
+            severity: warn
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + source_system + campaign_id + ad_set_id + ad_id + spend_date)
@@ -667,6 +712,27 @@ models:
       Grain: One row per tenant + source_system + campaign + ad_set + date.
 
       SECURITY: All rows are tenant-isolated via tenant_id.
+    tests:
+      - test_freshness:
+          arguments:
+            column_name: dbt_updated_at
+            error_after_hours: 48
+          config:
+            severity: error
+      - test_volume_anomaly:
+          arguments:
+            date_column: campaign_date
+            min_daily_records: 1
+            lookback_days: 7
+            threshold_pct: 50
+          config:
+            severity: warn
+      - test_tenant_has_rows:
+          arguments:
+            tenant_id_column: tenant_id
+            min_rows: 1
+          config:
+            severity: warn
     columns:
       - name: id
         description: Surrogate key (MD5 hash of tenant_id + source_system + campaign_id + ad_set_id + campaign_date)

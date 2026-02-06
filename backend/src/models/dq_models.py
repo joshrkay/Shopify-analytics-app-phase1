@@ -30,11 +30,15 @@ class DQCheckType(str, Enum):
     """Types of data quality checks."""
     FRESHNESS = "freshness"
     ROW_COUNT_DROP = "row_count_drop"
+    VOLUME_ANOMALY = "volume_anomaly"
     ZERO_SPEND = "zero_spend"
     ZERO_ORDERS = "zero_orders"
     MISSING_DAYS = "missing_days"
     NEGATIVE_VALUES = "negative_values"
     DUPLICATE_PRIMARY_KEY = "duplicate_primary_key"
+    METRIC_INCONSISTENCY = "metric_inconsistency"
+    DISTRIBUTION_DRIFT = "distribution_drift"
+    CARDINALITY_SHIFT = "cardinality_shift"
 
 
 class DQSeverity(str, Enum):
@@ -42,6 +46,13 @@ class DQSeverity(str, Enum):
     WARNING = "warning"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+class DataQualityState(str, Enum):
+    """Aggregated data quality state."""
+    PASS_STATE = "pass"
+    WARN = "warn"
+    FAIL = "fail"
 
 
 class DQResultStatus(str, Enum):
