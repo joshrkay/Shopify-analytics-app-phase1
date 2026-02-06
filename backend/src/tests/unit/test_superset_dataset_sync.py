@@ -18,7 +18,6 @@ from src.services.schema_compatibility_checker import (
     DatasetSchemaSnapshot,
     DatasetViewSchema,
     ColumnSchema,
-    build_snapshot_from_manifest,
 )
 from src.services.superset_dataset_sync import (
     SupersetDatasetSync,
@@ -60,6 +59,11 @@ def _make_sync_service(db=None):
         superset_password="p",
         database_name="markinsight",
     )
+
+
+def _mock_db_empty_baseline(db: MagicMock) -> None:
+    """Make build_snapshot_from_db return empty snapshot (no active versions)."""
+    db.query.return_value.filter.return_value.all.return_value = []
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +159,12 @@ class TestSyncIdempotentUpsert:
 
     def test_create_then_update_paths(self):
         db = MagicMock()
+        _mock_db_empty_baseline(db)
         svc = _make_sync_service(db)
+        svc.version_manager = MagicMock()
+        version_row = MagicMock()
+        version_row.id = "ver-id"
+        svc.version_manager.create_pending_version.return_value = version_row
         manifest = _minimal_manifest_one_model()
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(manifest, f)
@@ -185,6 +194,7 @@ class TestSyncIdempotentUpsert:
 class TestSyncApiFailureRecordsFailure:
     def test_record_sync_failure_on_api_error(self):
         db = MagicMock()
+        _mock_db_empty_baseline(db)
         svc = _make_sync_service(db)
         svc.observability = MagicMock()
         manifest = _minimal_manifest_one_model()
@@ -198,5 +208,81 @@ class TestSyncApiFailureRecordsFailure:
             assert result.success is False
             assert len(result.errors) >= 1
             svc.observability.record_sync_failure.assert_called()
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+
+class TestSyncVersionLifecycle:
+    """DatasetVersionManager: create_pending_version before upsert, activate on success, mark_failed on error."""
+
+    def test_create_pending_version_called_for_each_dataset(self):
+        db = MagicMock()
+        _mock_db_empty_baseline(db)
+        svc = _make_sync_service(db)
+        svc.version_manager = MagicMock()
+        version_row = MagicMock()
+        version_row.id = "ver-123"
+        svc.version_manager.create_pending_version.return_value = version_row
+        manifest = _minimal_manifest_one_model()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(manifest, f)
+            path = f.name
+        try:
+            with patch.object(svc.client, "get_database_id", return_value=1):
+                with patch.object(svc.client, "get_dataset", return_value=None):
+                    with patch.object(svc.client, "create_dataset"):
+                        with patch.object(svc.client, "refresh_dataset_columns"):
+                            svc.sync(path)
+            svc.version_manager.create_pending_version.assert_called_once()
+            call_args = svc.version_manager.create_pending_version.call_args
+            assert call_args[0][0] == "fact_orders_current"
+            assert call_args[0][1] == "v1"
+            assert len(call_args[0][2]) == 2
+            assert call_args[1]["schema_name"] == "semantic"
+            assert "dbt_manifest_hash" in call_args[1]
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    def test_activate_version_called_on_success(self):
+        db = MagicMock()
+        _mock_db_empty_baseline(db)
+        svc = _make_sync_service(db)
+        svc.version_manager = MagicMock()
+        version_row = MagicMock()
+        version_row.id = "ver-456"
+        svc.version_manager.create_pending_version.return_value = version_row
+        manifest = _minimal_manifest_one_model()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(manifest, f)
+            path = f.name
+        try:
+            with patch.object(svc.client, "get_database_id", return_value=1):
+                with patch.object(svc.client, "get_dataset", return_value=None):
+                    with patch.object(svc.client, "create_dataset"):
+                        with patch.object(svc.client, "refresh_dataset_columns"):
+                            svc.sync(path)
+            svc.version_manager.activate_version.assert_called_once_with("ver-456")
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    def test_mark_failed_called_on_api_error(self):
+        db = MagicMock()
+        _mock_db_empty_baseline(db)
+        svc = _make_sync_service(db)
+        svc.version_manager = MagicMock()
+        version_row = MagicMock()
+        version_row.id = "ver-789"
+        svc.version_manager.create_pending_version.return_value = version_row
+        manifest = _minimal_manifest_one_model()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(manifest, f)
+            path = f.name
+        try:
+            with patch.object(svc.client, "get_database_id", return_value=1):
+                with patch.object(svc.client, "get_dataset", side_effect=Exception("API error")):
+                    svc.sync(path)
+            svc.version_manager.mark_failed.assert_called_once()
+            assert svc.version_manager.mark_failed.call_args[0][0] == "ver-789"
+            assert "API error" in svc.version_manager.mark_failed.call_args[1]["error"]
         finally:
             Path(path).unlink(missing_ok=True)

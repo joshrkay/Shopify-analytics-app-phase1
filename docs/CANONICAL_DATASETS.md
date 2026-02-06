@@ -1,5 +1,7 @@
 # Canonical Dataset Exposure & Safety Model
 
+*Internal documentation — Story 5.2.11.*
+
 ## Overview
 
 This document describes how canonical data models are safely exposed to end users through Apache Superset. It covers the full lifecycle from dbt semantic views through Superset dataset sync, performance guardrails, fail-safe versioning, and observability.

@@ -1,69 +1,65 @@
 -- =============================================================================
--- Performance Indexes for Analytics Semantic Views
+-- Performance Indexes for Analytics Canonical Tables
 -- Story 5.2.6 — DB-Level Performance Guardrails
 --
--- Creates composite indexes on the most common query patterns:
+-- Creates composite indexes on the canonical fact TABLES (not views). PostgreSQL
+-- cannot index regular views; queries against semantic views (sem_*, fact_*_current)
+-- resolve against these underlying tables.
+--
+-- Index patterns:
 -- - tenant_id (always filtered via RLS)
--- - date columns (date range filters)
--- - channel (group-by dimension)
+-- - date (date range filters)
+-- - channel / source_platform (group-by dimensions)
 --
--- Also enforces statement_timeout on the analytics_reader role to prevent
--- runaway queries from impacting the database, and sets a max result size
--- guard via a custom function.
+-- Also grants analytics_reader and superset_service access to the semantic
+-- schema (where Superset-facing views live) and enforces statement_timeout.
 --
--- SAFETY: All changes are scoped to the analytics_reader role only.
+-- SAFETY: All changes are scoped to analytics_reader and superset_service.
 --         Admin and migration roles are NOT affected.
 -- =============================================================================
 
 BEGIN;
 
 -- ---------------------------------------------------------------------------
--- 1. Composite Indexes for fact_orders_current (sem_orders_v1)
+-- 1. Composite Indexes on analytics.orders (canonical table for sem_orders_v1)
 -- ---------------------------------------------------------------------------
 
--- Primary query pattern: tenant_id + date range
-CREATE INDEX IF NOT EXISTS ix_fact_orders_tenant_date
-    ON analytics.fact_orders_current (tenant_id, order_date DESC);
+CREATE INDEX IF NOT EXISTS ix_orders_tenant_date
+    ON analytics.orders (tenant_id, date DESC);
 
--- Group-by dimension: channel (always with tenant_id for RLS)
-CREATE INDEX IF NOT EXISTS ix_fact_orders_tenant_channel
-    ON analytics.fact_orders_current (tenant_id, channel);
-
--- Combined: tenant + date + channel (covers most Explore queries)
-CREATE INDEX IF NOT EXISTS ix_fact_orders_tenant_date_channel
-    ON analytics.fact_orders_current (tenant_id, order_date DESC, channel);
+CREATE INDEX IF NOT EXISTS ix_orders_tenant_date_source_platform
+    ON analytics.orders (tenant_id, date DESC, source_platform);
 
 -- ---------------------------------------------------------------------------
--- 2. Composite Indexes for fact_marketing_spend_current
+-- 2. Composite Indexes on analytics.marketing_spend (canonical for sem_marketing_spend_v1)
 -- ---------------------------------------------------------------------------
 
-CREATE INDEX IF NOT EXISTS ix_fact_marketing_spend_tenant_date
-    ON analytics.fact_marketing_spend_current (tenant_id, spend_date DESC);
+CREATE INDEX IF NOT EXISTS ix_marketing_spend_tenant_date
+    ON analytics.marketing_spend (tenant_id, date DESC);
 
-CREATE INDEX IF NOT EXISTS ix_fact_marketing_spend_tenant_channel
-    ON analytics.fact_marketing_spend_current (tenant_id, channel);
+CREATE INDEX IF NOT EXISTS ix_marketing_spend_tenant_channel
+    ON analytics.marketing_spend (tenant_id, channel);
 
-CREATE INDEX IF NOT EXISTS ix_fact_marketing_spend_tenant_date_channel
-    ON analytics.fact_marketing_spend_current (tenant_id, spend_date DESC, channel);
-
--- ---------------------------------------------------------------------------
--- 3. Composite Indexes for fact_campaign_performance_current
--- ---------------------------------------------------------------------------
-
-CREATE INDEX IF NOT EXISTS ix_fact_campaign_perf_tenant_date
-    ON analytics.fact_campaign_performance_current (tenant_id, campaign_date DESC);
-
-CREATE INDEX IF NOT EXISTS ix_fact_campaign_perf_tenant_channel
-    ON analytics.fact_campaign_performance_current (tenant_id, channel);
-
-CREATE INDEX IF NOT EXISTS ix_fact_campaign_perf_tenant_date_channel
-    ON analytics.fact_campaign_performance_current (tenant_id, campaign_date DESC, channel);
+CREATE INDEX IF NOT EXISTS ix_marketing_spend_tenant_date_channel
+    ON analytics.marketing_spend (tenant_id, date DESC, channel);
 
 -- ---------------------------------------------------------------------------
--- 4. Analytics Reader Role with statement_timeout
+-- 3. Composite Indexes on analytics.campaign_performance (canonical for sem_campaign_performance_v1)
 -- ---------------------------------------------------------------------------
 
--- Create the role if it does not exist (idempotent)
+CREATE INDEX IF NOT EXISTS ix_campaign_performance_tenant_date
+    ON analytics.campaign_performance (tenant_id, date DESC);
+
+CREATE INDEX IF NOT EXISTS ix_campaign_performance_tenant_channel
+    ON analytics.campaign_performance (tenant_id, channel);
+
+CREATE INDEX IF NOT EXISTS ix_campaign_performance_tenant_date_channel
+    ON analytics.campaign_performance (tenant_id, date DESC, channel);
+
+-- ---------------------------------------------------------------------------
+-- 4. Analytics Reader Role and Schema Access
+-- ---------------------------------------------------------------------------
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'analytics_reader') THEN
@@ -72,21 +68,38 @@ BEGIN
 END
 $$;
 
--- Grant read-only access to the analytics schema
+-- Analytics schema (canonical tables)
 GRANT USAGE ON SCHEMA analytics TO analytics_reader;
 GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO analytics_reader;
 ALTER DEFAULT PRIVILEGES IN SCHEMA analytics
     GRANT SELECT ON TABLES TO analytics_reader;
 
--- Enforce statement_timeout = 20 seconds (matching PERFORMANCE_LIMITS)
--- This kills any query exceeding 20s on this role ONLY.
+-- Semantic schema (Superset-facing views: sem_*_v1, fact_*_current)
+GRANT USAGE ON SCHEMA semantic TO analytics_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA semantic TO analytics_reader;
+ALTER DEFAULT PRIVILEGES IN SCHEMA semantic
+    GRANT SELECT ON TABLES TO analytics_reader;
+
 ALTER ROLE analytics_reader SET statement_timeout = '20s';
+ALTER ROLE analytics_reader SET analytics.max_rows = '50000';
+
+-- Superset service role: same schema access for metadata and query execution
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superset_service') THEN
+        GRANT USAGE ON SCHEMA analytics TO superset_service;
+        GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO superset_service;
+        GRANT USAGE ON SCHEMA semantic TO superset_service;
+        GRANT SELECT ON ALL TABLES IN SCHEMA semantic TO superset_service;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA semantic
+            GRANT SELECT ON TABLES TO superset_service;
+    END IF;
+END
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 5. Max Result Size Guard (row_limit enforcement at DB level)
 -- ---------------------------------------------------------------------------
--- This function wraps any analytics query with a hard LIMIT.
--- Superset uses this via the database connection configuration.
 
 CREATE OR REPLACE FUNCTION analytics.enforce_row_limit(
     max_rows INTEGER DEFAULT 50000
@@ -96,20 +109,13 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-    -- Set a session-level variable that can be referenced in views
     PERFORM set_config('analytics.max_rows', max_rows::TEXT, TRUE);
 END;
 $$;
 
--- Set default row limit for analytics_reader sessions
-ALTER ROLE analytics_reader SET analytics.max_rows = '50000';
-
 -- ---------------------------------------------------------------------------
 -- 6. Enable pg_stat_statements for query monitoring (if not already enabled)
 -- ---------------------------------------------------------------------------
--- NOTE: pg_stat_statements must be added to shared_preload_libraries in
--- postgresql.conf. This CREATE EXTENSION is safe to run — it will no-op
--- if the extension is already loaded or error if not in shared_preload_libraries.
 
 DO $$
 BEGIN
@@ -125,7 +131,6 @@ BEGIN
 END
 $$;
 
--- Grant analytics_reader read access to query stats for observability
 DO $$
 BEGIN
     IF EXISTS (

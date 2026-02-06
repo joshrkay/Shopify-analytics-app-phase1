@@ -21,6 +21,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.orm import Session
+
+from src.models.dataset_version import DatasetVersion, DatasetVersionStatus
+
 logger = logging.getLogger(__name__)
 
 # Semantic view name patterns: _current aliases and sem_*_v1 versioned views
@@ -236,4 +240,47 @@ class SchemaCompatibilityChecker:
 def build_snapshot_from_manifest(manifest: dict[str, Any]) -> DatasetSchemaSnapshot:
     """Build a DatasetSchemaSnapshot from a dbt manifest (e.g. for tests or CI)."""
     datasets = _parse_manifest_models(manifest)
+    return DatasetSchemaSnapshot(datasets=datasets)
+
+
+def build_snapshot_from_db(db: Session) -> DatasetSchemaSnapshot:
+    """
+    Build a DatasetSchemaSnapshot from the current ACTIVE dataset versions in the DB.
+
+    Used as the baseline for compatibility checks so we validate the new manifest
+    against the previously deployed state, not against itself. When no active
+    versions exist (first deploy), returns an empty snapshot so all views are
+    treated as additive and the check passes.
+    """
+    active_versions = (
+        db.query(DatasetVersion)
+        .filter(DatasetVersion.status == DatasetVersionStatus.ACTIVE.value)
+        .all()
+    )
+    datasets: dict[str, DatasetViewSchema] = {}
+    for row in active_versions:
+        try:
+            raw = json.loads(row.column_snapshot)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(
+                "schema_compatibility.invalid_column_snapshot",
+                extra={"dataset_name": row.dataset_name, "error": str(e)},
+            )
+            continue
+        if not isinstance(raw, list):
+            continue
+        columns: list[ColumnSchema] = []
+        for col in raw:
+            if not isinstance(col, dict):
+                continue
+            name = col.get("column_name") or col.get("name") or ""
+            if not name:
+                continue
+            data_type = str(col.get("type") or col.get("data_type") or "VARCHAR").strip() or "VARCHAR"
+            exposed = bool(col.get("superset_expose", False))
+            columns.append(ColumnSchema(name=name, data_type=data_type, exposed=exposed))
+        if columns:
+            datasets[row.dataset_name] = DatasetViewSchema(
+                name=row.dataset_name, columns=tuple(columns)
+            )
     return DatasetSchemaSnapshot(datasets=datasets)
