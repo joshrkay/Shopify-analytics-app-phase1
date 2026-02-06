@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/platform/feature_flags.py
+# hypothesis_version: 6.150.0
+
+['0', '1', '__global__', 'advanced-exports', 'ai-automation', 'ai-insights', 'ai-write-back', 'api-access', 'beta-advanced-ai', 'beta-new-ui', 'custom-dashboards', 'default', 'error', 'false', 'flag', 'maintenance-mode', 'multi-store', 'no', 'path', 'premium-analytics', 'rate-limiting-strict', 'request', 'result', 'team-collaboration', 'tenant_id', 'true', 'user_id', 'yes']

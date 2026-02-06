@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/repositories/airbyte_connections.py
+# hypothesis_version: 6.150.0
+
+['60', 'Connection disabled', 'Connection enabled', 'airbyte_source_id', 'configuration', 'connection_id', 'connection_name', 'connection_type', 'create_connection', 'disable_connection', 'enable_connection', 'error', 'get_by_airbyte_id', 'is_enabled', 'list_connections', 'new_status', 'old_status', 'soft_delete', 'source_type', 'status', 'success', 'tenant_id', 'unique', 'update_status']

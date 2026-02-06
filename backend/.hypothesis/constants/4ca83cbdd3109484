@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/dataset_metrics.py
+# hypothesis_version: 6.150.0
+
+[255, 'Database schema', 'Primary key (UUID)', 'analytics', 'blocked', 'dataset_metrics', 'failed', 'last_sync_at', 'ok', 'pending', 'stale', 'sync_status']

@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/services/schema_compatibility_checker.py
+# hypothesis_version: 6.150.0
+
+['VARCHAR', '_current', '_v1', 'column_removed', 'column_type_changed', 'columns', 'data_type', 'fact_', 'meta', 'model.', 'name', 'nodes', 'sem_', 'superset_expose', 'view_removed']

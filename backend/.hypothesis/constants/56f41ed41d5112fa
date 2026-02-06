@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/subscription.py
+# hypothesis_version: 6.150.0
+
+[255, 'Plan', 'Primary key (UUID)', 'ShopifyStore', 'active', 'cancelled', 'declined', 'expired', 'frozen', 'metadata', 'pending', 'plan_id', 'plans.id', 'shopify_stores.id', 'status', "status = 'active'", 'subscription', 'tenant_id', 'tenant_subscriptions']

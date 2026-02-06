@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/billing_event.py
+# hypothesis_version: 6.150.0
+
+[100, 255, 'DESC', 'Primary key (UUID)', 'Shopify charge ID', 'ShopifyStore', 'billing_events', 'charge_created', 'charge_failed', 'charge_succeeded', 'created_at', 'event_type', 'metadata', 'plan_changed', 'refund_issued', 'shopify_stores.id', 'subscription_created', 'subscription_renewed', 'subscription_updated', 'tenant_id']

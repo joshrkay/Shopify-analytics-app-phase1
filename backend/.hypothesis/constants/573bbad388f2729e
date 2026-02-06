@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/user_tenant_roles.py
+# hypothesis_version: 6.150.0
+
+[255, 'CASCADE', 'Tenant', 'User', 'UserTenantRole', 'admin', 'agency_admin', 'agency_grant', 'agency_viewer', 'clerk_webhook', 'is_active', 'joined', 'merchant_admin', 'owner', 'role', 'super_admin', 'tenant_id', 'tenant_roles', 'tenants.id', 'uq_user_tenant_role', 'user_id', 'user_roles', 'user_tenant_roles', 'users.id']

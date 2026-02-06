@@ -1,5 +1,5 @@
-# Superset Dataset: Fact Orders (Canonical v1)
-# Source: analytics/models/canonical/fact_orders_v1.sql
+# Superset Dataset: Fact Orders (Semantic View)
+# Source: analytics/models/semantic_views/fact_orders_current.sql
 #
 # Column allow-list: ONLY columns listed below are exposed in Superset.
 # PII columns (customer_id) and internal columns are excluded.
@@ -10,15 +10,16 @@
 # - Grain: one row per order
 
 dataset:
-  table_name: fact_orders
+  table_name: fact_orders_current
   schema: analytics
   description: |
-    Canonical orders fact table (v1). Source of truth for Shopify revenue.
+    Semantic view alias for the active orders fact table version.
+    Points to sem_orders_v1 via fact_orders_current alias.
     Grain: one row per order.
     Customer IDs are pseudonymized (MD5 hash) at the dbt layer but still
     excluded from Superset to prevent any PII exposure.
 
-  dbt_model: fact_orders_v1
+  dbt_model: fact_orders_current
   metric_version: v1
   version_status: active
 

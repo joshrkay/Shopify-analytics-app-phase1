@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/repositories/plans_repo.py
+# hypothesis_version: 6.150.0
+
+[100, 'Plan created', 'Plan deleted', 'Plan feature added', 'Plan feature removed', 'Plan feature updated', 'Plan features set', 'Plan updated', 'description', 'display_name', 'error', 'feature_count', 'feature_key', 'is_active', 'is_enabled', 'limit_value', 'limits', 'name', 'plan_id', 'price_monthly_cents', 'price_yearly_cents', 'shopify_plan_id', 'updated_fields']

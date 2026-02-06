@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/integrations/airbyte/client.py
+# hypothesis_version: 6.150.0
+
+[10.0, 30.0, 204, 400, 401, 403, 404, 429, 500, 3600, '/', '/connections', '/destinations', '/health', '/sources', 'AIRBYTE_API_TOKEN', 'AIRBYTE_BASE_URL', 'AIRBYTE_WORKSPACE_ID', 'Accept', 'Airbyte API error', 'Airbyte API timeout', 'AirbyteClient', 'Authorization', 'Content-Type', 'DELETE', 'GET', 'POST', 'Retry-After', 'application/json', 'bytes_synced', 'connection_count', 'connection_id', 'data', 'destination_id', 'duration_seconds', 'elapsed_seconds', 'endpoint', 'error', 'includeDeleted', 'jobId', 'job_id', 'name', 'records_synced', 'response', 'retry_after', 'source_id', 'source_type', 'status', 'status_code', 'timeout_seconds', 'true', 'workspaceIds', 'workspace_id']

@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/changelog_read_status.py
+# hypothesis_version: 6.150.0
+
+[255, 'CASCADE', 'changelog_entries.id', 'changelog_entry_id', 'tenant_id', 'user_id']

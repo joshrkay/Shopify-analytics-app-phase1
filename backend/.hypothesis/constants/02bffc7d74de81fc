@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/organization.py
+# hypothesis_version: 6.150.0
+
+[100, 255, 'Tenant', 'dynamic', 'name', 'organization', 'organizations', 'save-update, merge']

@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/services/billing_service.py
+# hypothesis_version: 6.150.0
+
+[100.0, 3000, 10000, '; ', 'ACTIVE', 'APPLY_IMMEDIATELY', 'APP_URL', 'CANCELLED', 'Checkout URL created', 'DECLINED', 'Downgrade initiated', 'EXPIRED', 'FROZEN', 'Free', 'PENDING', 'Trial expired', 'USD', 'Unknown', 'action', 'activated', 'active', 'cancelled_at', 'downgrade_initiated', 'effective_at', 'end_of_period', 'error', 'errors', 'existing_plan_id', 'false', 'free_plan', 'from_plan', 'from_price_cents', 'grace_period_ends_on', 'immediate', 'message', 'new_plan_id', 'new_status', 'none', 'old_status', 'payment_failed', 'plan_free', 'plan_id', 'reason', 'reconciliation', 'scheduled_at', 'scheduled_downgrade', 'shopify_status', 'source', 'subscription_id', 'tenant_id', 'test_mode', 'timing', 'to_plan', 'to_plan_id', 'to_price_cents', 'true', 'upgrade_initiated']

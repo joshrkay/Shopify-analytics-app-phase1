@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/notification.py
+# hypothesis_version: 6.150.0
+
+[100, 255, 500, 1000, 'Notification', 'action_executed', 'action_failed', 'connector_failed', 'delivered', 'entity_id', 'entity_type', 'failed', 'important', 'incident_declared', 'incident_resolved', 'insight_generated', 'notifications', 'pending', 'postgresql', 'read', 'routine', 'status', 'sync_completed', 'tenant_id', 'user_id']

@@ -778,3 +778,219 @@ def emit_token_refreshed(
             extra={"tenant_id": tenant_id, "dashboard_id": dashboard_id},
             exc_info=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# Dataset sync lifecycle audit event emitters (Story 5.2.10)
+# ---------------------------------------------------------------------------
+
+_DATASET_SYNC_RESOURCE_TYPE = "dataset_sync"
+
+
+def emit_dataset_sync_started(
+    db: Session,
+    dataset_name: str,
+    version: str,
+    *,
+    tenant_scope: str = "system",
+    correlation_id: str | None = None,
+) -> None:
+    """Emit dataset.sync.started when a dataset sync job begins."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_scope,
+            action=AuditAction.DATASET_SYNC_STARTED,
+            resource_type=_DATASET_SYNC_RESOURCE_TYPE,
+            resource_id=dataset_name,
+            metadata={
+                "dataset_name": dataset_name,
+                "version": version,
+                "tenant_scope": tenant_scope,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="sync_job",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_dataset_sync_started_failed",
+            extra={"dataset_name": dataset_name, "version": version},
+            exc_info=True,
+        )
+
+
+def emit_dataset_sync_completed(
+    db: Session,
+    dataset_name: str,
+    version: str,
+    duration_seconds: float,
+    *,
+    tenant_scope: str = "system",
+    correlation_id: str | None = None,
+) -> None:
+    """Emit dataset.sync.completed when a dataset sync succeeds."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_scope,
+            action=AuditAction.DATASET_SYNC_COMPLETED,
+            resource_type=_DATASET_SYNC_RESOURCE_TYPE,
+            resource_id=dataset_name,
+            metadata={
+                "dataset_name": dataset_name,
+                "version": version,
+                "duration_seconds": duration_seconds,
+                "tenant_scope": tenant_scope,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="sync_job",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_dataset_sync_completed_failed",
+            extra={"dataset_name": dataset_name, "version": version},
+            exc_info=True,
+        )
+
+
+def emit_dataset_sync_failed(
+    db: Session,
+    dataset_name: str,
+    version: str,
+    error: str,
+    *,
+    tenant_scope: str = "system",
+    correlation_id: str | None = None,
+) -> None:
+    """Emit dataset.sync.failed when a dataset sync fails."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_scope,
+            action=AuditAction.DATASET_SYNC_FAILED,
+            resource_type=_DATASET_SYNC_RESOURCE_TYPE,
+            resource_id=dataset_name,
+            metadata={
+                "dataset_name": dataset_name,
+                "version": version,
+                "error": error,
+                "tenant_scope": tenant_scope,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="sync_job",
+            outcome=AuditOutcome.FAILURE,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_dataset_sync_failed_failed",
+            extra={"dataset_name": dataset_name, "version": version},
+            exc_info=True,
+        )
+
+
+def emit_dataset_version_activated(
+    db: Session,
+    dataset_name: str,
+    version: str,
+    *,
+    tenant_scope: str = "system",
+    correlation_id: str | None = None,
+) -> None:
+    """Emit dataset.version.activated when a new version is promoted to ACTIVE."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_scope,
+            action=AuditAction.DATASET_VERSION_ACTIVATED,
+            resource_type=_DATASET_SYNC_RESOURCE_TYPE,
+            resource_id=dataset_name,
+            metadata={
+                "dataset_name": dataset_name,
+                "version": version,
+                "tenant_scope": tenant_scope,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="sync_job",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_dataset_version_activated_failed",
+            extra={"dataset_name": dataset_name, "version": version},
+            exc_info=True,
+        )
+
+
+def emit_dataset_version_rolled_back(
+    db: Session,
+    dataset_name: str,
+    rolled_back_version: str,
+    restored_version: str,
+    *,
+    tenant_scope: str = "system",
+    correlation_id: str | None = None,
+) -> None:
+    """Emit dataset.version.rolled_back when a version rollback occurs."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_scope,
+            action=AuditAction.DATASET_VERSION_ROLLED_BACK,
+            resource_type=_DATASET_SYNC_RESOURCE_TYPE,
+            resource_id=dataset_name,
+            metadata={
+                "dataset_name": dataset_name,
+                "rolled_back_version": rolled_back_version,
+                "restored_version": restored_version,
+                "tenant_scope": tenant_scope,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="sync_job",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_dataset_version_rolled_back_failed",
+            extra={
+                "dataset_name": dataset_name,
+                "rolled_back_version": rolled_back_version,
+            },
+            exc_info=True,
+        )

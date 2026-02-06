@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/airbyte_connection.py
+# hypothesis_version: 6.150.0
+
+[100, 255, '60', 'Airbyte source ID', 'Primary key (UUID)', 'active', 'connection_type', 'deleted', 'destination', 'failed', 'inactive', 'is_enabled', 'pending', 'postgresql', 'source', 'source_type', 'status', 'tenant_id']

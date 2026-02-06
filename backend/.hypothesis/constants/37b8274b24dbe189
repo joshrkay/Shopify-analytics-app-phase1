@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/platform/__init__.py
+# hypothesis_version: 6.150.0
+
+['AUDITABLE_EVENTS', 'AppError', 'AuditAction', 'AuditEvent', 'AuditExportFormat', 'AuditExportRequest', 'AuditExportResult', 'AuditExportService', 'AuditLog', 'AuditOutcome', 'AuthenticationError', 'ConflictError', 'FeatureDisabledError', 'FeatureFlag', 'NotFoundError', 'PIIRedactor', 'PaymentRequiredError', 'RateLimitError', 'TenantContext', 'TenantIsolationError', 'ValidationError', 'decrypt_secret', 'encrypt_secret', 'extract_client_info', 'get_correlation_id', 'get_env_secret', 'get_tenant_context', 'has_all_permissions', 'has_any_permission', 'has_permission', 'has_role', 'is_feature_enabled', 'is_secret_key', 'log_audit_event', 'log_audit_event_sync', 'mask_secret', 'redact_secrets', 'require_admin', 'require_audit', 'require_feature_flag', 'require_permission', 'require_role', 'write_audit_log', 'write_audit_log_sync']

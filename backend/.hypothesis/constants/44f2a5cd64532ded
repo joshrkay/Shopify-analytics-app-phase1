@@ -1,0 +1,4 @@
+# file: /Users/joshuakay/Desktop/Shopify analytics app/Shopify-analytics-app/backend/src/models/ai_recommendation.py
+# hypothesis_version: 6.150.0
+
+[255, 'CASCADE', 'DESC', 'account', 'adjust_bidding', 'ai_insights.id', 'ai_recommendations', 'campaign', 'content_hash', 'generated_at', 'high', 'increase_spend', 'low', 'medium', 'minimal', 'moderate', 'optimize_targeting', 'pause_campaign', 'platform', 'reallocate_budget', 'recommendation_type', 'reduce_spend', 'related_insight_id', 'review_creative', 'scale_campaign', 'significant', 'tenant_id']

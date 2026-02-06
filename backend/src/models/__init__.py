@@ -90,6 +90,14 @@ from src.models.data_availability import (
     AvailabilityState,
     AvailabilityReason,
 )
+from src.models.dataset_version import (
+    DatasetVersion,
+    DatasetVersionStatus,
+)
+from src.models.dataset_metrics import (
+    DatasetMetrics,
+    DatasetSyncStatus,
+)
 try:
     from .merchant_data_health import (
         MerchantHealthState,
@@ -215,4 +223,9 @@ __all__ = [
     # Merchant Data Health (Story 4.3)
     "MerchantHealthState",
     "MerchantDataHealthResponse",
+    # Dataset Versioning & Observability (Story 5.2)
+    "DatasetVersion",
+    "DatasetVersionStatus",
+    "DatasetMetrics",
+    "DatasetSyncStatus",
 ]
