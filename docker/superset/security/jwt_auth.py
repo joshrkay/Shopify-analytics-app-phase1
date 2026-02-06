@@ -273,9 +273,9 @@ def authenticate_embed_request():
     g.user = user
     g.tenant_id = user.tenant_id
     g.allowed_tenants = user.allowed_tenants
-    g.rls_filter = payload.get(
-        "rls_filter", f"tenant_id = '{user.tenant_id}'"
-    )
+    g.rls_filter = payload.get("rls_filter")
+    if not g.rls_filter:
+        g.rls_filter = "1=0"  # Safe default if claim is missing
 
     # Audit: determine event type from request path
     if "/superset/dashboard/" in request.path:
