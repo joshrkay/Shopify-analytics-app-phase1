@@ -11,12 +11,14 @@ This module enforces:
 SECURITY: RLS rules from rls_rules.py are applied independently and always enforced.
 """
 
+import json
 import os
 import re
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple, Iterable
 
 from performance_config import PERFORMANCE_LIMITS
 
@@ -308,6 +310,194 @@ class ValidationResult:
     is_valid: bool
     error_message: Optional[str] = None
     error_code: Optional[str] = None
+    should_cancel: bool = True
+
+
+@dataclass(frozen=True)
+class GuardrailBypassException:
+    """Approved guardrail bypass exception."""
+    id: str
+    user_id: str
+    requested_by_role: str
+    approved_by: str
+    approved_by_role: str
+    dataset_names: Tuple[str, ...]
+    expires_at: datetime
+    reason: str
+    created_at: datetime
+
+
+class GuardrailBypassStore:
+    """Base store for guardrail bypass exceptions."""
+
+    ALLOWED_REQUESTOR_ROLES = {"super_admin"}
+    ALLOWED_APPROVER_ROLES = {"analytics_tech_lead", "security_engineer"}
+
+    @classmethod
+    def _is_valid_exception(cls, exception: GuardrailBypassException) -> bool:
+        if not exception.id or not exception.user_id:
+            return False
+        if exception.requested_by_role not in cls.ALLOWED_REQUESTOR_ROLES:
+            return False
+        if exception.approved_by_role not in cls.ALLOWED_APPROVER_ROLES:
+            return False
+        if not exception.approved_by:
+            return False
+        if not exception.dataset_names:
+            return False
+        if exception.expires_at <= exception.created_at:
+            return False
+        if exception.expires_at - exception.created_at > timedelta(minutes=60):
+            return False
+        return True
+
+    def get_active_exception(
+        self,
+        user_id: str,
+        dataset_name: str,
+        now: Optional[datetime] = None,
+    ) -> Optional[GuardrailBypassException]:
+        raise NotImplementedError
+
+    def log_usage(
+        self,
+        exception: GuardrailBypassException,
+        dataset_name: str,
+        query_params: Dict,
+    ) -> None:
+        raise NotImplementedError
+
+
+class EnvGuardrailBypassStore(GuardrailBypassStore):
+    """Loads bypass exceptions from an environment variable payload."""
+
+    def __init__(self, env_var: str = "EXPLORE_GUARDRAIL_EXCEPTIONS"):
+        self.env_var = env_var
+        self.logger = logging.getLogger("explore_guardrails.bypass")
+
+    def _parse_payload(self, payload: Iterable[dict]) -> List[GuardrailBypassException]:
+        exceptions: List[GuardrailBypassException] = []
+        for entry in payload:
+            try:
+                created_at = datetime.fromisoformat(entry["created_at"])
+                expires_at = datetime.fromisoformat(entry["expires_at"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            exception = GuardrailBypassException(
+                id=str(entry.get("id")),
+                user_id=str(entry.get("user_id")),
+                requested_by_role=str(entry.get("requested_by_role", "")),
+                approved_by=str(entry.get("approved_by", "")),
+                approved_by_role=str(entry.get("approved_by_role", "")),
+                dataset_names=tuple(entry.get("dataset_names") or []),
+                expires_at=expires_at,
+                reason=str(entry.get("reason", "")),
+                created_at=created_at,
+            )
+            if not self._is_valid_exception(exception):
+                continue
+            exceptions.append(exception)
+        return exceptions
+
+    def _load_exceptions(self) -> List[GuardrailBypassException]:
+        raw = os.getenv(self.env_var)
+        if not raw:
+            return []
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            self.logger.warning("Invalid bypass exceptions payload; ignoring")
+            return []
+        if not isinstance(payload, list):
+            self.logger.warning("Bypass exceptions payload must be a list; ignoring")
+            return []
+        return self._parse_payload(payload)
+
+    def get_active_exception(
+        self,
+        user_id: str,
+        dataset_name: str,
+        now: Optional[datetime] = None,
+    ) -> Optional[GuardrailBypassException]:
+        now = now or datetime.utcnow()
+        for exception in self._load_exceptions():
+            if exception.user_id != user_id:
+                continue
+            if dataset_name not in exception.dataset_names:
+                continue
+            if exception.expires_at <= now:
+                continue
+            return exception
+        return None
+
+    def log_usage(
+        self,
+        exception: GuardrailBypassException,
+        dataset_name: str,
+        query_params: Dict,
+    ) -> None:
+        self.logger.info(
+            "Explore guardrail bypass used",
+            extra={
+                "exception_id": exception.id,
+                "user_id": exception.user_id,
+                "requested_by_role": exception.requested_by_role,
+                "approved_by": exception.approved_by,
+                "approved_by_role": exception.approved_by_role,
+                "dataset_name": dataset_name,
+                "expires_at": exception.expires_at.isoformat(),
+                "reason": exception.reason,
+                "query_params": query_params,
+            },
+        )
+
+
+class InMemoryGuardrailBypassStore(GuardrailBypassStore):
+    """Simple bypass store for tests and local usage."""
+
+    def __init__(self, exceptions: Iterable[GuardrailBypassException]):
+        self.exceptions = [
+            exception for exception in exceptions if self._is_valid_exception(exception)
+        ]
+        self.logger = logging.getLogger("explore_guardrails.bypass")
+
+    def get_active_exception(
+        self,
+        user_id: str,
+        dataset_name: str,
+        now: Optional[datetime] = None,
+    ) -> Optional[GuardrailBypassException]:
+        now = now or datetime.utcnow()
+        for exception in self.exceptions:
+            if exception.user_id != user_id:
+                continue
+            if dataset_name not in exception.dataset_names:
+                continue
+            if exception.expires_at <= now:
+                continue
+            return exception
+        return None
+
+    def log_usage(
+        self,
+        exception: GuardrailBypassException,
+        dataset_name: str,
+        query_params: Dict,
+    ) -> None:
+        self.logger.info(
+            "Explore guardrail bypass used",
+            extra={
+                "exception_id": exception.id,
+                "user_id": exception.user_id,
+                "requested_by_role": exception.requested_by_role,
+                "approved_by": exception.approved_by,
+                "approved_by_role": exception.approved_by_role,
+                "dataset_name": dataset_name,
+                "expires_at": exception.expires_at.isoformat(),
+                "reason": exception.reason,
+                "query_params": query_params,
+            },
+        )
 
 
 class ExplorePermissionValidator:
@@ -321,13 +511,16 @@ class ExplorePermissionValidator:
     def __init__(
         self,
         persona: ExplorePersona,
-        guardrails: PerformanceGuardrails = PERFORMANCE_GUARDRAILS
+        guardrails: PerformanceGuardrails = PERFORMANCE_GUARDRAILS,
+        bypass_store: Optional[GuardrailBypassStore] = None,
     ):
         if persona not in PERSONA_CONFIGS:
             raise ValueError(f"Invalid persona: {persona}")
         self.persona = persona
         self.persona_config = PERSONA_CONFIGS[persona]
         self.guardrails = guardrails
+        self.bypass_store = bypass_store or EnvGuardrailBypassStore()
+        self.logger = logging.getLogger("explore_guardrails.validation")
 
     def _get_effective_guardrails(
         self,
@@ -433,7 +626,8 @@ class ExplorePermissionValidator:
     def validate_metrics(
         self,
         dataset_name: str,
-        metrics: List[str]
+        metrics: List[str],
+        max_metrics_per_query: Optional[int] = None,
     ) -> ValidationResult:
         """Validate that all metrics are allowed."""
         if dataset_name not in DATASET_EXPLORE_CONFIGS:
@@ -450,10 +644,11 @@ class ExplorePermissionValidator:
         extra_metrics = self.persona_config.additional_metrics.get(dataset_name, frozenset())
         allowed_metrics.update(extra_metrics)
 
-        if len(metrics) > self.guardrails.max_metrics_per_query:
+        max_metrics = max_metrics_per_query or self.guardrails.max_metrics_per_query
+        if len(metrics) > max_metrics:
             return ValidationResult(
                 is_valid=False,
-                error_message=f"Maximum {self.guardrails.max_metrics_per_query} metrics per query",
+                error_message=f"Maximum {max_metrics} metrics per query",
                 error_code="TOO_MANY_METRICS",
             )
 
@@ -539,12 +734,17 @@ class ExplorePermissionValidator:
 
         return ValidationResult(is_valid=True)
 
-    def validate_filters_count(self, filters: List[dict]) -> ValidationResult:
+    def validate_filters_count(
+        self,
+        filters: List[dict],
+        max_filters: Optional[int] = None,
+    ) -> ValidationResult:
         """Validate number of filters doesn't exceed limit."""
-        if len(filters) > self.guardrails.max_filters:
+        limit = max_filters or self.guardrails.max_filters
+        if len(filters) > limit:
             return ValidationResult(
                 is_valid=False,
-                error_message=f"Maximum {self.guardrails.max_filters} filters allowed",
+                error_message=f"Maximum {limit} filters allowed",
                 error_code="TOO_MANY_FILTERS",
             )
         return ValidationResult(is_valid=True)
@@ -552,7 +752,8 @@ class ExplorePermissionValidator:
     def validate_query(
         self,
         dataset_name: str,
-        query_params: Dict
+        query_params: Dict,
+        user_id: Optional[str] = None,
     ) -> ValidationResult:
         """
         Comprehensive query validation.
@@ -576,6 +777,23 @@ class ExplorePermissionValidator:
         """
         # Resolve per-dataset guardrails (may differ from global defaults)
         effective = self._get_effective_guardrails(dataset_name)
+        bypass_exception: Optional[GuardrailBypassException] = None
+        if user_id:
+            bypass_exception = self.bypass_store.get_active_exception(
+                user_id=user_id,
+                dataset_name=dataset_name,
+            )
+            if bypass_exception:
+                self.bypass_store.log_usage(
+                    bypass_exception,
+                    dataset_name,
+                    query_params,
+                )
+                self.logger.info(
+                    "Bypass exception applied for user %s on dataset %s",
+                    user_id,
+                    dataset_name,
+                )
 
         # 1. Validate dataset access
         result = self.validate_dataset(dataset_name)
@@ -590,20 +808,19 @@ class ExplorePermissionValidator:
 
         # 3. Validate metrics (uses effective guardrails for max count)
         metrics = query_params.get('metrics', [])
-        if len(metrics) > effective.max_metrics_per_query:
-            return ValidationResult(
-                is_valid=False,
-                error_message=f"Maximum {effective.max_metrics_per_query} metrics per query",
-                error_code="TOO_MANY_METRICS",
-            )
-        result = self.validate_metrics(dataset_name, metrics)
+        max_metrics = None if bypass_exception else effective.max_metrics_per_query
+        result = self.validate_metrics(
+            dataset_name,
+            metrics,
+            max_metrics_per_query=max_metrics,
+        )
         if not result.is_valid:
             return result
 
         # 4. Validate date range (uses effective guardrails for max days)
         start_date = query_params.get('start_date')
         end_date = query_params.get('end_date')
-        if start_date and end_date:
+        if start_date and end_date and not bypass_exception:
             if end_date < start_date:
                 return ValidationResult(
                     is_valid=False,
@@ -623,7 +840,7 @@ class ExplorePermissionValidator:
 
         # 5. Validate group-by count (uses effective guardrails)
         group_by = query_params.get('group_by', [])
-        if len(group_by) > effective.max_group_by_dimensions:
+        if not bypass_exception and len(group_by) > effective.max_group_by_dimensions:
             return ValidationResult(
                 is_valid=False,
                 error_message=(
@@ -642,12 +859,22 @@ class ExplorePermissionValidator:
 
         # 7. Validate filters count (uses effective guardrails)
         filters = query_params.get('filters', [])
-        if len(filters) > effective.max_filters:
-            return ValidationResult(
-                is_valid=False,
-                error_message=f"Maximum {effective.max_filters} filters allowed",
-                error_code="TOO_MANY_FILTERS",
-            )
+        if not bypass_exception:
+            result = self.validate_filters_count(filters, max_filters=effective.max_filters)
+            if not result.is_valid:
+                return result
+
+        # 8. Validate row limit if explicitly requested
+        row_limit = query_params.get('row_limit')
+        if row_limit is not None and not bypass_exception:
+            if row_limit > effective.row_limit:
+                return ValidationResult(
+                    is_valid=False,
+                    error_message=(
+                        f"Row limit of {row_limit} exceeds maximum of {effective.row_limit}"
+                    ),
+                    error_code="ROW_LIMIT_EXCEEDED",
+                )
 
         return ValidationResult(is_valid=True)
 
@@ -682,8 +909,9 @@ class ExploreGuardrailEnforcer:
         if match:
             existing_limit = int(match.group(1))
             if existing_limit > limit:
-                # Replace with enforced limit
-                query = limit_pattern.sub(f'LIMIT {limit}', query)
+                raise ValueError(
+                    f"Row limit {existing_limit} exceeds maximum of {limit}"
+                )
         else:
             # Add LIMIT clause
             query = f"{query.rstrip().rstrip(';')} LIMIT {limit}"
@@ -843,7 +1071,9 @@ def get_superset_explore_config() -> Dict:
 def validate_explore_request(
     persona: str,
     dataset_name: str,
-    query_params: Dict
+    query_params: Dict,
+    user_id: Optional[str] = None,
+    bypass_store: Optional[GuardrailBypassStore] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Convenience function to validate an explore request.
@@ -861,7 +1091,14 @@ def validate_explore_request(
     except ValueError:
         return False, f"Invalid persona: {persona}"
 
-    validator = ExplorePermissionValidator(persona_enum)
-    result = validator.validate_query(dataset_name, query_params)
+    validator = ExplorePermissionValidator(
+        persona_enum,
+        bypass_store=bypass_store,
+    )
+    result = validator.validate_query(
+        dataset_name,
+        query_params,
+        user_id=user_id,
+    )
 
     return result.is_valid, result.error_message
