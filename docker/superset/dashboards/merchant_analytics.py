@@ -16,7 +16,7 @@ Dashboard Features:
 - Empty state handling
 """
 
-from typing import Any
+from typing import Any, Optional
 import json
 
 from .charts import CHART_DEFINITIONS, ChartTypes
@@ -187,7 +187,7 @@ def export_dashboard_json() -> str:
     return json.dumps(MERCHANT_ANALYTICS_DASHBOARD, indent=2, default=str)
 
 
-def get_chart_config(chart_id: int) -> dict[str, Any] | None:
+def get_chart_config(chart_id: int) -> Optional[dict[str, Any]]:
     """Get configuration for a specific chart."""
     return CHART_DEFINITIONS.get(chart_id)
 

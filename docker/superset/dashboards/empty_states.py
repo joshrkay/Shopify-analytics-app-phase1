@@ -8,7 +8,7 @@ Handles various scenarios where data may be missing or edge cases occur:
 - Null values in numeric fields
 """
 
-from typing import Any
+from typing import Any, Optional
 from enum import Enum
 from dataclasses import dataclass
 
@@ -28,8 +28,8 @@ class EmptyStateConfig:
     type: EmptyStateType
     message: str
     icon: str
-    action_text: str | None
-    action_url: str | None
+    action_text: Optional[str]
+    action_url: Optional[str]
 
 
 # Empty state messages and configurations
@@ -103,7 +103,7 @@ def get_empty_state_message(state_type: EmptyStateType) -> str:
     return config.message if config else 'No data available.'
 
 
-def get_empty_state_config(state_type: EmptyStateType) -> EmptyStateConfig | None:
+def get_empty_state_config(state_type: EmptyStateType) -> Optional[EmptyStateConfig]:
     """Get the full configuration for an empty state type."""
     return EMPTY_STATE_CONFIGS.get(state_type)
 
@@ -111,7 +111,7 @@ def get_empty_state_config(state_type: EmptyStateType) -> EmptyStateConfig | Non
 def format_edge_case_value(
     value: Any,
     metric_name: str,
-    edge_case_type: str | None = None
+    edge_case_type: Optional[str] = None
 ) -> str:
     """
     Format a value for display, handling edge cases.
@@ -138,7 +138,7 @@ def format_edge_case_value(
     return str(value)
 
 
-def should_show_empty_state(row_count: int, has_filters: bool = False) -> EmptyStateType | None:
+def should_show_empty_state(row_count: int, has_filters: bool = False) -> Optional[EmptyStateType]:
     """
     Determine if an empty state should be shown based on data.
 
@@ -157,7 +157,7 @@ def should_show_empty_state(row_count: int, has_filters: bool = False) -> EmptyS
     return None
 
 
-def get_roas_display_value(revenue: float | None, spend: float | None) -> str:
+def get_roas_display_value(revenue: Optional[float], spend: Optional[float]) -> str:
     """
     Get ROAS display value with edge case handling.
 
@@ -178,7 +178,7 @@ def get_roas_display_value(revenue: float | None, spend: float | None) -> str:
     return f'{roas:.2f}'
 
 
-def get_ctr_display_value(clicks: int | None, impressions: int | None) -> str:
+def get_ctr_display_value(clicks: Optional[int], impressions: Optional[int]) -> str:
     """
     Get CTR display value with edge case handling.
 
@@ -199,7 +199,7 @@ def get_ctr_display_value(clicks: int | None, impressions: int | None) -> str:
     return f'{ctr:.2f}%'
 
 
-def get_cpc_display_value(spend: float | None, clicks: int | None) -> str:
+def get_cpc_display_value(spend: Optional[float], clicks: Optional[int]) -> str:
     """
     Get CPC display value with edge case handling.
 
@@ -220,7 +220,7 @@ def get_cpc_display_value(spend: float | None, clicks: int | None) -> str:
     return f'${cpc:.2f}'
 
 
-def get_cpa_display_value(spend: float | None, conversions: int | None) -> str:
+def get_cpa_display_value(spend: Optional[float], conversions: Optional[int]) -> str:
     """
     Get CPA display value with edge case handling.
 

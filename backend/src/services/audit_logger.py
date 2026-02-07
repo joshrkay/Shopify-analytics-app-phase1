@@ -586,6 +586,92 @@ def emit_dashboard_viewed(
         )
 
 
+def emit_dashboard_filtered(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    dashboard_id: str,
+    filter_state: dict[str, Any],
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit analytics.dashboard.filtered when a user applies filters."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.ANALYTICS_DASHBOARD_FILTERED,
+            resource_type=_ANALYTICS_RESOURCE_TYPE,
+            resource_id=dashboard_id,
+            metadata={
+                "dashboard_id": dashboard_id,
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "filter_state": filter_state,
+            },
+            correlation_id=correlation_id,
+            source="superset",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_dashboard_filtered_failed",
+            extra={"tenant_id": tenant_id, "dashboard_id": dashboard_id},
+            exc_info=True,
+        )
+
+
+def emit_dashboard_drilldown_used(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    dashboard_id: str,
+    source_chart_id: int,
+    target_chart_id: int,
+    filter_state: dict[str, Any],
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit analytics.dashboard.drilldown_used when a user drills down."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.ANALYTICS_DRILLDOWN_USED,
+            resource_type=_ANALYTICS_RESOURCE_TYPE,
+            resource_id=dashboard_id,
+            metadata={
+                "dashboard_id": dashboard_id,
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "source_chart_id": source_chart_id,
+                "target_chart_id": target_chart_id,
+                "filter_state": filter_state,
+            },
+            correlation_id=correlation_id,
+            source="superset",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_dashboard_drilldown_used_failed",
+            extra={"tenant_id": tenant_id, "dashboard_id": dashboard_id},
+            exc_info=True,
+        )
+
+
 def emit_explore_accessed(
     db: Session,
     tenant_id: str,

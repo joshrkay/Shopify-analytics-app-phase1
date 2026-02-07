@@ -1,0 +1,74 @@
+{
+    "dashboard_title": "Core Merchant Dashboard",
+    "slug": "core_merchant_dashboard",
+    "position_json": "{\"CHART-Revenue\":{\"children\":[],\"id\":\"CHART-Revenue\",\"meta\":{\"chartId\":1,\"height\":50,\"sliceName\":\"Revenue KPI\",\"width\":3},\"parents\":[\"ROOT_ID\",\"GRID_ID\",\"ROW-1\"],\"type\":\"CHART\"},\"CHART-Orders\":{\"children\":[],\"id\":\"CHART-Orders\",\"meta\":{\"chartId\":2,\"height\":50,\"sliceName\":\"Orders KPI\",\"width\":3},\"parents\":[\"ROOT_ID\",\"GRID_ID\",\"ROW-1\"],\"type\":\"CHART\"},\"CHART-ROAS\":{\"children\":[],\"id\":\"CHART-ROAS\",\"meta\":{\"chartId\":3,\"height\":50,\"sliceName\":\"ROAS KPI\",\"width\":3},\"parents\":[\"ROOT_ID\",\"GRID_ID\",\"ROW-1\"],\"type\":\"CHART\"},\"CHART-CAC\":{\"children\":[],\"id\":\"CHART-CAC\",\"meta\":{\"chartId\":4,\"height\":50,\"sliceName\":\"CAC KPI\",\"width\":3},\"parents\":[\"ROOT_ID\",\"GRID_ID\",\"ROW-1\"],\"type\":\"CHART\"},\"CHART-RevenueTrend\":{\"children\":[],\"id\":\"CHART-RevenueTrend\",\"meta\":{\"chartId\":5,\"height\":50,\"sliceName\":\"Revenue Trend\",\"width\":6},\"parents\":[\"ROOT_ID\",\"GRID_ID\",\"ROW-2\"],\"type\":\"CHART\"},\"CHART-OrdersTrend\":{\"children\":[],\"id\":\"CHART-OrdersTrend\",\"meta\":{\"chartId\":6,\"height\":50,\"sliceName\":\"Orders Trend\",\"width\":6},\"parents\":[\"ROOT_ID\",\"GRID_ID\",\"ROW-2\"],\"type\":\"CHART\"},\"CHART-ChannelRevenue\":{\"children\":[],\"id\":\"CHART-ChannelRevenue\",\"meta\":{\"chartId\":7,\"height\":50,\"sliceName\":\"Revenue by Channel\",\"width\":6},\"parents\":[\"ROOT_ID\",\"GRID_ID\",\"ROW-3\"],\"type\":\"CHART\"},\"CHART-ChannelROAS\":{\"children\":[],\"id\":\"CHART-ChannelROAS\",\"meta\":{\"chartId\":8,\"height\":50,\"sliceName\":\"ROAS by Channel\",\"width\":6},\"parents\":[\"ROOT_ID\",\"GRID_ID\",\"ROW-3\"],\"type\":\"CHART\"},\"GRID_ID\":{\"children\":[\"ROW-1\",\"ROW-2\",\"ROW-3\"],\"id\":\"GRID_ID\",\"parents\":[\"ROOT_ID\"],\"type\":\"GRID\"},\"ROOT_ID\":{\"children\":[\"GRID_ID\"],\"id\":\"ROOT_ID\",\"type\":\"ROOT\"},\"ROW-1\":{\"children\":[\"CHART-Revenue\",\"CHART-Orders\",\"CHART-ROAS\",\"CHART-CAC\"],\"id\":\"ROW-1\",\"meta\":{\"background\":\"BACKGROUND_TRANSPARENT\"},\"parents\":[\"ROOT_ID\",\"GRID_ID\"],\"type\":\"ROW\"},\"ROW-2\":{\"children\":[\"CHART-RevenueTrend\",\"CHART-OrdersTrend\"],\"id\":\"ROW-2\",\"meta\":{\"background\":\"BACKGROUND_TRANSPARENT\"},\"parents\":[\"ROOT_ID\",\"GRID_ID\"],\"type\":\"ROW\"},\"ROW-3\":{\"children\":[\"CHART-ChannelRevenue\",\"CHART-ChannelROAS\"],\"id\":\"ROW-3\",\"meta\":{\"background\":\"BACKGROUND_TRANSPARENT\"},\"parents\":[\"ROOT_ID\",\"GRID_ID\"],\"type\":\"ROW\"}}",
+    "css": "",
+    "json_metadata": "{\"filter_scopes\":{\"CHART-Revenue\":{\"region\":[\"ROOT_ID\"],\"target\":[\"ROOT_ID\"]}},\"native_filter_configuration\":[{\"id\":\"NATIVE_FILTER-DateRange\",\"cascadeParentIds\":[],\"chartsInScope\":[\"CHART-Revenue\",\"CHART-Orders\",\"CHART-ROAS\",\"CHART-CAC\",\"CHART-RevenueTrend\",\"CHART-OrdersTrend\",\"CHART-ChannelRevenue\",\"CHART-ChannelROAS\"],\"controlValues\":{\"defaultToFirstItem\":false,\"enableEmptyFilter\":false,\"inverseSelection\":false,\"multiSelect\":false},\"defaultValue\":\"Last 30 days\",\"filterType\":\"filter_time\",\"name\":\"Date Range\",\"scope\":{\"rootPath\":[\"ROOT_ID\"],\"excluded\":[]},\"targets\":[{\"column\":{\"name\":\"order_date\"},\"datasetId\":1}]},{\"id\":\"NATIVE_FILTER-Channel\",\"cascadeParentIds\":[],\"chartsInScope\":[\"CHART-Revenue\",\"CHART-Orders\",\"CHART-ROAS\",\"CHART-CAC\",\"CHART-RevenueTrend\",\"CHART-OrdersTrend\",\"CHART-ChannelRevenue\",\"CHART-ChannelROAS\"],\"controlValues\":{\"defaultToFirstItem\":false,\"enableEmptyFilter\":true,\"inverseSelection\":false,\"multiSelect\":true},\"defaultValue\":null,\"filterType\":\"filter_select\",\"name\":\"Channel\",\"scope\":{\"rootPath\":[\"ROOT_ID\"],\"excluded\":[]},\"targets\":[{\"column\":{\"name\":\"channel\"},\"datasetId\":1}]}]}",
+    "published": true,
+    "slices": [
+        {
+            "slice_name": "Revenue KPI",
+            "viz_type": "big_number",
+            "datasource_type": "table",
+            "datasource_name": "fact_orders_current",
+            "schema": "analytics",
+            "params": "{\"metric\":\"sum__revenue\",\"subheader\":\"Total Revenue\"}"
+        },
+        {
+            "slice_name": "Orders KPI",
+            "viz_type": "big_number",
+            "datasource_type": "table",
+            "datasource_name": "fact_orders_current",
+            "schema": "analytics",
+            "params": "{\"metric\":\"count\",\"subheader\":\"Total Orders\"}"
+        },
+        {
+            "slice_name": "ROAS KPI",
+            "viz_type": "big_number",
+            "datasource_type": "table",
+            "datasource_name": "fact_marketing_spend_current",
+            "schema": "analytics",
+            "params": "{\"metric\":\"roas\",\"subheader\":\"Return on Ad Spend\"}"
+        },
+        {
+            "slice_name": "CAC KPI",
+            "viz_type": "big_number",
+            "datasource_type": "table",
+            "datasource_name": "fact_marketing_spend_current",
+            "schema": "analytics",
+            "params": "{\"metric\":\"cac\",\"subheader\":\"Customer Acquisition Cost\"}"
+        },
+        {
+            "slice_name": "Revenue Trend",
+            "viz_type": "echarts_timeseries_line",
+            "datasource_type": "table",
+            "datasource_name": "fact_orders_current",
+            "schema": "analytics",
+            "params": "{\"metrics\":[\"sum__revenue\"],\"time_grain_sqla\":\"P1D\"}"
+        },
+        {
+            "slice_name": "Orders Trend",
+            "viz_type": "echarts_timeseries_line",
+            "datasource_type": "table",
+            "datasource_name": "fact_orders_current",
+            "schema": "analytics",
+            "params": "{\"metrics\":[\"count\"],\"time_grain_sqla\":\"P1D\"}"
+        },
+        {
+            "slice_name": "Revenue by Channel",
+            "viz_type": "echarts_timeseries_bar",
+            "datasource_type": "table",
+            "datasource_name": "fact_campaign_performance_current",
+            "schema": "analytics",
+            "params": "{\"metrics\":[\"sum__revenue\"],\"groupby\":[\"channel\"]}"
+        },
+        {
+            "slice_name": "ROAS by Channel",
+            "viz_type": "echarts_timeseries_bar",
+            "datasource_type": "table",
+            "datasource_name": "fact_campaign_performance_current",
+            "schema": "analytics",
+            "params": "{\"metrics\":[\"roas\"],\"groupby\":[\"channel\"]}"
+        }
+    ]
+}

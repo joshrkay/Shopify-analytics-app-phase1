@@ -9,7 +9,7 @@ Each chart answers one of the 5 core merchant questions:
 5. Trend WoW - Line chart
 """
 
-from typing import Any
+from typing import Any, Optional
 
 # Chart type constants for Superset
 class ChartTypes:
@@ -339,7 +339,7 @@ CHART_DEFINITIONS: dict[int, dict[str, Any]] = {
 }
 
 
-def get_chart_by_id(chart_id: int) -> dict[str, Any] | None:
+def get_chart_by_id(chart_id: int) -> Optional[dict[str, Any]]:
     """Retrieve a chart definition by its ID."""
     return CHART_DEFINITIONS.get(chart_id)
 

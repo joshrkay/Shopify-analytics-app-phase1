@@ -219,6 +219,8 @@ class AuditAction(str, Enum):
 
     # Superset Analytics events (Story 5.1.7)
     ANALYTICS_DASHBOARD_VIEWED = "analytics.dashboard.viewed"
+    ANALYTICS_DASHBOARD_FILTERED = "analytics.dashboard.filtered"
+    ANALYTICS_DRILLDOWN_USED = "analytics.dashboard.drilldown_used"
     ANALYTICS_EXPLORE_ACCESSED = "analytics.explore.accessed"
     ANALYTICS_ACCESS_DENIED = "analytics.access.denied"
     ANALYTICS_CROSS_TENANT_BLOCKED = "analytics.cross_tenant.blocked"
