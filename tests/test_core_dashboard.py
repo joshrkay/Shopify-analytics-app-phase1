@@ -24,24 +24,27 @@ class TestCoreMerchantDashboardQA:
     
     def test_dashboard_filters(self, dashboard_json):
         """Verify required filters (Date, Channel) are present."""
-        # Note: Superset JSON structure for native filters is complex.
-        # This checks simplistic presence in the file content or structure if available.
-        # For generated JSON, we often look for filter configuration.
-        
-        # If filters are defined in 'native_filter_configuration', check them.
-        # If not populated in the initial skeleton, this test highlights the gap.
-        
-        content = json.dumps(dashboard_json)
-        # Check for filter labels or keywords
-        # Adjust expectation based on actual implementation
-        # assert "native_filter_configuration" in str(content) 
-        pass 
+        metadata = json.loads(dashboard_json.get("json_metadata", "{}"))
+        filters = metadata.get("native_filter_configuration", [])
+        filter_names = {flt.get("name") for flt in filters}
+
+        assert "Date Range" in filter_names
+        assert "Channel" in filter_names
+
+        date_filter = next(flt for flt in filters if flt.get("name") == "Date Range")
+        assert date_filter.get("defaultValue") == "Last 30 days"
+        date_columns = {target["column"]["name"] for target in date_filter.get("targets", [])}
+        assert {"order_date", "campaign_date", "period_start"} <= date_columns
+
+        channel_filter = next(flt for flt in filters if flt.get("name") == "Channel")
+        channel_columns = {target["column"]["name"] for target in channel_filter.get("targets", [])}
+        assert {"channel", "platform"} <= channel_columns
 
     def test_chart_data_sources(self, dashboard_json):
         """Verify charts use the canonical 'fact_*_current' tables."""
         slices = dashboard_json.get("slices", [])
         
-        valid_sources = ["fact_orders_current", "fact_marketing_spend_current", "fact_campaign_performance_current"]
+        valid_sources = ["fact_orders_current", "fact_campaign_performance", "fct_cac"]
         
         for slc in slices:
             ds_name = slc.get("datasource_name")
@@ -52,7 +55,9 @@ class TestCoreMerchantDashboardQA:
         # Superset dashboards are responsive by default, but we check if
         # we haven't locked sizes in a way that breaks mobile.
         # This is a heuristic check.
-        pass
+        position_json = json.loads(dashboard_json.get("position_json", "{}"))
+        chart_meta = [item.get("meta", {}) for item in position_json.values() if item.get("type") == "CHART"]
+        assert all(meta.get("width") for meta in chart_meta)
 
     def test_kpi_consistency(self, dashboard_json):
         """Verify 4 Key KPIs are present."""

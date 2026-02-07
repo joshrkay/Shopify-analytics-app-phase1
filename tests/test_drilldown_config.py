@@ -35,6 +35,14 @@ class TestDrilldownConfig:
         assert 'Last+7+days' in url or 'Last%207%20days' in url
         assert 'slice_id=4' in url
 
+    def test_generate_drilldown_url_disallowed_dashboard(self):
+        with pytest.raises(ValueError):
+            generate_drilldown_url(
+                dashboard_id='explore',
+                target_chart_id=4,
+                filters={'date_range': 'Last 7 days', 'channel': 'Social'}
+            )
+
     def test_drilldown_chain_integrity(self):
         """Verify the revenue chain is correctly linked."""
         steps = REVENUE_DRILLDOWN_CHAIN.steps
@@ -60,4 +68,8 @@ class TestDrilldownConfig:
         # Chart ID 6 is the detail step
         context = get_drilldown_context(source_chart_id=6, clicked_value='123', clicked_column='order_id')
         
+        assert context['has_drilldown'] is False
+
+    def test_get_drilldown_context_disallowed_column(self):
+        context = get_drilldown_context(source_chart_id=1, clicked_value='123', clicked_column='order_id')
         assert context['has_drilldown'] is False

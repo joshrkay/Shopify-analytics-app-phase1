@@ -43,6 +43,32 @@ class DrilldownChain:
     enabled: bool = True
 
 
+# Only allow drilldowns to predefined dashboards (no Explore links).
+ALLOWED_DASHBOARD_TARGETS: set[str] = {
+    "core_merchant_dashboard",
+    "merchant-analytics",
+}
+
+ALLOWED_DRILLDOWN_FILTERS: set[str] = {
+    "date_range",
+    "channel",
+    "order_date",
+    "order_created_at",
+    "campaign_date",
+    "period_start",
+    "platform",
+}
+
+
+def _validate_drilldown_target(dashboard_id: str) -> None:
+    if dashboard_id not in ALLOWED_DASHBOARD_TARGETS:
+        raise ValueError(f"Dashboard '{dashboard_id}' is not an allowed drilldown target.")
+
+
+def _sanitize_filters(filters: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in filters.items() if key in ALLOWED_DRILLDOWN_FILTERS}
+
+
 # Revenue Drilldown Chain
 REVENUE_DRILLDOWN_CHAIN = DrilldownChain(
     name='Revenue Drill',
@@ -83,14 +109,14 @@ DRILLDOWN_CHAINS: dict[str, Any] = {
                     'chart_id': 1,
                     'groupby': 'order_created_at',
                     'label': 'Revenue Summary',
-                    'next_level_filters': ['date'],
+                    'next_level_filters': ['date_range', 'channel'],
                 },
                 {
                     'level': 2,
                     'chart_id': 4,
                     'groupby': 'tags',
                     'label': 'Revenue by Category',
-                    'next_level_filters': ['date', 'category'],
+                    'next_level_filters': ['date_range', 'channel'],
                 },
                 {
                     'level': 3,
@@ -110,7 +136,7 @@ DRILLDOWN_CHAINS: dict[str, Any] = {
                     'chart_id': 2,
                     'groupby': 'platform',
                     'label': 'Spend by Channel',
-                    'next_level_filters': ['platform'],
+                    'next_level_filters': ['date_range', 'channel'],
                 },
                 {
                     'level': 2,
@@ -154,7 +180,10 @@ def generate_drilldown_url(
     import json
     import urllib.parse
 
+    _validate_drilldown_target(dashboard_id)
+
     # Build native filter state
+    filters = _sanitize_filters(filters)
     native_filter_state = []
     for filter_id, value in filters.items():
         if value is not None:
@@ -196,6 +225,14 @@ def get_drilldown_context(
     Returns:
         Drilldown context with target chart and filters
     """
+    if clicked_column not in ALLOWED_DRILLDOWN_FILTERS:
+        return {
+            'has_drilldown': False,
+            'target_chart_id': None,
+            'target_groupby': None,
+            'filter_column': None,
+            'filter_value': None,
+        }
     # Find which chain contains this source chart
     for chain in DRILLDOWN_CHAINS['chains']:
         for i, step in enumerate(chain['steps']):

@@ -5,7 +5,6 @@ This is a monitoring script intended to be run in a CI/CD pipeline or scheduled 
 """
 
 import time
-import random
 import logging
 
 # Configure logging
@@ -19,29 +18,20 @@ DASHBOARD_SLA_SECONDS = 5.0
 class SLAViolation(Exception):
     pass
 
-def check_dashboard_performance(dashboard_slug: str):
+def check_dashboard_performance(dashboard_slug: str) -> bool:
     logger.info(f"Starting SLA check for dashboard: {dashboard_slug}")
     
     # Simulate Dashboard Load
     start_time = time.time()
     
     # 1. Dashboard Metadata Load (Mock)
-    time.sleep(random.uniform(0.1, 0.5)) 
-    
-    # 2. Parallel Chart Loading (Mock)
-    # Simulate 6 charts loading
-    chart_times = []
-    for i in range(6):
-        # random load time between 0.5s and 2.5s (mostly passing)
-        load_time = random.uniform(0.5, 2.5)
-        
-        # Occasional spike for testing resilience
-        if random.random() < 0.05: 
-            load_time = 3.5
-            
-        chart_times.append(load_time)
-        
-    dashboard_load_time = max(chart_times) + 0.2 # Max chart time + overhead
+    metadata_load_time = 0.2
+    time.sleep(metadata_load_time)
+
+    # 2. Parallel Chart Loading (Mock, deterministic)
+    chart_times = [1.2, 1.4, 1.8, 2.0, 2.1, 1.6]
+
+    dashboard_load_time = max(chart_times) + 0.2  # Max chart time + overhead
     
     # Verification
     

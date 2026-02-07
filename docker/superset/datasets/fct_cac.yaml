@@ -1,0 +1,113 @@
+# Superset Dataset: CAC (Metric View)
+# Source: analytics/models/metrics/fct_cac.sql
+#
+# Column allow-list: ONLY columns listed below are exposed in Superset.
+# Internal columns (customer_key, source_system, source_primary_key) are excluded.
+#
+# IMPORTANT:
+# - CAC is defined in the metrics layer (no ad-hoc SQL in dashboards)
+# - RLS enforced via tenant_id
+# - Grain: one row per tenant + platform + period + currency (+ campaign_id)
+
+dataset:
+  table_name: fct_cac
+  schema: metrics
+  description: |
+    Customer Acquisition Cost (CAC) metric view.
+    Calculated from paid spend and new customer acquisition in dbt.
+    Provides CAC per platform and period for dashboarding.
+
+  dbt_model: fct_cac
+  metric_version: v1
+  version_status: active
+
+  columns:
+    - column_name: tenant_id
+      type: VARCHAR
+      description: Tenant identifier (RLS enforced)
+      filterable: false
+      groupby: false
+      is_rls_column: true
+
+    - column_name: platform
+      type: VARCHAR
+      description: Marketing platform (channel)
+      filterable: true
+      groupby: true
+
+    - column_name: period_start
+      type: TIMESTAMP
+      description: Start of the aggregation period
+      filterable: true
+      groupby: true
+      is_dttm: true
+
+    - column_name: period_type
+      type: VARCHAR
+      description: Aggregation period (daily, weekly, monthly, all_time)
+      filterable: true
+      groupby: true
+
+    - column_name: currency
+      type: VARCHAR
+      description: Currency code
+      filterable: true
+      groupby: true
+
+    - column_name: campaign_id
+      type: VARCHAR
+      description: Campaign identifier
+      filterable: true
+      groupby: true
+
+    - column_name: new_customers
+      type: INTEGER
+      description: Count of new customers
+      filterable: false
+      groupby: false
+
+    - column_name: total_spend
+      type: NUMERIC
+      description: Total ad spend
+      filterable: false
+      groupby: false
+
+    - column_name: cac
+      type: NUMERIC
+      description: Customer acquisition cost
+      filterable: false
+      groupby: false
+
+  metrics:
+    - metric_name: total_spend
+      expression: SUM(total_spend)
+      description: Total ad spend
+
+    - metric_name: cac
+      expression: |
+        CASE
+          WHEN SUM(new_customers) = 0 OR SUM(new_customers) IS NULL THEN 0
+          ELSE ROUND((SUM(total_spend) / SUM(new_customers))::NUMERIC, 2)
+        END
+      description: Customer acquisition cost
+
+  rls:
+    enabled: true
+    clause: "tenant_id = '{{ current_user.tenant_id }}'"
+
+  guardrails:
+    max_date_range_days: 90
+    query_timeout_seconds: 20
+    row_limit: 50000
+    cache_ttl_minutes: 30
+
+  visualizations_allowed:
+    - line
+    - bar
+    - table
+    - number
+
+  visualizations_disallowed:
+    - scatter
+    - geo_map
+    - box_plot
