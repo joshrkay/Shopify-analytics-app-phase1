@@ -17,6 +17,7 @@ Story 8.1 - AI Insight Generation (Read-Only Analytics)
 import enum
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import (
     Column,
@@ -175,7 +176,7 @@ class InsightJob(Base, TimestampMixin, TenantScopedMixin):
         self.status = InsightJobStatus.RUNNING
         self.started_at = datetime.now(timezone.utc)
 
-    def mark_success(self, insights_generated: int, metadata: dict | None = None) -> None:
+    def mark_success(self, insights_generated: int, metadata: Optional[dict] = None) -> None:
         """Mark job as successful with results."""
         self.status = InsightJobStatus.SUCCESS
         self.completed_at = datetime.now(timezone.utc)
