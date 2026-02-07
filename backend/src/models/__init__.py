@@ -98,6 +98,10 @@ from src.models.dataset_metrics import (
     DatasetMetrics,
     DatasetSyncStatus,
 )
+from src.models.explore_guardrail_exception import (
+    ExploreGuardrailException,
+    GuardrailExceptionStatus,
+)
 try:
     from .merchant_data_health import (
         MerchantHealthState,
@@ -228,4 +232,6 @@ __all__ = [
     "DatasetVersionStatus",
     "DatasetMetrics",
     "DatasetSyncStatus",
+    "ExploreGuardrailException",
+    "GuardrailExceptionStatus",
 ]

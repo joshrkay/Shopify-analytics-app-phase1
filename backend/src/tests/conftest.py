@@ -102,6 +102,7 @@ def db_engine():
     from src.models import dashboard_metric_binding  # noqa: F401 - Story 2.3
     from src.models import connector_credential  # noqa: F401 - Credential Vault
     from src.models import connection_consent  # noqa: F401 - Consent Flow
+    from src.models import explore_guardrail_exception  # noqa: F401 - Story 5.4
 
     Base.metadata.create_all(bind=engine)
 

@@ -915,6 +915,33 @@ AUDITABLE_EVENTS: Final[dict[str, list[str]]] = {
         "operation_type",
     ],
 
+    # =========================================================================
+    # EXPLORE GUARDRAIL BYPASS EVENTS (Story 5.4)
+    # =========================================================================
+    "explore.guardrail_bypass_requested": [
+        "user_id",
+        "dataset",
+        "reason",
+    ],
+    "explore.guardrail_bypass_approved": [
+        "user_id",
+        "approved_by",
+        "duration_minutes",
+    ],
+    "explore.guardrail_bypass_used": [
+        "user_id",
+        "dataset",
+        "query_hash",
+    ],
+    "explore.guardrail_bypass_expired": [
+        "user_id",
+        "expired_at",
+    ],
+    "explore.guardrail_bypass_revoked": [
+        "user_id",
+        "revoked_by",
+    ],
+
     "ai.safety.kill_switch_activated": [
         "tenant_id",
         "flag_name",

@@ -30,10 +30,14 @@ from explore_guardrails import (
     EXPLORE_FEATURE_FLAGS,
     VisualizationType,
     ValidationResult,
+    GuardrailBypassException,
+    InMemoryGuardrailBypassStore,
     get_allowed_dimensions_for_dataset,
     get_allowed_metrics_for_dataset,
     get_allowed_visualizations_for_dataset,
     get_explorable_datasets,
+    get_guardrail_bypass_banner,
+    get_heavy_query_warnings,
     validate_explore_request,
 )
 
@@ -347,10 +351,10 @@ class TestQueryEnforcer:
         assert "LIMIT 50000" in result
 
     def test_row_limit_enforced(self, enforcer):
-        """Existing high LIMIT should be reduced."""
+        """Existing high LIMIT should be blocked."""
         query = "SELECT * FROM fact_orders LIMIT 100000"
-        result = enforcer.add_row_limit(query)
-        assert "LIMIT 50000" in result
+        with pytest.raises(ValueError):
+            enforcer.add_row_limit(query)
 
     def test_low_row_limit_preserved(self, enforcer):
         """Low LIMIT should be preserved."""
@@ -368,6 +372,150 @@ class TestQueryEnforcer:
         """Cache config should use 30-minute TTL."""
         config = enforcer.get_cache_config()
         assert config['CACHE_DEFAULT_TIMEOUT'] == 1800  # 30 minutes in seconds
+
+
+class TestGuardrailBypass:
+    """Test approved guardrail bypass behavior."""
+
+    def test_bypass_allows_extended_date_range(self):
+        """Approved bypass should allow longer date range."""
+        now = datetime.utcnow()
+        exception = GuardrailBypassException(
+            id="bypass-1",
+            user_id="user-123",
+            requested_by_role="super_admin",
+            approved_by="tech-lead-1",
+            approved_by_role="analytics_tech_lead",
+            dataset_names=("fact_orders",),
+            expires_at=now + timedelta(minutes=30),
+            reason="Investigation",
+            created_at=now,
+        )
+        store = InMemoryGuardrailBypassStore([exception])
+
+        query_params = {
+            "dimensions": ["order_date"],
+            "metrics": ["SUM(revenue)"],
+            "group_by": ["order_date"],
+            "start_date": now - timedelta(days=180),
+            "end_date": now,
+            "filters": [],
+            "viz_type": "line",
+        }
+
+        is_valid, error = validate_explore_request(
+            "merchant",
+            "fact_orders",
+            query_params,
+            user_id="user-123",
+            bypass_store=store,
+        )
+        assert is_valid is True
+        assert error is None
+
+    def test_bypass_does_not_allow_disabled_dataset(self):
+        """Bypass must not allow PII-disabled datasets."""
+        now = datetime.utcnow()
+        exception = GuardrailBypassException(
+            id="bypass-2",
+            user_id="user-123",
+            requested_by_role="super_admin",
+            approved_by="security-1",
+            approved_by_role="security_engineer",
+            dataset_names=("dim_customers",),
+            expires_at=now + timedelta(minutes=30),
+            reason="Investigation",
+            created_at=now,
+        )
+        store = InMemoryGuardrailBypassStore([exception])
+
+        query_params = {
+            "dimensions": [],
+            "metrics": [],
+            "group_by": [],
+            "filters": [],
+        }
+
+        is_valid, error = validate_explore_request(
+            "merchant",
+            "dim_customers",
+            query_params,
+            user_id="user-123",
+            bypass_store=store,
+        )
+        assert is_valid is False
+        assert error == "Dataset 'dim_customers' is not available for exploration"
+
+    def test_bypass_rejected_with_invalid_roles(self):
+        """Bypass must require super admin request and approved roles."""
+        now = datetime.utcnow()
+        exception = GuardrailBypassException(
+            id="bypass-3",
+            user_id="user-123",
+            requested_by_role="analyst",
+            approved_by="tech-lead-1",
+            approved_by_role="analytics_tech_lead",
+            dataset_names=("fact_orders",),
+            expires_at=now + timedelta(minutes=30),
+            reason="Investigation",
+            created_at=now,
+        )
+        store = InMemoryGuardrailBypassStore([exception])
+
+        query_params = {
+            "dimensions": ["order_date"],
+            "metrics": ["SUM(revenue)"],
+            "group_by": ["order_date"],
+            "start_date": now - timedelta(days=180),
+            "end_date": now,
+            "filters": [],
+            "viz_type": "line",
+        }
+
+        is_valid, error = validate_explore_request(
+            "merchant",
+            "fact_orders",
+            query_params,
+            user_id="user-123",
+            bypass_store=store,
+        )
+        assert is_valid is False
+        assert error == "Date range of 180 days exceeds maximum of 90 days"
+
+    def test_bypass_banner_displays_remaining_minutes(self):
+        """Bypass banner shows remaining minutes until expiry."""
+        now = datetime.utcnow()
+        exception = GuardrailBypassException(
+            id="bypass-4",
+            user_id="user-123",
+            requested_by_role="super_admin",
+            approved_by="security-1",
+            approved_by_role="security_engineer",
+            dataset_names=("fact_orders",),
+            expires_at=now + timedelta(minutes=37),
+            reason="Investigation",
+            created_at=now,
+        )
+        banner = get_guardrail_bypass_banner(exception, now=now)
+        assert "expires in 37 minutes" in banner
+
+
+class TestHeavyQueryWarnings:
+    """Test inline warning generation for heavy queries."""
+
+    def test_warns_on_high_limits(self):
+        query_params = {
+            "dimensions": ["order_date"],
+            "metrics": ["SUM(revenue)"] * PERFORMANCE_GUARDRAILS.max_metrics_per_query,
+            "group_by": ["order_date"] * PERFORMANCE_GUARDRAILS.max_group_by_dimensions,
+            "start_date": datetime.utcnow() - timedelta(
+                days=int(PERFORMANCE_GUARDRAILS.max_date_range_days * 0.8)
+            ),
+            "end_date": datetime.utcnow(),
+            "filters": [{}] * PERFORMANCE_GUARDRAILS.max_filters,
+        }
+        warnings = get_heavy_query_warnings(query_params, PERFORMANCE_GUARDRAILS)
+        assert warnings
 
 
 # ============================================================================
