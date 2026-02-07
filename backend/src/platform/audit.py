@@ -88,6 +88,13 @@ class AuditAction(str, Enum):
     AI_ACTION_EXECUTED = "ai.action_executed"
     AI_ACTION_REJECTED = "ai.action_rejected"
 
+    # Explore guardrail bypass events (Story 5.4)
+    EXPLORE_GUARDRAIL_BYPASS_REQUESTED = "explore.guardrail_bypass_requested"
+    EXPLORE_GUARDRAIL_BYPASS_APPROVED = "explore.guardrail_bypass_approved"
+    EXPLORE_GUARDRAIL_BYPASS_USED = "explore.guardrail_bypass_used"
+    EXPLORE_GUARDRAIL_BYPASS_EXPIRED = "explore.guardrail_bypass_expired"
+    EXPLORE_GUARDRAIL_BYPASS_REVOKED = "explore.guardrail_bypass_revoked"
+
     # Data export events
     EXPORT_REQUESTED = "export.requested"
     EXPORT_COMPLETED = "export.completed"
