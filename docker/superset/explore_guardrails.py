@@ -442,8 +442,9 @@ class EnvGuardrailBypassStore(GuardrailBypassStore):
             except (KeyError, ValueError, TypeError):
                 continue
             exception = GuardrailBypassException(
-                id=str(entry.get("id")),
-                user_id=str(entry.get("user_id")),
+                id=str(entry.get("id", "")),
+                user_id=str(entry.get("user_id", "")),
+
                 requested_by_role=str(entry.get("requested_by_role", "")),
                 approved_by=str(entry.get("approved_by", "")),
                 approved_by_role=str(entry.get("approved_by_role", "")),
