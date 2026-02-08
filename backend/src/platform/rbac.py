@@ -76,6 +76,9 @@ def has_permission(tenant_context: TenantContext, permission: Permission) -> boo
     """
     Check if tenant context has the specified permission.
 
+    Checks data-driven resolved_permissions first (Story 5.5.1).
+    Falls back to hardcoded ROLE_PERMISSIONS matrix if resolved_permissions is None.
+
     Args:
         tenant_context: The current tenant context from JWT
         permission: The permission to check
@@ -83,12 +86,18 @@ def has_permission(tenant_context: TenantContext, permission: Permission) -> boo
     Returns:
         True if any of the user's roles grant this permission
     """
+    resolved = getattr(tenant_context, "resolved_permissions", None)
+    if resolved is not None:
+        return permission.value in resolved
     return roles_have_permission(tenant_context.roles, permission)
 
 
 def has_any_permission(tenant_context: TenantContext, permissions: list[Permission]) -> bool:
     """
     Check if tenant context has any of the specified permissions.
+
+    Checks data-driven resolved_permissions first (Story 5.5.1).
+    Falls back to hardcoded ROLE_PERMISSIONS matrix if resolved_permissions is None.
 
     Args:
         tenant_context: The current tenant context from JWT
@@ -97,6 +106,9 @@ def has_any_permission(tenant_context: TenantContext, permissions: list[Permissi
     Returns:
         True if any of the user's roles grant any of the permissions
     """
+    resolved = getattr(tenant_context, "resolved_permissions", None)
+    if resolved is not None:
+        return any(p.value in resolved for p in permissions)
     user_permissions = get_permissions_for_roles(tenant_context.roles)
     return bool(user_permissions.intersection(permissions))
 
@@ -105,6 +117,9 @@ def has_all_permissions(tenant_context: TenantContext, permissions: list[Permiss
     """
     Check if tenant context has all of the specified permissions.
 
+    Checks data-driven resolved_permissions first (Story 5.5.1).
+    Falls back to hardcoded ROLE_PERMISSIONS matrix if resolved_permissions is None.
+
     Args:
         tenant_context: The current tenant context from JWT
         permissions: List of permissions to check
@@ -112,6 +127,9 @@ def has_all_permissions(tenant_context: TenantContext, permissions: list[Permiss
     Returns:
         True if user has all of the specified permissions
     """
+    resolved = getattr(tenant_context, "resolved_permissions", None)
+    if resolved is not None:
+        return all(p.value in resolved for p in permissions)
     user_permissions = get_permissions_for_roles(tenant_context.roles)
     return all(p in user_permissions for p in permissions)
 

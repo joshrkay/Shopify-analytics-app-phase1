@@ -203,6 +203,11 @@ class AuditAction(str, Enum):
     IDENTITY_SUPER_ADMIN_GRANTED = "identity.super_admin_granted"
     IDENTITY_SUPER_ADMIN_REVOKED = "identity.super_admin_revoked"
 
+    # Agency Access events (Story 5.5.2)
+    AGENCY_ACCESS_REQUESTED = "agency_access.requested"
+    AGENCY_ACCESS_APPROVED = "agency_access.approved"
+    AGENCY_ACCESS_DENIED = "agency_access.denied"
+
     # Identity collision events
     IDENTITY_COLLISION_DETECTED = "identity.identity_collision_detected"
 

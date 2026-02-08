@@ -1080,3 +1080,142 @@ def emit_dataset_version_rolled_back(
             },
             exc_info=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# Agency access audit event emitters (Story 5.5.2)
+# ---------------------------------------------------------------------------
+
+_AGENCY_ACCESS_RESOURCE_TYPE = "agency_access_request"
+
+
+def emit_agency_access_requested(
+    db: Session,
+    tenant_id: str,
+    requesting_user_id: str,
+    request_id: str,
+    requested_role_slug: str,
+    requesting_org_id: str | None = None,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit agency_access.requested when an agency user requests access to a tenant."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_REQUESTED,
+            resource_type=_AGENCY_ACCESS_RESOURCE_TYPE,
+            resource_id=request_id,
+            metadata={
+                "request_id": request_id,
+                "requesting_user_id": requesting_user_id,
+                "tenant_id": tenant_id,
+                "requested_role_slug": requested_role_slug,
+                "requesting_org_id": requesting_org_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_requested_failed",
+            extra={"request_id": request_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+def emit_agency_access_approved(
+    db: Session,
+    tenant_id: str,
+    request_id: str,
+    requesting_user_id: str,
+    reviewed_by: str,
+    role_slug: str,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit agency_access.approved when a tenant admin approves a request."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_APPROVED,
+            resource_type=_AGENCY_ACCESS_RESOURCE_TYPE,
+            resource_id=request_id,
+            metadata={
+                "request_id": request_id,
+                "requesting_user_id": requesting_user_id,
+                "reviewed_by": reviewed_by,
+                "role_slug": role_slug,
+                "tenant_id": tenant_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_approved_failed",
+            extra={"request_id": request_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+def emit_agency_access_denied(
+    db: Session,
+    tenant_id: str,
+    request_id: str,
+    requesting_user_id: str,
+    reviewed_by: str,
+    review_note: str | None = None,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit agency_access.denied when a tenant admin denies a request."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_DENIED,
+            resource_type=_AGENCY_ACCESS_RESOURCE_TYPE,
+            resource_id=request_id,
+            metadata={
+                "request_id": request_id,
+                "requesting_user_id": requesting_user_id,
+                "reviewed_by": reviewed_by,
+                "review_note": review_note or "",
+                "tenant_id": tenant_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.DENIED,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_denied_failed",
+            extra={"request_id": request_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
