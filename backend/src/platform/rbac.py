@@ -76,6 +76,9 @@ def has_permission(tenant_context: TenantContext, permission: Permission) -> boo
     """
     Check if tenant context has the specified permission.
 
+    Checks data-driven resolved_permissions first (Story 5.5.1).
+    Falls back to hardcoded ROLE_PERMISSIONS matrix if resolved_permissions is None.
+
     Args:
         tenant_context: The current tenant context from JWT
         permission: The permission to check
@@ -83,12 +86,18 @@ def has_permission(tenant_context: TenantContext, permission: Permission) -> boo
     Returns:
         True if any of the user's roles grant this permission
     """
+    resolved = getattr(tenant_context, "resolved_permissions", None)
+    if resolved is not None:
+        return permission.value in resolved
     return roles_have_permission(tenant_context.roles, permission)
 
 
 def has_any_permission(tenant_context: TenantContext, permissions: list[Permission]) -> bool:
     """
     Check if tenant context has any of the specified permissions.
+
+    Checks data-driven resolved_permissions first (Story 5.5.1).
+    Falls back to hardcoded ROLE_PERMISSIONS matrix if resolved_permissions is None.
 
     Args:
         tenant_context: The current tenant context from JWT
@@ -97,6 +106,9 @@ def has_any_permission(tenant_context: TenantContext, permissions: list[Permissi
     Returns:
         True if any of the user's roles grant any of the permissions
     """
+    resolved = getattr(tenant_context, "resolved_permissions", None)
+    if resolved is not None:
+        return any(p.value in resolved for p in permissions)
     user_permissions = get_permissions_for_roles(tenant_context.roles)
     return bool(user_permissions.intersection(permissions))
 
@@ -105,6 +117,9 @@ def has_all_permissions(tenant_context: TenantContext, permissions: list[Permiss
     """
     Check if tenant context has all of the specified permissions.
 
+    Checks data-driven resolved_permissions first (Story 5.5.1).
+    Falls back to hardcoded ROLE_PERMISSIONS matrix if resolved_permissions is None.
+
     Args:
         tenant_context: The current tenant context from JWT
         permissions: List of permissions to check
@@ -112,6 +127,9 @@ def has_all_permissions(tenant_context: TenantContext, permissions: list[Permiss
     Returns:
         True if user has all of the specified permissions
     """
+    resolved = getattr(tenant_context, "resolved_permissions", None)
+    if resolved is not None:
+        return all(p.value in resolved for p in permissions)
     user_permissions = get_permissions_for_roles(tenant_context.roles)
     return all(p in user_permissions for p in permissions)
 
@@ -130,11 +148,49 @@ def has_role(tenant_context: TenantContext, role: Role) -> bool:
     return role.value in [r.lower() for r in tenant_context.roles]
 
 
+def _try_emit_rbac_denied(
+    tenant_id: str,
+    user_id: str,
+    permission_str: str,
+    endpoint: str,
+    method: str,
+    roles: list[str],
+) -> None:
+    """Emit rbac.denied audit event, never crashing the caller."""
+    try:
+        from src.database.session import get_db_session_sync
+        from src.services.audit_logger import emit_rbac_denied
+
+        session = next(get_db_session_sync())
+        try:
+            emit_rbac_denied(
+                db=session,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                permission=permission_str,
+                endpoint=endpoint,
+                method=method,
+                roles=roles,
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+        finally:
+            session.close()
+    except Exception:
+        logger.debug(
+            "rbac.emit_audit_failed",
+            extra={"user_id": user_id, "permission": permission_str},
+            exc_info=True,
+        )
+
+
 def require_permission(permission: Permission) -> Callable:
     """
     Decorator to require a specific permission for an endpoint.
 
     Raises 403 if the user doesn't have the required permission.
+    Emits rbac.denied audit event on denial (Story 5.5.5).
 
     Usage:
         @app.get("/api/billing")
@@ -159,6 +215,14 @@ def require_permission(permission: Permission) -> Callable:
                         "path": request.url.path,
                         "method": request.method,
                     }
+                )
+                _try_emit_rbac_denied(
+                    tenant_id=tenant_context.tenant_id,
+                    user_id=tenant_context.user_id,
+                    permission_str=permission.value,
+                    endpoint=request.url.path,
+                    method=request.method,
+                    roles=tenant_context.roles,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -197,6 +261,7 @@ def require_any_permission(*permissions: Permission) -> Callable:
             tenant_context = get_tenant_context(request)
 
             if not has_any_permission(tenant_context, list(permissions)):
+                perm_str = ",".join(p.value for p in permissions)
                 logger.warning(
                     "Permission denied (any)",
                     extra={
@@ -207,6 +272,14 @@ def require_any_permission(*permissions: Permission) -> Callable:
                         "path": request.url.path,
                         "method": request.method,
                     }
+                )
+                _try_emit_rbac_denied(
+                    tenant_id=tenant_context.tenant_id,
+                    user_id=tenant_context.user_id,
+                    permission_str=perm_str,
+                    endpoint=request.url.path,
+                    method=request.method,
+                    roles=tenant_context.roles,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -237,6 +310,7 @@ def require_all_permissions(*permissions: Permission) -> Callable:
             tenant_context = get_tenant_context(request)
 
             if not has_all_permissions(tenant_context, list(permissions)):
+                perm_str = ",".join(p.value for p in permissions)
                 logger.warning(
                     "Permission denied (all)",
                     extra={
@@ -247,6 +321,14 @@ def require_all_permissions(*permissions: Permission) -> Callable:
                         "path": request.url.path,
                         "method": request.method,
                     }
+                )
+                _try_emit_rbac_denied(
+                    tenant_id=tenant_context.tenant_id,
+                    user_id=tenant_context.user_id,
+                    permission_str=perm_str,
+                    endpoint=request.url.path,
+                    method=request.method,
+                    roles=tenant_context.roles,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -290,6 +372,14 @@ def require_role(role: Role) -> Callable:
                         "path": request.url.path,
                         "method": request.method,
                     }
+                )
+                _try_emit_rbac_denied(
+                    tenant_id=tenant_context.tenant_id,
+                    user_id=tenant_context.user_id,
+                    permission_str=f"role:{role.value}",
+                    endpoint=request.url.path,
+                    method=request.method,
+                    roles=tenant_context.roles,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -340,6 +430,14 @@ def check_permission_or_raise(
                 "path": request.url.path,
                 "method": request.method,
             }
+        )
+        _try_emit_rbac_denied(
+            tenant_id=tenant_context.tenant_id,
+            user_id=tenant_context.user_id,
+            permission_str=permission.value,
+            endpoint=request.url.path,
+            method=request.method,
+            roles=tenant_context.roles,
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

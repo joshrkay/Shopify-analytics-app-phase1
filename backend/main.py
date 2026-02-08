@@ -42,6 +42,8 @@ from src.api.routes import user_tenants
 from src.api.routes import dashboard_bindings
 from src.api.dq import routes as sync_health
 from src.api.routes import admin_diagnostics
+from src.api.routes import agency_access
+from src.api.routes import auth_refresh_jwt
 
 # Configure structured logging
 logging.basicConfig(
@@ -216,6 +218,14 @@ app.include_router(dashboard_bindings.router)
 # Include admin diagnostics routes (requires admin role)
 # Story 4.2 - Data Quality Root Cause Signals
 app.include_router(admin_diagnostics.router)
+
+# Include agency access routes (requires authentication)
+# Story 5.5.2 - Agency Access Request + Tenant Approval Workflow
+app.include_router(agency_access.router)
+
+# Include auth JWT refresh routes (requires authentication)
+# Story 5.5.3 - Tenant Selector + JWT Refresh for Active Tenant Context
+app.include_router(auth_refresh_jwt.router)
 
 
 # Global exception handler for tenant isolation errors

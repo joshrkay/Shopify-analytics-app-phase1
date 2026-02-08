@@ -26,8 +26,8 @@ import { hasMultiTenantAccess } from '../types/agency';
 import {
   fetchAssignedStores,
   fetchUserContext,
-  switchActiveStore,
 } from '../services/agencyApi';
+import { refreshTenantToken } from '../utils/auth';
 
 interface AgencyState {
   // User information
@@ -40,6 +40,7 @@ interface AgencyState {
   activeTenantId: string | null;
   allowedTenants: string[];
   assignedStores: AssignedStore[];
+  accessExpiringAt: string | null;
 
   // UI state
   loading: boolean;
@@ -62,6 +63,7 @@ const initialState: AgencyState = {
   activeTenantId: null,
   allowedTenants: [],
   assignedStores: [],
+  accessExpiringAt: null,
   loading: true,
   error: null,
 };
@@ -149,17 +151,14 @@ export function AgencyProvider({
       try {
         setState((prev) => ({ ...prev, loading: true, error: null }));
 
-        const response = await switchActiveStore(tenantId);
+        const response = await refreshTenantToken(tenantId, state.allowedTenants);
 
-        if (response.success) {
-          setState((prev) => ({
-            ...prev,
-            activeTenantId: response.active_tenant_id,
-            loading: false,
-          }));
-        } else {
-          throw new Error('Failed to switch store');
-        }
+        setState((prev) => ({
+          ...prev,
+          activeTenantId: response.active_tenant_id,
+          accessExpiringAt: response.access_expiring_at,
+          loading: false,
+        }));
       } catch (err) {
         console.error('Failed to switch store:', err);
         setState((prev) => ({
