@@ -22,7 +22,8 @@ import {
   Badge,
 } from '@shopify/polaris';
 import type { AssignedStore, AssignedStoresResponse } from '../types/agency';
-import { fetchAssignedStores, switchActiveStore } from '../services/agencyApi';
+import { fetchAssignedStores } from '../services/agencyApi';
+import { refreshTenantToken } from '../utils/auth';
 
 interface AgencyStoreSelectorProps {
   /** Current user ID */
@@ -42,6 +43,7 @@ interface StoreSelectorState {
   switching: boolean;
   error: string | null;
   maxStoresAllowed: number;
+  accessExpiringAt: string | null;
 }
 
 export function AgencyStoreSelector({
@@ -57,6 +59,7 @@ export function AgencyStoreSelector({
     switching: false,
     error: null,
     maxStoresAllowed: 0,
+    accessExpiringAt: null,
   });
 
   // Fetch assigned stores on mount
@@ -111,19 +114,24 @@ export function AgencyStoreSelector({
       try {
         setState((prev) => ({ ...prev, switching: true, error: null }));
 
-        const response = await switchActiveStore(tenantId);
+        const response = await refreshTenantToken(
+          tenantId,
+          state.stores.map((s) => s.tenant_id),
+        );
 
-        if (response.success) {
-          setState((prev) => ({
-            ...prev,
-            selectedTenantId: response.active_tenant_id,
-            switching: false,
-          }));
+        setState((prev) => ({
+          ...prev,
+          selectedTenantId: response.active_tenant_id,
+          accessExpiringAt: response.access_expiring_at,
+          switching: false,
+        }));
 
-          // Notify parent of store change
-          onStoreChange(response.active_tenant_id, response.store);
-        } else {
-          throw new Error('Failed to switch store');
+        // Notify parent of store change
+        const store = state.stores.find(
+          (s) => s.tenant_id === response.active_tenant_id,
+        );
+        if (store) {
+          onStoreChange(response.active_tenant_id, store);
         }
       } catch (err) {
         console.error('Failed to switch store:', err);
@@ -202,6 +210,17 @@ export function AgencyStoreSelector({
 
   return (
     <Box padding="400">
+      {state.accessExpiringAt && (
+        <Box paddingBlockEnd="300">
+          <Banner title="Access expiring soon" tone="warning">
+            <p>
+              Your access to this store expires at{' '}
+              {new Date(state.accessExpiringAt).toLocaleString()}.
+              Contact your administrator to maintain access.
+            </p>
+          </Banner>
+        </Box>
+      )}
       <InlineStack gap="400" align="center" blockAlign="center">
         <Text as="span" variant="bodyMd" fontWeight="semibold">
           Client Store:

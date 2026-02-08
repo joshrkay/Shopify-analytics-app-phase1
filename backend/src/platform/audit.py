@@ -208,6 +208,15 @@ class AuditAction(str, Enum):
     AGENCY_ACCESS_APPROVED = "agency_access.approved"
     AGENCY_ACCESS_DENIED = "agency_access.denied"
 
+    # Auth JWT events (Story 5.5.3)
+    AUTH_JWT_ISSUED = "auth.jwt_issued"
+    AUTH_JWT_REFRESH = "auth.jwt_refresh"
+    TENANT_CONTEXT_SWITCHED = "tenant.context_switched"
+
+    # Grace-period revocation events (Story 5.5.4)
+    AGENCY_ACCESS_REVOKED = "agency_access.revoked"
+    AGENCY_ACCESS_EXPIRED = "agency_access.expired"
+
     # Identity collision events
     IDENTITY_COLLISION_DETECTED = "identity.identity_collision_detected"
 

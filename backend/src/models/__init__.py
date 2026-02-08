@@ -16,6 +16,8 @@ from src.models.role import Role, RolePermission
 from src.models.user_role_assignment import UserRoleAssignment
 # Agency access models (Story 5.5.2)
 from src.models.agency_access_request import AgencyAccessRequest, AgencyAccessRequestStatus
+# Access revocation models (Story 5.5.4)
+from src.models.access_revocation import AccessRevocation, RevocationStatus
 from src.models.store import ShopifyStore
 from src.models.plan import Plan, PlanFeature
 from src.models.subscription import Subscription
@@ -246,4 +248,7 @@ __all__ = [
     # Agency access models (Story 5.5.2)
     "AgencyAccessRequest",
     "AgencyAccessRequestStatus",
+    # Access revocation models (Story 5.5.4)
+    "AccessRevocation",
+    "RevocationStatus",
 ]

@@ -172,8 +172,12 @@ class AgencyAccessRequest(Base, TimestampMixin):
         """Check if this request can still be reviewed."""
         if not self.is_pending:
             return False
-        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
-            return False
+        if self.expires_at:
+            expires = self.expires_at
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expires:
+                return False
         return True
 
     def approve(self, reviewed_by: str, review_note: Optional[str] = None) -> None:

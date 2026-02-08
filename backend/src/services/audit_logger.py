@@ -21,6 +21,7 @@ Story 4.1 - Data Quality Rules
 
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -1217,5 +1218,180 @@ def emit_agency_access_denied(
         logger.warning(
             "audit_logger.emit_agency_access_denied_failed",
             extra={"request_id": request_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# JWT refresh and tenant context audit event emitters (Story 5.5.3)
+# ---------------------------------------------------------------------------
+
+
+def emit_jwt_refresh(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    previous_tenant_id: str | None = None,
+    access_surface: str = "external_app",
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit auth.jwt_refresh when a JWT is refreshed for tenant switching."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AUTH_JWT_REFRESH,
+            resource_type="auth",
+            metadata={
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "previous_tenant_id": previous_tenant_id,
+                "access_surface": access_surface,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_jwt_refresh_failed",
+            extra={"user_id": user_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+def emit_tenant_context_switched(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    previous_tenant_id: str | None = None,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit tenant.context_switched when a user switches active tenant."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.TENANT_CONTEXT_SWITCHED,
+            resource_type="tenant",
+            metadata={
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "previous_tenant_id": previous_tenant_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_tenant_context_switched_failed",
+            extra={"user_id": user_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Grace-period revocation audit event emitters (Story 5.5.4)
+# ---------------------------------------------------------------------------
+
+_REVOCATION_RESOURCE_TYPE = "access_revocation"
+
+
+def emit_agency_access_revoked(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    revoked_by: str | None = None,
+    expires_at: object | None = None,
+    grace_period_hours: int = 24,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit agency_access.revoked when access revocation enters grace period."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_REVOKED,
+            resource_type=_REVOCATION_RESOURCE_TYPE,
+            metadata={
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "revoked_by": revoked_by,
+                "expires_at": expires_at.isoformat() if hasattr(expires_at, "isoformat") else str(expires_at),
+                "grace_period_hours": grace_period_hours,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_revoked_failed",
+            extra={"user_id": user_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+def emit_agency_access_expired(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    revocation_id: str | None = None,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit agency_access.expired when grace period ends and access is enforced."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_EXPIRED,
+            resource_type=_REVOCATION_RESOURCE_TYPE,
+            resource_id=revocation_id,
+            metadata={
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "revocation_id": revocation_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="worker",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_expired_failed",
+            extra={"user_id": user_id, "tenant_id": tenant_id},
             exc_info=True,
         )

@@ -132,9 +132,15 @@ def _generate_jwt_token(
     allowed_tenants: List[str],
     billing_tier: str,
     org_id: str,
+    access_surface: str = "external_app",
+    access_expiring_at: Optional[datetime] = None,
 ) -> str:
     """
     Generate a new JWT token with updated tenant context.
+
+    Args:
+        access_surface: "shopify_embed" or "external_app"
+        access_expiring_at: Grace period expiry (Story 5.5.4)
 
     NOTE: In production, this should call your auth service (e.g., Clerk)
     to issue a new token. This is a placeholder implementation.
@@ -142,7 +148,6 @@ def _generate_jwt_token(
     import jwt
     import os
 
-    # Get JWT secret from environment
     jwt_secret = os.getenv("JWT_SECRET", "development-secret-change-in-prod")
 
     payload = {
@@ -154,9 +159,13 @@ def _generate_jwt_token(
         "roles": roles,
         "allowed_tenants": allowed_tenants,
         "billing_tier": billing_tier,
+        "access_surface": access_surface,
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(hours=1),
     }
+
+    if access_expiring_at:
+        payload["access_expiring_at"] = access_expiring_at.isoformat()
 
     return jwt.encode(payload, jwt_secret, algorithm="HS256")
 
