@@ -21,6 +21,7 @@ Story 4.1 - Data Quality Rules
 
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -1083,23 +1084,159 @@ def emit_dataset_version_rolled_back(
 
 
 # ---------------------------------------------------------------------------
-# JWT embed token audit event emitters (Phase 1 - JWT Issuance)
+# Agency access audit event emitters (Story 5.5.2)
 # ---------------------------------------------------------------------------
 
-_JWT_RESOURCE_TYPE = "embed_token"
+_AGENCY_ACCESS_RESOURCE_TYPE = "agency_access_request"
 
 
-def emit_jwt_issued(
+def emit_agency_access_requested(
     db: Session,
     tenant_id: str,
-    user_id: str,
-    dashboard_id: str,
-    access_surface: str,
-    lifetime_minutes: int,
+    requesting_user_id: str,
+    request_id: str,
+    requested_role_slug: str,
+    requesting_org_id: str | None = None,
     *,
     correlation_id: str | None = None,
 ) -> None:
-    """Emit auth.jwt_issued when an embed JWT token is generated."""
+    """Emit agency_access.requested when an agency user requests access to a tenant."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_REQUESTED,
+            resource_type=_AGENCY_ACCESS_RESOURCE_TYPE,
+            resource_id=request_id,
+            metadata={
+                "request_id": request_id,
+                "requesting_user_id": requesting_user_id,
+                "tenant_id": tenant_id,
+                "requested_role_slug": requested_role_slug,
+                "requesting_org_id": requesting_org_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_requested_failed",
+            extra={"request_id": request_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+def emit_agency_access_approved(
+    db: Session,
+    tenant_id: str,
+    request_id: str,
+    requesting_user_id: str,
+    reviewed_by: str,
+    role_slug: str,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit agency_access.approved when a tenant admin approves a request."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_APPROVED,
+            resource_type=_AGENCY_ACCESS_RESOURCE_TYPE,
+            resource_id=request_id,
+            metadata={
+                "request_id": request_id,
+                "requesting_user_id": requesting_user_id,
+                "reviewed_by": reviewed_by,
+                "role_slug": role_slug,
+                "tenant_id": tenant_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_approved_failed",
+            extra={"request_id": request_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+def emit_agency_access_denied(
+    db: Session,
+    tenant_id: str,
+    request_id: str,
+    requesting_user_id: str,
+    reviewed_by: str,
+    review_note: str | None = None,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit agency_access.denied when a tenant admin denies a request."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_DENIED,
+            resource_type=_AGENCY_ACCESS_RESOURCE_TYPE,
+            resource_id=request_id,
+            metadata={
+                "request_id": request_id,
+                "requesting_user_id": requesting_user_id,
+                "reviewed_by": reviewed_by,
+                "review_note": review_note or "",
+                "tenant_id": tenant_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.DENIED,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_denied_failed",
+            extra={"request_id": request_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# JWT refresh and tenant context audit event emitters (Story 5.5.3)
+# ---------------------------------------------------------------------------
+
+
+def emit_jwt_refresh(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    previous_tenant_id: str | None = None,
+    access_surface: str = "external_app",
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit auth.jwt_refresh when a JWT is refreshed for tenant switching."""
     try:
         from src.platform.audit import (
             AuditAction,
@@ -1191,13 +1328,15 @@ def emit_jwt_refresh(
         log_system_audit_event_sync(
             db=db,
             tenant_id=tenant_id,
-            action=AuditAction.AUTH_TOKEN_REFRESH,
-            resource_type=_JWT_RESOURCE_TYPE,
-            resource_id=dashboard_id,
+            action=AuditAction.AGENCY_ACCESS_REVOKED,
+            resource_type=_REVOCATION_RESOURCE_TYPE,
             metadata={
                 "user_id": user_id,
                 "tenant_id": tenant_id,
-                "dashboard_id": dashboard_id,
+                "revoked_by": revoked_by,
+                "expires_at": expires_at.isoformat() if hasattr(expires_at, "isoformat") else str(expires_at),
+                "grace_period_hours": grace_period_hours,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             correlation_id=correlation_id,
             source="api",
@@ -1205,7 +1344,104 @@ def emit_jwt_refresh(
         )
     except Exception:
         logger.warning(
-            "audit_logger.emit_jwt_refresh_failed",
-            extra={"tenant_id": tenant_id, "user_id": user_id},
+            "audit_logger.emit_agency_access_revoked_failed",
+            extra={"user_id": user_id, "tenant_id": tenant_id},
+            exc_info=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# RBAC enforcement audit event emitters (Story 5.5.5)
+# ---------------------------------------------------------------------------
+
+_RBAC_RESOURCE_TYPE = "rbac"
+
+
+def emit_rbac_denied(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    permission: str,
+    endpoint: str,
+    method: str = "",
+    roles: list[str] | None = None,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit rbac.denied when a permission check blocks access to an endpoint."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id or "unknown",
+            action=AuditAction.RBAC_DENIED,
+            resource_type=_RBAC_RESOURCE_TYPE,
+            metadata={
+                "user_id": user_id or "unknown",
+                "tenant_id": tenant_id or "unknown",
+                "permission": permission,
+                "endpoint": endpoint,
+                "method": method,
+                "roles": roles or [],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="api",
+            outcome=AuditOutcome.DENIED,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_rbac_denied_failed",
+            extra={
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "permission": permission,
+                "endpoint": endpoint,
+            },
+            exc_info=True,
+        )
+
+
+def emit_agency_access_expired(
+    db: Session,
+    tenant_id: str,
+    user_id: str,
+    revocation_id: str | None = None,
+    *,
+    correlation_id: str | None = None,
+) -> None:
+    """Emit agency_access.expired when grace period ends and access is enforced."""
+    try:
+        from src.platform.audit import (
+            AuditAction,
+            AuditOutcome,
+            log_system_audit_event_sync,
+        )
+
+        log_system_audit_event_sync(
+            db=db,
+            tenant_id=tenant_id,
+            action=AuditAction.AGENCY_ACCESS_EXPIRED,
+            resource_type=_REVOCATION_RESOURCE_TYPE,
+            resource_id=revocation_id,
+            metadata={
+                "user_id": user_id,
+                "tenant_id": tenant_id,
+                "revocation_id": revocation_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            correlation_id=correlation_id,
+            source="worker",
+            outcome=AuditOutcome.SUCCESS,
+        )
+    except Exception:
+        logger.warning(
+            "audit_logger.emit_agency_access_expired_failed",
+            extra={"user_id": user_id, "tenant_id": tenant_id},
             exc_info=True,
         )

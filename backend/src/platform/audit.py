@@ -211,6 +211,23 @@ class AuditAction(str, Enum):
     IDENTITY_SUPER_ADMIN_GRANTED = "identity.super_admin_granted"
     IDENTITY_SUPER_ADMIN_REVOKED = "identity.super_admin_revoked"
 
+    # Agency Access events (Story 5.5.2)
+    AGENCY_ACCESS_REQUESTED = "agency_access.requested"
+    AGENCY_ACCESS_APPROVED = "agency_access.approved"
+    AGENCY_ACCESS_DENIED = "agency_access.denied"
+
+    # Auth JWT events (Story 5.5.3)
+    AUTH_JWT_ISSUED = "auth.jwt_issued"
+    AUTH_JWT_REFRESH = "auth.jwt_refresh"
+    TENANT_CONTEXT_SWITCHED = "tenant.context_switched"
+
+    # Grace-period revocation events (Story 5.5.4)
+    AGENCY_ACCESS_REVOKED = "agency_access.revoked"
+    AGENCY_ACCESS_EXPIRED = "agency_access.expired"
+
+    # RBAC enforcement events (Story 5.5.5)
+    RBAC_DENIED = "rbac.denied"
+
     # Identity collision events
     IDENTITY_COLLISION_DETECTED = "identity.identity_collision_detected"
 

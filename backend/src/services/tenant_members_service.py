@@ -231,19 +231,23 @@ class TenantMembersService:
         tenant_id: str,
         user_id: str,
         revoked_by: Optional[str] = None,
+        grace_period_hours: Optional[int] = None,
     ) -> bool:
         """
-        Revoke a user's access to a tenant.
+        Revoke a user's access to a tenant with grace period.
 
-        Deactivates all role assignments for the user in that tenant.
+        Instead of immediately deactivating roles, initiates a grace-period
+        revocation. Roles remain active during the grace period; a worker
+        job enforces actual deactivation after the grace period ends.
 
         Args:
             tenant_id: Tenant ID
             user_id: User ID to revoke access from
             revoked_by: clerk_user_id of user revoking access
+            grace_period_hours: Override default grace period (env var or 24h)
 
         Returns:
-            True if access was revoked
+            True if revocation was initiated
 
         Raises:
             TenantNotFoundError: If tenant doesn't exist
@@ -267,16 +271,30 @@ class TenantMembersService:
         if self._is_last_admin(tenant.id, user.id):
             raise LastAdminError("Cannot remove the last admin from tenant")
 
-        # Deactivate all roles
-        for role in roles:
-            role.is_active = False
+        # Initiate grace-period revocation (Story 5.5.4)
+        try:
+            from src.services.access_revocation_service import AccessRevocationService
+
+            revocation_service = AccessRevocationService(self.session)
+            kwargs = {
+                "user_id": user.id,
+                "tenant_id": tenant.id,
+                "revoked_by": revoked_by,
+            }
+            if grace_period_hours is not None:
+                kwargs["grace_period_hours"] = grace_period_hours
+            revocation_service.initiate_revocation(**kwargs)
+        except ImportError:
+            # Fallback: immediate deactivation if revocation service not available
+            for role in roles:
+                role.is_active = False
 
         logger.info(
-            "Revoked tenant access",
+            "Revoked tenant access (grace period)",
             extra={
                 "user_id": user.id,
                 "tenant_id": tenant.id,
-                "roles_revoked": len(roles),
+                "roles_count": len(roles),
                 "revoked_by": revoked_by,
             }
         )
