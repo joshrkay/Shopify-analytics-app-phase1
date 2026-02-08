@@ -1309,7 +1309,7 @@ def emit_jwt_revoked(
         )
 
 
-def emit_jwt_refresh(
+def emit_embed_token_refresh(
     db: Session,
     tenant_id: str,
     user_id: str,
@@ -1317,7 +1317,7 @@ def emit_jwt_refresh(
     *,
     correlation_id: str | None = None,
 ) -> None:
-    """Emit auth.jwt_refresh (via AUTH_TOKEN_REFRESH) when an embed token is refreshed."""
+    """Emit auth.token_refresh when an embed token is refreshed."""
     try:
         from src.platform.audit import (
             AuditAction,

@@ -276,13 +276,13 @@ async def refresh_embed_token(
 
         # Emit auth.jwt_refresh audit event
         try:
-            from src.services.audit_logger import emit_jwt_refresh
+            from src.services.audit_logger import emit_embed_token_refresh
             from src.database.session import get_db_session_sync
 
             db_gen = get_db_session_sync()
             db = next(db_gen)
             try:
-                emit_jwt_refresh(
+                emit_embed_token_refresh(
                     db=db,
                     tenant_id=tenant_ctx.tenant_id,
                     user_id=tenant_ctx.user_id,

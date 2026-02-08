@@ -181,7 +181,7 @@ class AuditAction(str, Enum):
     AUDIT_RETENTION_FAILED = "audit.retention.failed"
 
     # JWT Embed events (Phase 1 - JWT Issuance)
-    AUTH_JWT_ISSUED = "auth.jwt_issued"
+    # NOTE: AUTH_JWT_ISSUED already defined above (Story 5.5.3)
     AUTH_JWT_REVOKED = "auth.jwt_revoked"
     EMBED_NAVIGATION_BLOCKED = "embed.navigation_blocked"
     EMBED_LOAD_FAILED = "embed.load_failed"
