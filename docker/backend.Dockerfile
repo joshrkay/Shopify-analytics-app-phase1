@@ -1,3 +1,28 @@
+###############################################################################
+# Stage 1: Build the React frontend
+###############################################################################
+FROM node:20-slim AS frontend-build
+
+WORKDIR /app/frontend
+
+# Copy dependency files first for caching
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --production=false
+
+# Copy frontend source and build
+COPY frontend/ ./
+
+# VITE_CLERK_PUBLISHABLE_KEY must be set at build time since Vite
+# inlines environment variables into the bundle.
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
+
+RUN npm run build
+
+
+###############################################################################
+# Stage 2: Python backend + built frontend static files
+###############################################################################
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -16,6 +41,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy application code
 COPY backend /app/backend
+
+# Copy built frontend from stage 1 into backend/static
+COPY --from=frontend-build /app/frontend/dist /app/backend/static
 
 # Ensure python can import /app/backend/src
 ENV PYTHONPATH=/app/backend

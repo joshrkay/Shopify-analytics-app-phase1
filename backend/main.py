@@ -7,10 +7,12 @@ All routes require valid JWT with tenant context.
 
 import os
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.platform.tenant_context import TenantContextMiddleware
@@ -126,11 +128,6 @@ tenant_middleware = TenantContextMiddleware()
 app.middleware("http")(tenant_middleware)
 
 
-# Include Shopify embedded app entry point (bypasses Clerk authentication)
-# This handles GET / which is loaded by Shopify Admin in an iframe.
-# Authentication is via Shopify HMAC verification, not Clerk JWT.
-app.include_router(shopify_embed_entry.router)
-
 # Include health route (bypasses authentication)
 app.include_router(health.router)
 
@@ -240,6 +237,42 @@ app.include_router(agency_access.router)
 # Include auth JWT refresh routes (requires authentication)
 # Story 5.5.3 - Tenant Selector + JWT Refresh for Active Tenant Context
 app.include_router(auth_refresh_jwt.router)
+
+
+# ---------------------------------------------------------------------------
+# Serve the built React frontend (bundled into /app/backend/static by Docker)
+# ---------------------------------------------------------------------------
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+if STATIC_DIR.is_dir():
+    # Mount Vite's hashed asset files (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="frontend-assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(request: Request, full_path: str):
+        """
+        SPA catch-all: serve the file if it exists in static/, otherwise
+        serve index.html so React Router can handle client-side routing.
+
+        This MUST be registered after all API routes so /api/* and /health
+        are matched first.
+        """
+        # Try to serve an exact static file (e.g. favicon.ico, vite.svg)
+        file_path = STATIC_DIR / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(str(file_path))
+
+        # Everything else → index.html (React Router handles the route)
+        return FileResponse(str(STATIC_DIR / "index.html"))
+else:
+    logger.warning(
+        "Frontend static directory not found at %s — "
+        "falling back to bootstrap page. Build the frontend and "
+        "copy dist/ to backend/static/ to serve the full UI.",
+        STATIC_DIR,
+    )
+    # Keep the shopify_embed_entry bootstrap fallback if static dir missing
+    app.include_router(shopify_embed_entry.router)
 
 
 # Global exception handler for tenant isolation errors
