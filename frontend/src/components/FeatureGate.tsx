@@ -5,7 +5,7 @@
  * Shows locked state with tooltip when feature is not entitled.
  */
 
-import React, { ReactNode } from 'react';
+import { ReactNode } from 'react';
 import {
   Card,
   BlockStack,

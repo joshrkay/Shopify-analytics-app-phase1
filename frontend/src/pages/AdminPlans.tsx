@@ -29,8 +29,6 @@ import {
   BlockStack,
   InlineStack,
   Divider,
-  Select,
-  Icon,
 } from '@shopify/polaris';
 import {
   PlusIcon,
@@ -343,10 +341,10 @@ export default function AdminPlans() {
   // Table rows
   const tableRows = plans.map((plan) => [
     <BlockStack gap="100" key={`name-${plan.id}`}>
-      <Text variant="bodyMd" fontWeight="semibold">
+      <Text as="p" variant="bodyMd" fontWeight="semibold">
         {plan.display_name}
       </Text>
-      <Text variant="bodySm" tone="subdued">
+      <Text as="p" variant="bodySm" tone="subdued">
         {plan.name}
       </Text>
     </BlockStack>,
@@ -366,7 +364,7 @@ export default function AdminPlans() {
         Synced
       </Badge>
     ) : (
-      <Text key={`shopify-${plan.id}`} tone="subdued">
+      <Text as="span" key={`shopify-${plan.id}`} tone="subdued">
         Not synced
       </Text>
     ),
@@ -419,7 +417,7 @@ export default function AdminPlans() {
           },
         },
       ]}
-      large
+      size="large"
     >
       <Modal.Section>
         <FormLayout>
@@ -588,7 +586,7 @@ export default function AdminPlans() {
               This action cannot be undone.
             </p>
           </Banner>
-          <Text variant="bodyMd">
+          <Text as="p" variant="bodyMd">
             Consider deactivating the plan instead to preserve historical data.
           </Text>
         </BlockStack>
@@ -685,7 +683,7 @@ export default function AdminPlans() {
               <Text variant="headingMd" as="h2">
                 Quick Feature Toggle
               </Text>
-              <Text variant="bodySm" tone="subdued">
+              <Text as="p" variant="bodySm" tone="subdued">
                 Quickly enable or disable features for plans. Changes apply instantly.
               </Text>
 

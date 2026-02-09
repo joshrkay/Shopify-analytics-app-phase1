@@ -19,7 +19,6 @@ import {
   Spinner,
   Banner,
   Box,
-  Divider,
 } from '@shopify/polaris';
 import {
   getSummary,

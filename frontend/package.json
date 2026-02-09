@@ -12,6 +12,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.60.0",
     "@shopify/polaris": "^12.0.0",
     "@shopify/polaris-icons": "^9.0.0",
     "react": "^18.2.0",
@@ -19,8 +20,8 @@
     "react-router-dom": "^6.20.0"
   },
   "devDependencies": {
-    "@testing-library/react": "^14.1.2",
     "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",

@@ -304,7 +304,7 @@ const BackfillModal: React.FC<BackfillModalProps> = ({
                           estimate.days_count / estimate.max_allowed_days > 0.8
                             ? 'critical'
                             : estimate.days_count / estimate.max_allowed_days > 0.5
-                            ? 'attention'
+                            ? 'highlight'
                             : 'success'
                         }
                       />

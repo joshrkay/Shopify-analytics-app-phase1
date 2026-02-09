@@ -37,7 +37,6 @@ export interface TokenRefreshConfig {
   onError?: (error: Error) => void;
 }
 
-const DEFAULT_REFRESH_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_DELAY_MS = 3000;
 
@@ -52,7 +51,6 @@ export class UnifiedTokenRefreshManager {
   private currentToken: string | null = null;
   private dashboardId: string;
   private accessSurface: AccessSurface;
-  private refreshThresholdMs: number;
   private maxRetries: number;
   private retryDelayMs: number;
   private onRefreshed?: (token: EmbedTokenResponse) => void;
@@ -63,7 +61,6 @@ export class UnifiedTokenRefreshManager {
   constructor(config: TokenRefreshConfig) {
     this.dashboardId = config.dashboardId;
     this.accessSurface = config.accessSurface;
-    this.refreshThresholdMs = config.refreshThresholdMs ?? DEFAULT_REFRESH_THRESHOLD_MS;
     this.maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
     this.retryDelayMs = config.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
     this.onRefreshed = config.onRefreshed;

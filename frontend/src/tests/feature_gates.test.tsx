@@ -67,7 +67,7 @@ describe('FeatureGate', () => {
   describe('when feature is entitled', () => {
     it('renders children normally', () => {
       const entitlements = createMockEntitlements();
-      const { container } = renderWithPolaris(
+      renderWithPolaris(
         <FeatureGate feature="premium_analytics" entitlements={entitlements}>
           <div data-testid="content">Premium Content</div>
         </FeatureGate>
@@ -93,7 +93,7 @@ describe('FeatureGate', () => {
 
     it('shows "Upgrade required" tooltip in inline variant per acceptance criteria', () => {
       const entitlements = createMockEntitlements();
-      const { container } = renderWithPolaris(
+      renderWithPolaris(
         <FeatureGate
           feature="data_export"
           entitlements={entitlements}
@@ -147,7 +147,7 @@ describe('FeatureGate', () => {
 
     it('renders inline variant with tooltip', () => {
       const entitlements = createMockEntitlements();
-      const { container } = renderWithPolaris(
+      renderWithPolaris(
         <FeatureGate
           feature="data_export"
           entitlements={entitlements}
@@ -305,8 +305,8 @@ describe('useFeatureEntitlement hook', () => {
     renderWithPolaris(<TestComponent />);
 
     expect(result).not.toBeNull();
-    expect(result?.isEntitled).toBe(true);
-    expect(result?.reason).toBeNull();
+    expect(result!.isEntitled).toBe(true);
+    expect(result!.reason).toBeNull();
   });
 
   it('returns false for non-entitled feature', () => {
@@ -321,8 +321,8 @@ describe('useFeatureEntitlement hook', () => {
     renderWithPolaris(<TestComponent />);
 
     expect(result).not.toBeNull();
-    expect(result?.isEntitled).toBe(false);
-    expect(result?.reason).toContain('higher plan');
+    expect(result!.isEntitled).toBe(false);
+    expect(result!.reason).toContain('higher plan');
   });
 
   it('returns false when entitlements are null', () => {
@@ -336,6 +336,6 @@ describe('useFeatureEntitlement hook', () => {
     renderWithPolaris(<TestComponent />);
 
     expect(result).not.toBeNull();
-    expect(result?.isEntitled).toBe(false);
+    expect(result!.isEntitled).toBe(false);
   });
 });

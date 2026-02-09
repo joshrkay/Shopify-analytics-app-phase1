@@ -20,7 +20,6 @@ vi.mock('../services/embedApi', () => ({
 }));
 
 import { UnifiedTokenRefreshManager } from '../utils/tokenRefresh';
-import type { TokenRefreshConfig } from '../utils/tokenRefresh';
 import { refreshEmbedToken } from '../services/embedApi';
 import type { EmbedTokenResponse } from '../services/embedApi';
 

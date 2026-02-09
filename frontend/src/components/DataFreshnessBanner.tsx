@@ -6,7 +6,6 @@
  * All copy is sourced from freshness_copy.ts to keep text centralized.
  */
 
-import React from 'react';
 import {
   Banner,
   BlockStack,

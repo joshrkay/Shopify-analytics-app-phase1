@@ -18,7 +18,6 @@ import {
   Text,
   Badge,
   ProgressBar,
-  Button,
   EmptyState,
   Box,
 } from '@shopify/polaris';
@@ -256,7 +255,7 @@ const SyncHealth: React.FC = () => {
                     summary.health_score >= 80
                       ? 'success'
                       : summary.health_score >= 50
-                      ? 'attention'
+                      ? 'highlight'
                       : 'critical'
                   }
                 />

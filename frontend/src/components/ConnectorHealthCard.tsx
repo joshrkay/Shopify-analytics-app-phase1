@@ -7,7 +7,6 @@
 
 import React, { useState } from 'react';
 import {
-  Card,
   BlockStack,
   InlineStack,
   Text,
@@ -142,7 +141,7 @@ const ConnectorHealthCard: React.FC<ConnectorHealthCardProps> = ({
 
             {connector.has_open_incidents && (
               <Badge tone="attention">
-                {connector.open_incident_count} Issue{connector.open_incident_count > 1 ? 's' : ''}
+                {`${connector.open_incident_count} Issue${connector.open_incident_count > 1 ? 's' : ''}`}
               </Badge>
             )}
           </InlineStack>

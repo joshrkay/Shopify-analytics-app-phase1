@@ -20,7 +20,6 @@
 
 import {
   generateEmbedToken,
-  refreshEmbedToken,
   TokenRefreshManager,
   isInShopifyAdmin,
 } from '../services/embedApi';
@@ -145,7 +144,7 @@ export class EmbedSessionManager {
     this.config.onSessionRefresh?.(token);
   };
 
-  private handleRefreshError = (error: Error): void => {
+  private handleRefreshError = (_error: Error): void => {
     const maxRetries = this.config.maxRetries ?? DEFAULT_MAX_RETRIES;
     const retryDelay = this.config.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
 

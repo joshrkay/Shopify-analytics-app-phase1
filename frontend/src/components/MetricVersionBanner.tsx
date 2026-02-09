@@ -13,7 +13,6 @@
  * - Banner includes date + version change summary
  */
 
-import React from 'react';
 import {
   Banner,
   Text,
@@ -57,7 +56,7 @@ function MetricBanner({ banner }: { banner: MetricBannerData }) {
         <Text as="p">{banner.message}</Text>
         <InlineStack gap="300" align="start">
           <Badge tone={banner.tone === 'critical' ? 'critical' : undefined}>
-            {banner.metric_name} {banner.current_version}
+            {`${banner.metric_name} ${banner.current_version}`}
           </Badge>
           {banner.change_date && (
             <Text as="span" tone="subdued">
@@ -66,7 +65,7 @@ function MetricBanner({ banner }: { banner: MetricBannerData }) {
           )}
           {banner.new_version_available && (
             <Badge tone="info">
-              {banner.new_version_available} available
+              {`${banner.new_version_available} available`}
             </Badge>
           )}
           {banner.days_until_sunset != null && banner.days_until_sunset > 0 && (

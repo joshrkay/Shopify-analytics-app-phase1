@@ -5,8 +5,6 @@
  */
 
 import { refreshJwtToken } from '../services/agencyApi';
-import { setAuthToken } from '../services/apiUtils';
-
 export interface RefreshResult {
   jwt_token: string;
   active_tenant_id: string;

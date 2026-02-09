@@ -148,7 +148,7 @@ export function ChangelogEntry({
                 borderBlockStartWidth="025"
                 borderColor="border"
               >
-                <Text as="div" variant="bodyMd">
+                <Text as="p" variant="bodyMd">
                   {/* Render content as paragraphs (simple markdown-like) */}
                   {entry.content.split('\n\n').map((paragraph, idx) => (
                     <Box key={idx} paddingBlockEnd="200">

@@ -238,7 +238,7 @@ export function ComponentErrorFallback({
           </Button>
         </InlineStack>
 
-        {process.env.NODE_ENV === 'development' && (
+        {import.meta.env.DEV && (
           <Text as="p" variant="bodySm" tone="subdued">
             Dev: {error.message}
           </Text>

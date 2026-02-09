@@ -36,7 +36,7 @@ export function FaultInjector({
   const [shouldThrow, setShouldThrow] = useState(false);
 
   // Only render in development
-  if (process.env.NODE_ENV === 'production') {
+  if (import.meta.env.PROD) {
     return null;
   }
 
@@ -73,7 +73,7 @@ export function DevErrorPanel() {
   const [errorLevel, setErrorLevel] = useState<'none' | 'root' | 'page' | 'component'>('none');
 
   // Only render in development
-  if (process.env.NODE_ENV === 'production') {
+  if (import.meta.env.PROD) {
     return null;
   }
 

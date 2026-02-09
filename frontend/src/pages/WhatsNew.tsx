@@ -21,7 +21,6 @@ import {
   Spinner,
   EmptyState,
   Pagination,
-  Button,
 } from '@shopify/polaris';
 import { ChangelogEntry } from '../components/changelog/ChangelogEntry';
 import type { ChangelogEntry as ChangelogEntryType, ReleaseType } from '../types/changelog';
@@ -30,7 +29,6 @@ import {
   markAsRead,
   markAllAsRead,
 } from '../services/changelogApi';
-import { getReleaseTypeLabel } from '../types/changelog';
 
 const PAGE_SIZE = 10;
 

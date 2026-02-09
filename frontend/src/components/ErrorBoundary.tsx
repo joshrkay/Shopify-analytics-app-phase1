@@ -10,7 +10,7 @@
  * - Component level: Wrap high-risk components (e.g., embedded iframes)
  */
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 
 export interface ErrorBoundaryProps {
   /** Child components to wrap */
@@ -58,7 +58,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.props.onError?.(error, errorInfo);
 
     // Log to console in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.error('ErrorBoundary caught an error:', error);
       console.error('Component stack:', errorInfo.componentStack);
     }

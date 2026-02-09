@@ -329,7 +329,7 @@ export const ShopifyEmbeddedSuperset: React.FC<ShopifyEmbeddedSupersetProps> = (
       {(state.status === 'ready' || state.status === 'refreshing') && renderIframe()}
 
       {/* Hidden status indicator for debugging */}
-      {process.env.NODE_ENV === 'development' && (
+      {import.meta.env.DEV && (
         <div className="superset-embed-debug">
           Status: {state.status} | Token expires:{' '}
           {state.expiresAt?.toLocaleTimeString() || 'N/A'}

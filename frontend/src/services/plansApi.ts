@@ -134,4 +134,5 @@ export const plansApi = {
 
 export { isApiError } from './apiUtils';
 export type { ApiError } from './apiUtils';
+export type { Plan } from '../types/plans';
 export default plansApi;

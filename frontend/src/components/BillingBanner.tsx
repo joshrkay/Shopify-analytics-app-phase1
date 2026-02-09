@@ -7,12 +7,9 @@
  * - expired: Paywall redirect
  */
 
-import React from 'react';
 import {
   Banner,
-  InlineStack,
   Text,
-  Button,
   BlockStack,
 } from '@shopify/polaris';
 import type { EntitlementsResponse } from '../services/entitlementsApi';

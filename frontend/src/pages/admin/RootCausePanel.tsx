@@ -26,7 +26,6 @@ import {
   Button,
   Select,
   Box,
-  Link,
 } from '@shopify/polaris';
 import { RefreshIcon } from '@shopify/polaris-icons';
 
@@ -140,9 +139,9 @@ function HypothesisCard({ cause }: { cause: RankedCause }) {
             <Text variant="headingSm" as="h3">
               {getCauseTypeLabel(cause.cause_type)}
             </Text>
-            {cause.evidence.signal && (
+            {cause.evidence.signal ? (
               <Badge tone="info">{String(cause.evidence.signal)}</Badge>
-            )}
+            ) : null}
           </InlineStack>
           <ConfidenceBar score={cause.confidence_score} />
         </InlineStack>

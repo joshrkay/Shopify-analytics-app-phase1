@@ -12,15 +12,11 @@
  */
 
 import type {
-  DataChangeEvent,
   ChangeEventsListResponse,
   WhatChangedSummary,
   DataFreshness,
-  RecentSync,
   RecentSyncsResponse,
-  AIActionSummary,
   AIActionsResponse,
-  ConnectorStatusChange,
   ConnectorStatusChangesResponse,
   ChangeEventsFilters,
 } from '../types/whatChanged';

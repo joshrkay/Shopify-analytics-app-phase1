@@ -47,7 +47,7 @@ interface StoreSelectorState {
 }
 
 export function AgencyStoreSelector({
-  userId,
+  userId: _userId,
   onStoreChange,
   isAgencyUser,
   initialTenantId,

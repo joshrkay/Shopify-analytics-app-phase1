@@ -64,7 +64,7 @@ function ThrowOnClickComponent() {
 
 describe('ErrorBoundary', () => {
   // Suppress console.error for these tests since we're testing error handling
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: any;
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

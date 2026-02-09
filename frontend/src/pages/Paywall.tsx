@@ -11,7 +11,6 @@ import {
   Layout,
   Card,
   BlockStack,
-  InlineStack,
   Text,
   Button,
   Banner,
@@ -19,7 +18,8 @@ import {
 } from '@shopify/polaris';
 import { useNavigate } from 'react-router-dom';
 import { fetchEntitlements, type EntitlementsResponse } from '../services/entitlementsApi';
-import { plansApi, type Plan } from '../services/plansApi';
+import { plansApi } from '../services/plansApi';
+import type { Plan } from '../types/plans';
 
 const Paywall: React.FC = () => {
   const navigate = useNavigate();

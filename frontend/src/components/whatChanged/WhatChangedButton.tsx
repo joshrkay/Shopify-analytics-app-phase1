@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Badge, InlineStack, Tooltip } from '@shopify/polaris';
+import { Button, Badge, Tooltip } from '@shopify/polaris';
 import { QuestionCircleIcon } from '@shopify/polaris-icons';
 import { WhatChangedPanel } from './WhatChangedPanel';
 import { hasCriticalIssues } from '../../services/whatChangedApi';
@@ -57,16 +57,7 @@ export function WhatChangedButton({
       icon={QuestionCircleIcon}
       variant={variant === 'floating' ? 'primary' : 'plain'}
     >
-      {variant === 'inline' ? (
-        <InlineStack gap="100" blockAlign="center">
-          <span>What changed?</span>
-          {showBadge && hasCritical && (
-            <Badge tone="critical" size="small">
-              !
-            </Badge>
-          )}
-        </InlineStack>
-      ) : null}
+      {variant === 'inline' ? 'What changed?' : undefined}
     </Button>
   );
 

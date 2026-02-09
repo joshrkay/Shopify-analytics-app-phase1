@@ -117,6 +117,7 @@ export function AgencyProvider({
         activeTenantId: userContext.tenant_id,
         allowedTenants: userContext.allowed_tenants,
         assignedStores: stores,
+        accessExpiringAt: null,
         loading: false,
         error: null,
       });

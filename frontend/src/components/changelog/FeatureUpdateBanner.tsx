@@ -14,7 +14,6 @@ import {
   InlineStack,
   Text,
   Button,
-  Link,
 } from '@shopify/polaris';
 import { getEntriesForFeature, markAsRead } from '../../services/changelogApi';
 import { ChangelogEntry } from './ChangelogEntry';

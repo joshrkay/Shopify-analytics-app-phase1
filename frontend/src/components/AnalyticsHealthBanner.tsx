@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { Banner, Button, Spinner } from '@shopify/polaris';
+import { Banner, Button, Spinner, InlineStack } from '@shopify/polaris';
 import { API_BASE_URL } from '../services/apiUtils';
 import type { AccessSurface } from '../types/embed';
 
@@ -74,15 +74,12 @@ export const AnalyticsHealthBanner: React.FC<AnalyticsHealthBannerProps> = ({
     >
       <p>We're retrying. You can also try manually.</p>
       <div style={{ marginTop: '12px' }}>
-        <Button onClick={onRetry} disabled={isRetrying}>
-          {isRetrying ? (
-            <>
-              <Spinner size="small" /> Retrying...
-            </>
-          ) : (
-            'Retry'
-          )}
-        </Button>
+        <InlineStack gap="200" blockAlign="center">
+            {isRetrying && <Spinner size="small" />}
+            <Button onClick={onRetry} disabled={isRetrying}>
+              {isRetrying ? 'Retrying...' : 'Retry'}
+            </Button>
+          </InlineStack>
       </div>
     </Banner>
   );
