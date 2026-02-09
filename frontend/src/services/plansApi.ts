@@ -131,5 +131,5 @@ export const plansApi = {
   },
 };
 
-export { ApiError } from './apiUtils';
+export type { ApiError } from './apiUtils';
 export default plansApi;
