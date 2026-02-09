@@ -374,3 +374,7 @@ class GAAuditMiddleware(BaseHTTPMiddleware):
             logger.debug("ga_audit_login_failed_failed", exc_info=True)
         finally:
             db.close()
+
+
+# Backward-compatible alias used by main.py
+AuditLoggingMiddleware = GAAuditMiddleware
