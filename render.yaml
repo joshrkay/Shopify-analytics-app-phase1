@@ -84,6 +84,10 @@ services:
       # Encryption key for secrets (set via Render dashboard)
       - key: ENCRYPTION_KEY
         sync: false
+      # Clerk publishable key — passed as Docker build arg so Vite can
+      # inline it into the frontend bundle at build time.
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
 
   # ============================================
   # BACKGROUND WORKER SERVICE
