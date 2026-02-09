@@ -512,8 +512,14 @@ class TenantContextMiddleware:
 
         SECURITY: tenant_id is ONLY extracted from JWT, never from request body/query.
         """
-        # Skip tenant check for health endpoint, webhooks, and API documentation (public)
-        if request.url.path in ("/health", "/docs", "/redoc", "/openapi.json") or request.url.path.startswith("/api/webhooks/"):
+        # Skip tenant check for health endpoint, webhooks, API documentation, and
+        # Shopify embedded app entry point (public paths).
+        # The root path "/" is the Shopify embedded app entry point - Shopify loads
+        # this URL in an iframe with session params (id_token, hmac, shop) as query
+        # parameters, NOT as Bearer tokens. Authentication for this route is handled
+        # by Shopify HMAC verification in the route handler itself.
+        PUBLIC_PATHS = {"/", "/health", "/docs", "/redoc", "/openapi.json"}
+        if request.url.path in PUBLIC_PATHS or request.url.path.startswith("/api/webhooks/"):
             return await call_next(request)
 
         # Check if authentication is configured (set in app lifespan)
