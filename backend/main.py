@@ -49,6 +49,8 @@ from src.api.dq import routes as sync_health
 from src.api.routes import admin_diagnostics
 from src.api.routes import agency_access
 from src.api.routes import auth_refresh_jwt
+from src.api.routes import audit_logs
+from src.api.routes import audit_export
 from src.api.routes import shopify_embed_entry
 
 # Configure structured logging

@@ -20,7 +20,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, Request, HTTPException, status, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.platform.tenant_context import get_tenant_context
 from src.database.session import get_db_session
@@ -47,6 +47,8 @@ router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 class RecommendationResponse(BaseModel):
     """Response model for a single recommendation."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     recommendation_id: str
     related_insight_id: str
     recommendation_type: str
@@ -62,9 +64,6 @@ class RecommendationResponse(BaseModel):
     generated_at: datetime
     is_accepted: bool
     is_dismissed: bool
-
-    class Config:
-        from_attributes = True
 
 
 class RecommendationsListResponse(BaseModel):

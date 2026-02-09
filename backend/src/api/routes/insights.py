@@ -18,7 +18,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, Request, HTTPException, status, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.platform.tenant_context import get_tenant_context
 from src.database.session import get_db_session
@@ -49,6 +49,8 @@ class SupportingMetricResponse(BaseModel):
 class InsightResponse(BaseModel):
     """Response model for a single insight (Story 8.2 format)."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     insight_id: str
     insight_type: str
     severity: str
@@ -63,9 +65,6 @@ class InsightResponse(BaseModel):
     generated_at: datetime
     is_read: bool
     is_dismissed: bool
-
-    class Config:
-        from_attributes = True
 
 
 class InsightsListResponse(BaseModel):

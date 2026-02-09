@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, FrozenSet
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ClerkOrgRole(str, Enum):
@@ -90,8 +90,7 @@ class ClerkJWTClaims(BaseModel):
     verified_at: Optional[str] = Field(None, description="Timestamp when token was verified")
     token_type: Optional[str] = Field(None, description="Type of token (e.g., clerk_jwt)")
 
-    class Config:
-        extra = "allow"  # Allow additional claims
+    model_config = ConfigDict(extra="allow")
 
     @property
     def clerk_user_id(self) -> str:

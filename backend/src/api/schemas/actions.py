@@ -9,7 +9,7 @@ Story 8.5 - Action Execution (Scoped & Reversible)
 from typing import Optional, List, Any
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # =============================================================================
@@ -39,6 +39,8 @@ class StateSnapshot(BaseModel):
 
 class ActionResponse(BaseModel):
     """Response model for a single action."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     action_id: str = Field(..., description="Unique action identifier")
     action_type: str = Field(..., description="Type of action: pause_campaign, adjust_budget, etc.")
@@ -73,9 +75,6 @@ class ActionResponse(BaseModel):
     job_id: Optional[str] = Field(None, description="Execution job ID")
     created_at: datetime = Field(..., description="When action was created")
     updated_at: datetime = Field(..., description="When action was last updated")
-
-    class Config:
-        from_attributes = True
 
 
 class ActionsListResponse(BaseModel):
@@ -113,6 +112,8 @@ class ActionRollbackResponse(BaseModel):
 class ExecutionLogEntry(BaseModel):
     """Response model for a single execution log entry."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str = Field(..., description="Log entry ID")
     event_type: str = Field(..., description="Type of event: execution_started, api_request_sent, etc.")
     event_timestamp: datetime = Field(..., description="When this event occurred")
@@ -127,9 +128,6 @@ class ExecutionLogEntry(BaseModel):
     error_details: Optional[dict] = Field(None, description="Error information if failure")
 
     triggered_by: Optional[str] = Field(None, description="Actor: system, user:id, worker:job_id")
-
-    class Config:
-        from_attributes = True
 
 
 class ExecutionLogsResponse(BaseModel):
@@ -147,6 +145,8 @@ class ExecutionLogsResponse(BaseModel):
 class ActionJobResponse(BaseModel):
     """Response model for an action job."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     job_id: str = Field(..., description="Unique job identifier")
     status: str = Field(..., description="Job status: queued, running, succeeded, failed, partial_success")
     action_count: int = Field(..., description="Number of actions in this job")
@@ -159,9 +159,6 @@ class ActionJobResponse(BaseModel):
     error_message: Optional[str] = Field(None, description="Error message if job failed")
 
     created_at: datetime = Field(..., description="When job was created")
-
-    class Config:
-        from_attributes = True
 
 
 class ActionJobsListResponse(BaseModel):

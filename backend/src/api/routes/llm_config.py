@@ -19,7 +19,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Request, HTTPException, status, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.platform.tenant_context import get_tenant_context
 from src.database.session import get_db_session
@@ -44,6 +44,9 @@ router = APIRouter(prefix="/api/llm", tags=["llm-config"])
 
 class ModelRegistryResponse(BaseModel):
     """Response model for a registered LLM model."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     model_id: str
     display_name: str
     provider: str
@@ -54,20 +57,17 @@ class ModelRegistryResponse(BaseModel):
     capabilities: List[str]
     tier_restriction: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class OrgConfigResponse(BaseModel):
     """Response model for organization LLM configuration."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     primary_model_id: str
     fallback_model_id: Optional[str] = None
     max_tokens_per_request: int
     temperature: float
     monthly_token_budget: Optional[int] = None
-
-    class Config:
-        from_attributes = True
 
 
 class OrgConfigUpdateRequest(BaseModel):
@@ -81,6 +81,9 @@ class OrgConfigUpdateRequest(BaseModel):
 
 class PromptTemplateResponse(BaseModel):
     """Response model for a prompt template."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     template_id: str
     template_key: str
     version: int
@@ -89,9 +92,6 @@ class PromptTemplateResponse(BaseModel):
     is_active: bool
     is_system: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class PromptTemplateCreateRequest(BaseModel):
@@ -113,6 +113,9 @@ class UsageStatsResponse(BaseModel):
 
 class UsageLogResponse(BaseModel):
     """Response model for a single usage log entry."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     model_id: str
     prompt_template_key: Optional[str]
@@ -124,9 +127,6 @@ class UsageLogResponse(BaseModel):
     was_fallback: bool
     response_status: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class UsageLogListResponse(BaseModel):

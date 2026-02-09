@@ -9,7 +9,7 @@ Story 8.4 - Action Proposals (Approval Required)
 from typing import Optional, List, Any
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # =============================================================================
@@ -42,6 +42,8 @@ class ProposedChange(BaseModel):
 class ActionProposalResponse(BaseModel):
     """Response model for a single action proposal."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     proposal_id: str = Field(..., description="Unique proposal identifier")
     action_type: str = Field(..., description="Type of action being proposed")
     status: str = Field(..., description="Current status: proposed, approved, rejected, expired, cancelled")
@@ -59,9 +61,6 @@ class ActionProposalResponse(BaseModel):
     decided_by: Optional[str] = Field(None, description="User ID who approved/rejected")
     decision_reason: Optional[str] = Field(None, description="Reason for rejection")
     source_recommendation_id: Optional[str] = Field(None, description="Source recommendation ID")
-
-    class Config:
-        from_attributes = True
 
 
 class ActionProposalsListResponse(BaseModel):
@@ -104,6 +103,8 @@ class ApproveRejectRequest(BaseModel):
 class AuditEntryResponse(BaseModel):
     """Response model for a single audit entry."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str = Field(..., description="Audit entry ID")
     action: str = Field(..., description="Type of action: created, approved, rejected, expired, cancelled")
     performed_at: datetime = Field(..., description="When the action was performed")
@@ -112,9 +113,6 @@ class AuditEntryResponse(BaseModel):
     previous_status: Optional[str] = Field(None, description="Status before the action")
     new_status: str = Field(..., description="Status after the action")
     reason: Optional[str] = Field(None, description="Optional reason or notes")
-
-    class Config:
-        from_attributes = True
 
 
 class AuditTrailResponse(BaseModel):
