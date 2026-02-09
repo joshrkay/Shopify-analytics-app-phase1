@@ -204,7 +204,7 @@ class GAAuditLog(Base):
     - dashboard_id (nullable)
     - access_surface (shopify_embed | external_app)
     - success (boolean)
-    - metadata (JSONB, sanitized)
+    - event_metadata (JSONB, sanitized)
     - correlation_id (uuid)
     - created_at (timestamp)
     """
@@ -222,7 +222,7 @@ class GAAuditLog(Base):
         String(50), nullable=False, default=AccessSurface.EXTERNAL_APP.value,
     )
     success = Column(Boolean, nullable=False, default=True)
-    metadata = Column(JSONType, nullable=False, default=dict)
+    event_metadata = Column(JSONType, nullable=False, default=dict)
     correlation_id = Column(
         String(36), nullable=False, index=True,
         default=generate_correlation_id,
@@ -277,7 +277,7 @@ class GAAuditEvent:
     Immutable audit event data structure for GA scope.
 
     Construct this before writing to the database.
-    PII in metadata is automatically sanitized before persistence.
+    PII in event_metadata is automatically sanitized before persistence.
     """
     event_type: AuditEventType
     tenant_id: Optional[str] = None
@@ -285,7 +285,7 @@ class GAAuditEvent:
     dashboard_id: Optional[str] = None
     access_surface: AccessSurface = AccessSurface.EXTERNAL_APP
     success: bool = True
-    metadata: dict[str, Any] = field(default_factory=dict)
+    event_metadata: dict[str, Any] = field(default_factory=dict)
     correlation_id: str = field(default_factory=generate_correlation_id)
     created_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc),
@@ -308,7 +308,7 @@ class GAAuditEvent:
                 else self.access_surface
             ),
             "success": self.success,
-            "metadata": PIISanitizer.sanitize(self.metadata),
+            "event_metadata": PIISanitizer.sanitize(self.event_metadata),
             "correlation_id": self.correlation_id,
             "created_at": self.created_at,
         }
