@@ -41,7 +41,7 @@ import {
   XIcon,
 } from '@shopify/polaris-icons';
 
-import { plansApi, ApiError } from '../services/plansApi';
+import { plansApi, isApiError } from '../services/plansApi';
 import type {
   Plan,
   PlanFeature,
@@ -120,7 +120,7 @@ export default function AdminPlans() {
       setPlans(response.plans);
     } catch (err) {
       const message =
-        err instanceof ApiError
+        isApiError(err)
           ? err.detail || err.message
           : 'Failed to load plans';
       setError(message);
@@ -242,7 +242,7 @@ export default function AdminPlans() {
       loadPlans();
     } catch (err) {
       const message =
-        err instanceof ApiError
+        isApiError(err)
           ? err.detail || err.message
           : 'Failed to create plan';
       setError(message);
@@ -268,7 +268,7 @@ export default function AdminPlans() {
       loadPlans();
     } catch (err) {
       const message =
-        err instanceof ApiError
+        isApiError(err)
           ? err.detail || err.message
           : 'Failed to update plan';
       setError(message);
@@ -292,7 +292,7 @@ export default function AdminPlans() {
       loadPlans();
     } catch (err) {
       const message =
-        err instanceof ApiError
+        isApiError(err)
           ? err.detail || err.message
           : 'Failed to delete plan';
       setError(message);
@@ -312,7 +312,7 @@ export default function AdminPlans() {
       loadPlans();
     } catch (err) {
       const message =
-        err instanceof ApiError
+        isApiError(err)
           ? err.detail || err.message
           : 'Failed to toggle feature';
       setError(message);
