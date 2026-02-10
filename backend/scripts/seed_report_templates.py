@@ -50,7 +50,7 @@ REPORT_TEMPLATES = [
     {
         "name": "Revenue Overview",
         "description": "Track gross revenue, net revenue, and order trends over time. Includes daily revenue line chart, revenue by product category, and top products table.",
-        "category": "revenue",
+        "category": "sales",
         "min_billing_tier": "free",
         "config_json": {
             "reports": [
@@ -154,7 +154,7 @@ REPORT_TEMPLATES = [
                 },
                 {
                     "title": "Average Order Value",
-                    "chart_type": "big_number",
+                    "chart_type": "kpi",
                     "dataset_name": "fact_orders_current",
                     "metrics": [
                         {"label": "AOV", "column": "average_order_value", "aggregate": "AVG", "expressionType": "SIMPLE"},
@@ -216,7 +216,7 @@ REPORT_TEMPLATES = [
                 },
                 {
                     "title": "Refund Summary",
-                    "chart_type": "big_number",
+                    "chart_type": "kpi",
                     "dataset_name": "fact_orders_current",
                     "metrics": [
                         {"label": "Refund Amount", "column": "total_refunds", "aggregate": "SUM", "expressionType": "SIMPLE"},

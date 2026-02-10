@@ -1,11 +1,14 @@
 /**
  * TypeScript types for Custom Dashboards, Reports, Templates, Datasets, and Shares.
  *
- * Phase 2D - Frontend Types
+ * Aligned with backend Pydantic schemas in:
+ *   backend/src/api/schemas/custom_dashboards.py
+ *
+ * Phase 3 - Dashboard Builder UI
  */
 
 // =============================================================================
-// Dataset Discovery Types (Phase 2A)
+// Dataset Discovery Types
 // =============================================================================
 
 export interface ColumnMetadata {
@@ -49,17 +52,94 @@ export interface ValidateConfigResponse {
 }
 
 // =============================================================================
-// Chart Preview Types (Phase 2B)
+// Chart Types & Configuration (matches backend ChartConfig schema)
 // =============================================================================
 
-export type AbstractChartType =
-  | 'line'
-  | 'bar'
-  | 'pie'
-  | 'big_number'
-  | 'table'
-  | 'area'
-  | 'scatter';
+/** Valid chart types — must match backend VALID_CHART_TYPES */
+export type ChartType = 'line' | 'bar' | 'area' | 'pie' | 'kpi' | 'table';
+
+export type Aggregation = 'SUM' | 'AVG' | 'COUNT' | 'MIN' | 'MAX';
+
+export type FilterOperator =
+  | '='
+  | '!='
+  | '>'
+  | '<'
+  | '>='
+  | '<='
+  | 'IN'
+  | 'NOT IN'
+  | 'LIKE';
+
+export type TimeGrain = 'P1D' | 'P1W' | 'P1M' | 'P3M' | 'P1Y';
+
+export interface MetricConfig {
+  column: string;
+  aggregation: Aggregation;
+  label?: string;
+  format?: string;
+}
+
+export interface ChartFilter {
+  column: string;
+  operator: FilterOperator;
+  value: unknown;
+}
+
+export interface DisplayConfig {
+  color_scheme?: string;
+  show_legend: boolean;
+  legend_position?: string;
+  axis_label_x?: string;
+  axis_label_y?: string;
+}
+
+export interface ChartConfig {
+  metrics: MetricConfig[];
+  dimensions: string[];
+  time_range: string;
+  time_grain: TimeGrain;
+  filters: ChartFilter[];
+  display: DisplayConfig;
+}
+
+// =============================================================================
+// Grid Position (matches backend GridPosition schema — 12-column grid)
+// =============================================================================
+
+export interface GridPosition {
+  x: number; // 0-11: column start
+  y: number; // 0+: row start
+  w: number; // 1-12: width in columns (x + w <= 12)
+  h: number; // 1-20: height in rows
+}
+
+/** Minimum grid dimensions per chart type (from backend validation) */
+export const MIN_GRID_DIMENSIONS: Record<ChartType, { w: number; h: number }> = {
+  line: { w: 4, h: 3 },
+  bar: { w: 4, h: 3 },
+  area: { w: 4, h: 3 },
+  pie: { w: 3, h: 3 },
+  kpi: { w: 3, h: 2 },
+  table: { w: 6, h: 4 },
+};
+
+export const GRID_COLS = 12;
+
+// =============================================================================
+// Dashboard Filter (dashboard-level filters)
+// =============================================================================
+
+export interface DashboardFilter {
+  column: string;
+  filter_type: 'date_range' | 'select' | 'multi_select';
+  default_value?: unknown;
+  dataset_names: string[];
+}
+
+// =============================================================================
+// Chart Preview Types
+// =============================================================================
 
 export interface MetricDefinition {
   label: string;
@@ -82,7 +162,7 @@ export interface ChartPreviewRequest {
   time_range?: string;
   time_column?: string | null;
   time_grain?: string;
-  viz_type?: AbstractChartType;
+  viz_type?: ChartType;
 }
 
 export interface ChartPreviewResponse {
@@ -96,14 +176,14 @@ export interface ChartPreviewResponse {
 }
 
 // =============================================================================
-// Template Types (Phase 2C)
+// Template Types
 // =============================================================================
 
 export type TemplateCategory =
-  | 'revenue'
+  | 'sales'
   | 'marketing'
-  | 'product'
   | 'customer'
+  | 'product'
   | 'operations';
 
 export interface ReportTemplate {
@@ -112,9 +192,12 @@ export interface ReportTemplate {
   description: string;
   category: TemplateCategory;
   thumbnail_url: string | null;
+  layout_json: Record<string, unknown>;
+  reports_json: Record<string, unknown>[];
+  required_datasets: string[];
   min_billing_tier: string;
-  report_count: number;
-  version: number;
+  sort_order: number;
+  is_active: boolean;
 }
 
 export interface TemplateListResponse {
@@ -122,163 +205,179 @@ export interface TemplateListResponse {
   total: number;
 }
 
-export interface TemplateDetail {
-  id: string;
-  name: string;
-  description: string;
-  category: TemplateCategory;
-  thumbnail_url: string | null;
-  min_billing_tier: string;
-  config_json: Record<string, unknown>;
-  is_active: boolean;
-  version: number;
-}
-
-export interface InstantiateRequest {
-  dashboard_name?: string;
-}
-
-export interface InstantiateResponse {
-  success: boolean;
-  dashboard_id: string | null;
-  report_ids: string[];
-  error: string | null;
-}
-
-export interface CreateTemplateRequest {
-  name: string;
-  description?: string;
-  category: TemplateCategory;
-  config_json: Record<string, unknown>;
-  min_billing_tier?: string;
-  thumbnail_url?: string;
-}
-
-export interface UpdateTemplateRequest {
-  name?: string;
-  description?: string;
+export interface TemplateFilters {
   category?: TemplateCategory;
-  config_json?: Record<string, unknown>;
-  min_billing_tier?: string;
-  thumbnail_url?: string;
-  is_active?: boolean;
 }
 
 // =============================================================================
-// Custom Dashboard Types
+// Dashboard Types (matches backend DashboardResponse)
 // =============================================================================
 
-export interface CustomDashboard {
+export type DashboardStatus = 'draft' | 'published' | 'archived';
+export type AccessLevel = 'owner' | 'admin' | 'edit' | 'view';
+
+export interface Dashboard {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
+  status: DashboardStatus;
   layout_json: Record<string, unknown>;
-  is_default: boolean;
+  filters_json: DashboardFilter[] | null;
   template_id: string | null;
+  is_template_derived: boolean;
+  version_number: number;
+  reports: Report[];
+  access_level: AccessLevel;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface CustomDashboardListResponse {
-  dashboards: CustomDashboard[];
+export interface DashboardListResponse {
+  dashboards: Dashboard[];
   total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+}
+
+export interface DashboardCountResponse {
+  current_count: number;
+  max_count: number | null;
+  can_create: boolean;
+}
+
+export interface DashboardFilters {
+  status?: DashboardStatus;
+  limit?: number;
+  offset?: number;
 }
 
 export interface CreateDashboardRequest {
   name: string;
   description?: string;
-  layout_json?: Record<string, unknown>;
+  template_id?: string;
 }
 
 export interface UpdateDashboardRequest {
   name?: string;
   description?: string;
   layout_json?: Record<string, unknown>;
-  is_default?: boolean;
+  filters_json?: DashboardFilter[];
+  expected_updated_at?: string; // ISO datetime for optimistic locking
 }
 
 // =============================================================================
-// Custom Report Types
+// Report Types (matches backend ReportResponse)
 // =============================================================================
 
-export interface CustomReport {
+export interface Report {
   id: string;
   dashboard_id: string;
-  title: string;
-  config_json: Record<string, unknown>;
-  position: number;
+  name: string;
+  description: string | null;
+  chart_type: ChartType;
   dataset_name: string;
-  viz_type: string;
-  warnings: ConfigWarning[];
+  config_json: ChartConfig;
+  position_json: GridPosition;
+  sort_order: number;
+  created_by: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface CustomReportListResponse {
-  reports: CustomReport[];
-  total: number;
+  warnings: string[];
 }
 
 export interface CreateReportRequest {
-  dashboard_id: string;
-  title: string;
-  config_json: Record<string, unknown>;
+  name: string;
+  description?: string;
+  chart_type: ChartType;
   dataset_name: string;
-  viz_type?: AbstractChartType;
-  position?: number;
+  config_json: ChartConfig;
+  position_json: GridPosition;
 }
 
 export interface UpdateReportRequest {
-  title?: string;
-  config_json?: Record<string, unknown>;
-  dataset_name?: string;
-  viz_type?: AbstractChartType;
-  position?: number;
+  name?: string;
+  description?: string;
+  chart_type?: ChartType;
+  config_json?: ChartConfig;
+  position_json?: GridPosition;
+}
+
+export interface ReorderReportsRequest {
+  report_ids: string[];
 }
 
 // =============================================================================
-// Dashboard Shares Types
+// Dashboard Shares Types (matches backend ShareResponse)
 // =============================================================================
 
-export type SharePermission = 'view' | 'edit';
+export type SharePermission = 'view' | 'edit' | 'admin';
 
 export interface DashboardShare {
   id: string;
   dashboard_id: string;
-  shared_with_user_id: string;
-  shared_with_email: string;
+  shared_with_user_id: string | null;
+  shared_with_role: string | null;
   permission: SharePermission;
+  granted_by: string;
+  expires_at: string | null;
+  is_expired: boolean;
   created_at: string;
+  updated_at: string;
 }
 
-export interface DashboardShareListResponse {
+export interface ShareListResponse {
   shares: DashboardShare[];
   total: number;
 }
 
 export interface CreateShareRequest {
-  shared_with_user_id: string;
+  shared_with_user_id?: string;
+  shared_with_role?: string;
   permission: SharePermission;
+  expires_at?: string;
+}
+
+export interface UpdateShareRequest {
+  permission?: SharePermission;
+  expires_at?: string;
 }
 
 // =============================================================================
-// Filter Types
+// Version History Types (matches backend DashboardVersionResponse)
 // =============================================================================
 
-export interface TemplateFilters {
-  category?: TemplateCategory;
-  billing_tier?: string;
+export interface DashboardVersion {
+  id: string;
+  dashboard_id: string;
+  version_number: number;
+  change_summary: string;
+  created_by: string;
+  created_at: string;
 }
 
-export interface DashboardFilters {
-  limit?: number;
-  offset?: number;
+export interface VersionListResponse {
+  versions: DashboardVersion[];
+  total: number;
 }
 
-export interface ReportFilters {
-  dashboard_id?: string;
-  limit?: number;
-  offset?: number;
+// =============================================================================
+// Audit Trail Types (matches backend AuditEntryResponse)
+// =============================================================================
+
+export interface AuditEntry {
+  id: string;
+  dashboard_id: string;
+  action: string;
+  actor_id: string;
+  details_json: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AuditListResponse {
+  entries: AuditEntry[];
+  total: number;
 }
 
 // =============================================================================
@@ -287,24 +386,23 @@ export interface ReportFilters {
 
 export function getTemplateCategoryLabel(category: TemplateCategory): string {
   const labels: Record<TemplateCategory, string> = {
-    revenue: 'Revenue',
+    sales: 'Sales',
     marketing: 'Marketing',
-    product: 'Product',
     customer: 'Customer',
+    product: 'Product',
     operations: 'Operations',
   };
   return labels[category] || category;
 }
 
-export function getChartTypeLabel(type: AbstractChartType): string {
-  const labels: Record<AbstractChartType, string> = {
+export function getChartTypeLabel(type: ChartType): string {
+  const labels: Record<ChartType, string> = {
     line: 'Line Chart',
     bar: 'Bar Chart',
-    pie: 'Pie Chart',
-    big_number: 'Big Number',
-    table: 'Table',
     area: 'Area Chart',
-    scatter: 'Scatter Plot',
+    pie: 'Pie Chart',
+    kpi: 'KPI',
+    table: 'Table',
   };
   return labels[type] || type;
 }

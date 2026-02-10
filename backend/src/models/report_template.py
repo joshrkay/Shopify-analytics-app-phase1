@@ -24,8 +24,9 @@ class TemplateCategory(str, PyEnum):
     """Categories for organizing templates in the gallery."""
     SALES = "sales"
     MARKETING = "marketing"
+    CUSTOMER = "customer"
+    PRODUCT = "product"
     OPERATIONS = "operations"
-    FINANCE = "finance"
 
 
 class ReportTemplate(Base, TimestampMixin):
@@ -72,7 +73,7 @@ class ReportTemplate(Base, TimestampMixin):
         String(50),
         nullable=False,
         index=True,
-        comment="Template category: sales, marketing, operations, finance",
+        comment="Template category: sales, marketing, customer, product, operations",
     )
 
     thumbnail_url = Column(

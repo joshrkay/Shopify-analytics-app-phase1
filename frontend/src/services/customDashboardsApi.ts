@@ -1,10 +1,14 @@
 /**
- * Custom Dashboards API Service
+ * Dashboards API Service
  *
- * Handles API calls for user-created custom dashboards:
- * - Listing dashboards
+ * Handles API calls for user-created dashboards:
+ * - Listing dashboards (with filters)
  * - Getting dashboard details
  * - Creating, updating, deleting dashboards
+ * - Publishing and duplicating dashboards
+ * - Dashboard count (billing limits)
+ * - Version history and restore
+ * - Audit trail
  *
  * Uses async token refresh to handle long builder sessions
  * where Clerk tokens may expire.
@@ -13,11 +17,14 @@
  */
 
 import type {
-  CustomDashboard,
-  CustomDashboardListResponse,
+  Dashboard,
+  DashboardListResponse,
   CreateDashboardRequest,
   UpdateDashboardRequest,
   DashboardFilters,
+  DashboardCountResponse,
+  VersionListResponse,
+  AuditListResponse,
 } from '../types/customDashboards';
 import {
   API_BASE_URL,
@@ -27,21 +34,21 @@ import {
 } from './apiUtils';
 
 /**
- * List custom dashboards for the current tenant.
+ * List dashboards for the current tenant.
  */
 export async function listDashboards(
   filters: DashboardFilters = {},
-): Promise<CustomDashboardListResponse> {
+): Promise<DashboardListResponse> {
   const queryString = buildQueryString(filters);
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/custom-dashboards${queryString}`,
+    `${API_BASE_URL}/api/v1/dashboards${queryString}`,
     {
       method: 'GET',
       headers,
     },
   );
-  return handleResponse<CustomDashboardListResponse>(response);
+  return handleResponse<DashboardListResponse>(response);
 }
 
 /**
@@ -49,31 +56,31 @@ export async function listDashboards(
  */
 export async function getDashboard(
   dashboardId: string,
-): Promise<CustomDashboard> {
+): Promise<Dashboard> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/custom-dashboards/${dashboardId}`,
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}`,
     {
       method: 'GET',
       headers,
     },
   );
-  return handleResponse<CustomDashboard>(response);
+  return handleResponse<Dashboard>(response);
 }
 
 /**
- * Create a new custom dashboard.
+ * Create a new dashboard.
  */
 export async function createDashboard(
   body: CreateDashboardRequest,
-): Promise<CustomDashboard> {
+): Promise<Dashboard> {
   const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/custom-dashboards`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/dashboards`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
   });
-  return handleResponse<CustomDashboard>(response);
+  return handleResponse<Dashboard>(response);
 }
 
 /**
@@ -85,28 +92,28 @@ export async function createDashboard(
 export async function updateDashboard(
   dashboardId: string,
   body: UpdateDashboardRequest,
-): Promise<CustomDashboard> {
+): Promise<Dashboard> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/custom-dashboards/${dashboardId}`,
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}`,
     {
       method: 'PUT',
       headers,
       body: JSON.stringify(body),
     },
   );
-  return handleResponse<CustomDashboard>(response);
+  return handleResponse<Dashboard>(response);
 }
 
 /**
- * Delete a custom dashboard and all its reports.
+ * Delete a dashboard and all its reports.
  */
 export async function deleteDashboard(
   dashboardId: string,
 ): Promise<void> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/custom-dashboards/${dashboardId}`,
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}`,
     {
       method: 'DELETE',
       headers,
@@ -115,4 +122,113 @@ export async function deleteDashboard(
   if (!response.ok) {
     return handleResponse<void>(response);
   }
+}
+
+/**
+ * Publish a draft dashboard, changing its status to "published".
+ */
+export async function publishDashboard(
+  dashboardId: string,
+): Promise<Dashboard> {
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/publish`,
+    {
+      method: 'POST',
+      headers,
+    },
+  );
+  return handleResponse<Dashboard>(response);
+}
+
+/**
+ * Duplicate an existing dashboard under a new name.
+ */
+export async function duplicateDashboard(
+  dashboardId: string,
+  newName: string,
+): Promise<Dashboard> {
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/duplicate`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ new_name: newName }),
+    },
+  );
+  return handleResponse<Dashboard>(response);
+}
+
+/**
+ * Get the dashboard count and billing-tier limit for the current tenant.
+ */
+export async function getDashboardCount(): Promise<DashboardCountResponse> {
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/dashboards/count`,
+    {
+      method: 'GET',
+      headers,
+    },
+  );
+  return handleResponse<DashboardCountResponse>(response);
+}
+
+/**
+ * List version history entries for a dashboard.
+ */
+export async function listVersions(
+  dashboardId: string,
+  offset?: number,
+  limit?: number,
+): Promise<VersionListResponse> {
+  const queryString = buildQueryString({ offset, limit });
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/versions${queryString}`,
+    {
+      method: 'GET',
+      headers,
+    },
+  );
+  return handleResponse<VersionListResponse>(response);
+}
+
+/**
+ * Restore a dashboard to a previous version.
+ */
+export async function restoreVersion(
+  dashboardId: string,
+  versionNumber: number,
+): Promise<Dashboard> {
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/restore/${versionNumber}`,
+    {
+      method: 'POST',
+      headers,
+    },
+  );
+  return handleResponse<Dashboard>(response);
+}
+
+/**
+ * List audit trail entries for a dashboard.
+ */
+export async function listAuditEntries(
+  dashboardId: string,
+  offset?: number,
+  limit?: number,
+): Promise<AuditListResponse> {
+  const queryString = buildQueryString({ offset, limit });
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/audit${queryString}`,
+    {
+      method: 'GET',
+      headers,
+    },
+  );
+  return handleResponse<AuditListResponse>(response);
 }

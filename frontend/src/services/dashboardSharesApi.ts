@@ -4,6 +4,7 @@
  * Handles API calls for sharing custom dashboards:
  * - Listing shares for a dashboard
  * - Creating a share (invite user)
+ * - Updating a share's permission or expiry
  * - Revoking a share
  *
  * Uses async token refresh to handle long builder sessions.
@@ -12,8 +13,9 @@
  */
 
 import type {
-  DashboardShareListResponse,
+  ShareListResponse,
   CreateShareRequest,
+  UpdateShareRequest,
   DashboardShare,
 } from '../types/customDashboards';
 import {
@@ -27,16 +29,16 @@ import {
  */
 export async function listShares(
   dashboardId: string,
-): Promise<DashboardShareListResponse> {
+): Promise<ShareListResponse> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/custom-dashboards/${dashboardId}/shares`,
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/shares`,
     {
       method: 'GET',
       headers,
     },
   );
-  return handleResponse<DashboardShareListResponse>(response);
+  return handleResponse<ShareListResponse>(response);
 }
 
 /**
@@ -48,9 +50,29 @@ export async function createShare(
 ): Promise<DashboardShare> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/custom-dashboards/${dashboardId}/shares`,
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/shares`,
     {
       method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    },
+  );
+  return handleResponse<DashboardShare>(response);
+}
+
+/**
+ * Update a dashboard share's permission or expiry.
+ */
+export async function updateShare(
+  dashboardId: string,
+  shareId: string,
+  body: UpdateShareRequest,
+): Promise<DashboardShare> {
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/shares/${shareId}`,
+    {
+      method: 'PUT',
       headers,
       body: JSON.stringify(body),
     },
@@ -67,7 +89,7 @@ export async function revokeShare(
 ): Promise<void> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/custom-dashboards/${dashboardId}/shares/${shareId}`,
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/shares/${shareId}`,
     {
       method: 'DELETE',
       headers,

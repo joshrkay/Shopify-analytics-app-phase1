@@ -5,19 +5,15 @@
  * - Listing templates with billing tier filtering
  * - Getting template details
  * - Instantiating templates into dashboards
- * - Admin CRUD operations
  *
- * Phase 2C - Template System
+ * Phase 3 - Dashboard Builder UI
  */
 
 import type {
+  ReportTemplate,
   TemplateListResponse,
-  TemplateDetail,
   TemplateFilters,
-  InstantiateRequest,
-  InstantiateResponse,
-  CreateTemplateRequest,
-  UpdateTemplateRequest,
+  Dashboard,
 } from '../types/customDashboards';
 import {
   API_BASE_URL,
@@ -35,7 +31,7 @@ export async function listTemplates(
   const queryString = buildQueryString(filters);
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/templates${queryString}`,
+    `${API_BASE_URL}/api/v1/templates${queryString}`,
     {
       method: 'GET',
       headers,
@@ -49,91 +45,36 @@ export async function listTemplates(
  */
 export async function getTemplate(
   templateId: string,
-): Promise<TemplateDetail> {
+): Promise<ReportTemplate> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/templates/${templateId}`,
+    `${API_BASE_URL}/api/v1/templates/${templateId}`,
     {
       method: 'GET',
       headers,
     },
   );
-  return handleResponse<TemplateDetail>(response);
+  return handleResponse<ReportTemplate>(response);
 }
 
 /**
  * Instantiate a template into the user's dashboard.
  *
  * Creates a dashboard with all reports from the template.
- * Atomic - rolls back on partial failure.
+ * The backend expects the dashboard name as a query parameter.
  */
 export async function instantiateTemplate(
   templateId: string,
-  body: InstantiateRequest = {},
-): Promise<InstantiateResponse> {
+  dashboardName: string,
+): Promise<Dashboard> {
+  const queryString = buildQueryString({ name: dashboardName });
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/templates/${templateId}/instantiate`,
+    `${API_BASE_URL}/api/v1/templates/${templateId}/instantiate${queryString}`,
     {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
     },
   );
-  return handleResponse<InstantiateResponse>(response);
-}
-
-/**
- * Create a new template (admin-only).
- */
-export async function createTemplate(
-  body: CreateTemplateRequest,
-): Promise<TemplateDetail> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/templates`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-  return handleResponse<TemplateDetail>(response);
-}
-
-/**
- * Update a template (admin-only). Bumps version.
- */
-export async function updateTemplate(
-  templateId: string,
-  body: UpdateTemplateRequest,
-): Promise<TemplateDetail> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(
-    `${API_BASE_URL}/api/templates/${templateId}`,
-    {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(body),
-    },
-  );
-  return handleResponse<TemplateDetail>(response);
-}
-
-/**
- * Deactivate a template (admin-only).
- *
- * Hides from gallery but does not affect existing dashboards.
- */
-export async function deactivateTemplate(
-  templateId: string,
-): Promise<void> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(
-    `${API_BASE_URL}/api/templates/${templateId}`,
-    {
-      method: 'DELETE',
-      headers,
-    },
-  );
-  if (!response.ok) {
-    return handleResponse<void>(response);
-  }
+  return handleResponse<Dashboard>(response);
 }
