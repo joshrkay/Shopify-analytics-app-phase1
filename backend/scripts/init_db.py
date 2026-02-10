@@ -37,6 +37,13 @@ from src.models.store import ShopifyStore
 from src.models.subscription import Subscription
 from src.models.billing_event import BillingEvent
 from src.models.usage import UsageRecord, UsageAggregate
+# Custom Reports & Dashboard Builder models
+from src.models.report_template import ReportTemplate
+from src.models.custom_dashboard import CustomDashboard
+from src.models.custom_report import CustomReport
+from src.models.dashboard_version import DashboardVersion
+from src.models.dashboard_share import DashboardShare
+from src.models.dashboard_audit import DashboardAudit
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -131,7 +138,7 @@ def seed_default_plans(database_url: str) -> None:
             "price_yearly_cents": None,
             "is_active": True,
             "features": [
-                {"feature_key": "custom_reports", "is_enabled": True, "limit_value": 5},
+                {"feature_key": "custom_reports", "is_enabled": False},
                 {"feature_key": "export_data", "is_enabled": True, "limit_value": 100},
             ]
         },
@@ -144,7 +151,7 @@ def seed_default_plans(database_url: str) -> None:
             "is_active": True,
             "features": [
                 {"feature_key": "ai_insights", "is_enabled": True, "limit_value": 50},
-                {"feature_key": "custom_reports", "is_enabled": True, "limit_value": 25},
+                {"feature_key": "custom_reports", "is_enabled": True, "limit_value": 10},
                 {"feature_key": "export_data", "is_enabled": True},
                 {"feature_key": "api_access", "is_enabled": True},
                 {"feature_key": "team_members", "is_enabled": True, "limit_value": 5},
@@ -159,7 +166,7 @@ def seed_default_plans(database_url: str) -> None:
             "is_active": True,
             "features": [
                 {"feature_key": "ai_insights", "is_enabled": True},
-                {"feature_key": "custom_reports", "is_enabled": True},
+                {"feature_key": "custom_reports", "is_enabled": True, "limit_value": 50},
                 {"feature_key": "export_data", "is_enabled": True},
                 {"feature_key": "api_access", "is_enabled": True},
                 {"feature_key": "team_members", "is_enabled": True, "limit_value": 25},

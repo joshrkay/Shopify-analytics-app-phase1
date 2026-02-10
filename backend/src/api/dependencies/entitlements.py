@@ -95,3 +95,9 @@ check_llm_routing_entitlement = create_entitlement_check(
     feature_name="LLM Routing",
     default_required_tier="Pro",
 )
+
+check_custom_reports_entitlement = create_entitlement_check(
+    feature=BillingFeature.CUSTOM_REPORTS,
+    feature_name="Custom Reports",
+    default_required_tier="Growth",
+)

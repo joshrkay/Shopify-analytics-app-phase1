@@ -107,6 +107,13 @@ def db_engine():
     from src.models import agency_access_request  # noqa: F401 - Story 5.5.2
     from src.models import access_revocation  # noqa: F401 - Story 5.5.4
     from src.platform import audit  # noqa: F401 - Audit log model
+    # Custom Reports & Dashboard Builder models
+    from src.models import report_template  # noqa: F401
+    from src.models import custom_dashboard  # noqa: F401
+    from src.models import custom_report  # noqa: F401
+    from src.models import dashboard_version  # noqa: F401
+    from src.models import dashboard_share  # noqa: F401
+    from src.models import dashboard_audit  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 

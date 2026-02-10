@@ -52,6 +52,9 @@ from src.api.routes import auth_refresh_jwt
 from src.api.routes import audit_logs
 from src.api.routes import audit_export
 from src.api.routes import shopify_embed_entry
+from src.api.routes import custom_dashboards
+from src.api.routes import dashboard_shares
+from src.api.routes import report_templates
 
 # Configure structured logging
 logging.basicConfig(
@@ -243,6 +246,11 @@ app.include_router(agency_access.router)
 app.include_router(auth_refresh_jwt.router)
 app.include_router(audit_logs.router)
 app.include_router(audit_export.router)
+
+# Custom Reports & Dashboard Builder (requires authentication + custom_reports entitlement for writes)
+app.include_router(custom_dashboards.router)
+app.include_router(dashboard_shares.router)
+app.include_router(report_templates.router)
 
 
 # ---------------------------------------------------------------------------

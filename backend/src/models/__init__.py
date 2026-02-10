@@ -92,6 +92,13 @@ from src.models.data_change_event import (
     AFFECTED_METRICS,
 )
 from src.models.dashboard_metric_binding import DashboardMetricBinding
+# Custom Reports & Dashboard Builder models
+from src.models.report_template import ReportTemplate, TemplateCategory
+from src.models.custom_dashboard import CustomDashboard, DashboardStatus
+from src.models.custom_report import CustomReport, ChartType, CHART_MIN_DIMENSIONS
+from src.models.dashboard_version import DashboardVersion, MAX_DASHBOARD_VERSIONS
+from src.models.dashboard_share import DashboardShare, SharePermission
+from src.models.dashboard_audit import DashboardAudit, DashboardAuditAction
 from src.models.data_availability import (
     DataAvailability,
     AvailabilityState,
@@ -251,4 +258,18 @@ __all__ = [
     # Access revocation models (Story 5.5.4)
     "AccessRevocation",
     "RevocationStatus",
+    # Custom Reports & Dashboard Builder models
+    "ReportTemplate",
+    "TemplateCategory",
+    "CustomDashboard",
+    "DashboardStatus",
+    "CustomReport",
+    "ChartType",
+    "CHART_MIN_DIMENSIONS",
+    "DashboardVersion",
+    "MAX_DASHBOARD_VERSIONS",
+    "DashboardShare",
+    "SharePermission",
+    "DashboardAudit",
+    "DashboardAuditAction",
 ]
