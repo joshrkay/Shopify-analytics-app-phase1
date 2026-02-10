@@ -43,6 +43,7 @@ from src.api.schemas.custom_dashboards import (
     UpdateReportRequest,
     ReorderReportsRequest,
     DashboardVersionResponse,
+    DashboardVersionDetailResponse,
     VersionListResponse,
     AuditEntryResponse,
     AuditListResponse,
@@ -302,6 +303,22 @@ async def list_versions(
         ],
         total=total,
     )
+
+
+@router.get("/{dashboard_id}/versions/{version_number}", response_model=DashboardVersionDetailResponse)
+async def get_version_detail(
+    dashboard_id: str,
+    version_number: int,
+    request: Request,
+    service: CustomDashboardService = Depends(_get_dashboard_service),
+):
+    """Get a single version with its full snapshot for preview."""
+    try:
+        version = service.get_version(dashboard_id, version_number)
+    except DashboardNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return DashboardVersionDetailResponse.model_validate(version)
 
 
 @router.post("/{dashboard_id}/restore/{version_number}", response_model=DashboardResponse)

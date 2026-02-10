@@ -76,6 +76,9 @@ interface DashboardBuilderActions {
 
   // Error handling
   clearError: () => void;
+
+  // Refresh
+  refreshDashboard: () => Promise<void>;
 }
 
 type DashboardBuilderContextValue = DashboardBuilderState & DashboardBuilderActions;
@@ -500,6 +503,28 @@ export function DashboardBuilderProvider({
     setState((prev) => ({ ...prev, saveError: null }));
   }, []);
 
+  const refreshDashboard = useCallback(async () => {
+    try {
+      const dashboard = await getDashboard(dashboardId);
+      expectedUpdatedAtRef.current = dashboard.updated_at;
+      pendingPositionsRef.current = new Map();
+      setState({
+        dashboard,
+        isDirty: false,
+        isSaving: false,
+        saveError: null,
+        selectedReportId: null,
+        isReportConfigOpen: false,
+      });
+    } catch (err) {
+      console.error('Failed to refresh dashboard:', err);
+      setState((prev) => ({
+        ...prev,
+        saveError: err instanceof Error ? err.message : 'Failed to refresh dashboard',
+      }));
+    }
+  }, [dashboardId]);
+
   // ---------------------------------------------------------------------------
   // Context Value
   // ---------------------------------------------------------------------------
@@ -518,6 +543,7 @@ export function DashboardBuilderProvider({
     openReportConfig,
     closeReportConfig,
     clearError,
+    refreshDashboard,
   };
 
   return (

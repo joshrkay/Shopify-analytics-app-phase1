@@ -409,6 +409,22 @@ class CustomDashboardService:
 
         return versions, total
 
+    def get_version(self, dashboard_id: str, version_number: int) -> DashboardVersion:
+        """Get a single version with its snapshot for preview."""
+        dashboard = self.get_dashboard(dashboard_id)
+
+        version = self.db.query(DashboardVersion).filter(
+            DashboardVersion.dashboard_id == dashboard.id,
+            DashboardVersion.version_number == version_number,
+        ).first()
+
+        if not version:
+            raise DashboardNotFoundError(
+                f"Version {version_number} not found for dashboard {dashboard_id}"
+            )
+
+        return version
+
     def restore_version(self, dashboard_id: str, version_number: int) -> CustomDashboard:
         """Restore a dashboard to a previous version."""
         dashboard = self.get_dashboard(dashboard_id)

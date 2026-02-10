@@ -6,12 +6,14 @@
  * - Renders reports in a static (non-draggable) grid
  * - Edit button for users with edit/owner/admin access
  * - Share button for owner/admin users
+ * - History button for owner/admin users (Phase 4A)
  * - Loading skeleton and error states
  *
  * Phase 3 - Dashboard Builder UI
+ * Phase 4A - Version History Integration
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Page,
@@ -31,6 +33,7 @@ import 'react-resizable/css/styles.css';
 import { getDashboard } from '../services/customDashboardsApi';
 import { ViewReportCard } from '../components/dashboards/ViewReportCard';
 import { ShareModal } from '../components/dashboards/ShareModal';
+import { VersionHistory } from '../components/dashboards/VersionHistory';
 import type { Dashboard, Report } from '../types/customDashboards';
 import { MIN_GRID_DIMENSIONS, GRID_COLS } from '../types/customDashboards';
 
@@ -45,6 +48,7 @@ export function DashboardView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Fetch dashboard on mount
   useEffect(() => {
@@ -81,6 +85,12 @@ export function DashboardView() {
       cancelled = true;
     };
   }, [dashboardId]);
+
+  // Handle version restore
+  const handleRestore = useCallback((restored: Dashboard) => {
+    setDashboard(restored);
+    setShowHistory(false);
+  }, []);
 
   // Derive permissions
   const canEdit = dashboard
@@ -138,6 +148,12 @@ export function DashboardView() {
     secondaryActions.push({
       content: 'Share',
       onAction: () => setShowShareModal(true),
+    });
+  }
+  if (canShare) {
+    secondaryActions.push({
+      content: 'History',
+      onAction: () => setShowHistory(true),
     });
   }
 
@@ -210,6 +226,16 @@ export function DashboardView() {
           dashboardId={dashboardId}
           open={showShareModal}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {dashboardId && (
+        <VersionHistory
+          dashboardId={dashboardId}
+          currentVersionNumber={dashboard.version_number}
+          open={showHistory}
+          onClose={() => setShowHistory(false)}
+          onRestore={handleRestore}
         />
       )}
     </Page>
