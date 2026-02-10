@@ -7,7 +7,7 @@
  * - Embed configuration retrieval
  */
 
-import { API_BASE_URL, createHeaders, handleResponse } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse } from './apiUtils';
 import type { AccessSurface } from '../types/embed';
 
 export type { AccessSurface } from '../types/embed';
@@ -57,9 +57,10 @@ export async function generateEmbedToken(
   if (accessSurface) {
     body.access_surface = accessSurface;
   }
+  const headers = await createHeadersAsync();
   const response = await fetch(`${API_BASE_URL}/api/v1/embed/token`, {
     method: 'POST',
-    headers: createHeaders(),
+    headers,
     body: JSON.stringify(body),
   });
   return handleResponse<EmbedTokenResponse>(response);
@@ -87,9 +88,10 @@ export async function refreshEmbedToken(
   if (accessSurface) {
     body.access_surface = accessSurface;
   }
+  const headers = await createHeadersAsync();
   const response = await fetch(`${API_BASE_URL}/api/v1/embed/token/refresh`, {
     method: 'POST',
-    headers: createHeaders(),
+    headers,
     body: JSON.stringify(body),
   });
   return handleResponse<EmbedTokenResponse>(response);
@@ -101,9 +103,10 @@ export async function refreshEmbedToken(
  * @returns Embed configuration including allowed dashboards and refresh interval
  */
 export async function getEmbedConfig(): Promise<EmbedConfig> {
+  const headers = await createHeadersAsync();
   const response = await fetch(`${API_BASE_URL}/api/v1/embed/config`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers,
   });
   return handleResponse<EmbedConfig>(response);
 }
