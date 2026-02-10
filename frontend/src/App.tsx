@@ -1,4 +1,3 @@
-/**
  * Main App Component
  *
  * Sets up Shopify Polaris provider, data health context, and routing.
@@ -26,6 +25,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { RootErrorFallback } from './components/ErrorFallback';
 import { DataHealthProvider } from './contexts/DataHealthContext';
 import { AppHeader } from './components/layout/AppHeader';
+import { useAutoOrganization } from './hooks/useAutoOrganization';
 import { useClerkToken } from './hooks/useClerkToken';
 import { useEntitlements } from './hooks/useEntitlements';
 import { isFeatureEntitled } from './services/entitlementsApi';
@@ -70,7 +70,38 @@ function FeatureGateRoute({ feature, entitlements, children }: FeatureGateRouteP
 // Authenticated app content
 // =============================================================================
 
+/**
+ * AuthenticatedApp — waits for Clerk organization to be active before
+ * mounting the token provider and routes.  This guarantees that
+ * getToken() returns a JWT that contains org_id, which the backend
+ * tenant_context middleware requires.
+ */
 function AuthenticatedApp() {
+  const { isLoading: isOrgLoading, hasOrg } = useAutoOrganization();
+
+  if (isOrgLoading) {
+    return <SkeletonPage />;
+  }
+
+  if (!hasOrg) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <h2>Organization Required</h2>
+        <p>
+          Your account is not part of an organization yet.
+          Please contact your administrator or create an organization
+          in the Clerk dashboard.
+        </p>
+      </div>
+    );
+  }
+
+  // Org is active — safe to mount the token provider
+  return <AppWithOrg />;
+}
+
+/** Inner shell: only mounts once the Clerk org is active so the token has org_id. */
+function AppWithOrg() {
   useClerkToken();
   const { entitlements } = useEntitlements();
 
