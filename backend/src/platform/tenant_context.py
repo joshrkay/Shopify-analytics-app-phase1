@@ -517,11 +517,17 @@ class TenantContextMiddleware:
         # The root path "/" serves the React SPA (or bootstrap page). Shopify
         # loads this URL in an iframe. Frontend assets under /assets/ are
         # hashed bundles from the Vite build and contain no tenant data.
+        # The SPA catch-all also serves files like vite.svg, favicon.ico,
+        # etc. from the static directory — these must not require auth.
         PUBLIC_PATHS = {"/", "/health", "/docs", "/redoc", "/openapi.json"}
+        # Static file extensions served by the SPA catch-all route
+        STATIC_EXTENSIONS = (".svg", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".woff", ".woff2", ".ttf", ".map")
         if (
             request.url.path in PUBLIC_PATHS
             or request.url.path.startswith("/api/webhooks/")
             or request.url.path.startswith("/assets/")
+            or request.url.path.endswith(STATIC_EXTENSIONS)
+            or not request.url.path.startswith("/api/")
         ):
             return await call_next(request)
 
