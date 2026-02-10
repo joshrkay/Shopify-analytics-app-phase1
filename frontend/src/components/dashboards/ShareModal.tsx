@@ -63,10 +63,187 @@ const PERMISSION_OPTIONS: { label: string; value: SharePermission }[] = [
   { label: 'Admin', value: 'admin' },
 ];
 
-function getPermissionLabel(permission: SharePermission): string {
-  const found = PERMISSION_OPTIONS.find((o) => o.value === permission);
-  return found ? found.label : permission;
+// ============================================================================
+// Sub-components (co-located per cursor rules §1.4)
+// ============================================================================
+
+interface ActiveShareRowProps {
+  share: DashboardShare;
+  editingShareId: string | null;
+  revokingId: string | null;
+  confirmRevokeSelf: string | null;
+  onPermissionChange: (shareId: string, permission: string) => void;
+  onRevoke: (shareId: string) => void;
+  onDismissConfirm: () => void;
 }
+
+function ActiveShareRow({
+  share,
+  editingShareId,
+  revokingId,
+  confirmRevokeSelf,
+  onPermissionChange,
+  onRevoke,
+  onDismissConfirm,
+}: ActiveShareRowProps) {
+  return (
+    <Card padding="300">
+      <BlockStack gap="200">
+        <InlineStack align="space-between" blockAlign="center">
+          <BlockStack gap="050">
+            <Text as="p" variant="bodyMd">
+              {share.shared_with_user_id ?? share.shared_with_role ?? 'Unknown'}
+            </Text>
+            {share.expires_at && (
+              <Text as="p" variant="bodySm" tone="subdued">
+                Expires: {new Date(share.expires_at).toLocaleDateString()}
+              </Text>
+            )}
+          </BlockStack>
+          <InlineStack gap="200" blockAlign="center">
+            <Select
+              label=""
+              labelHidden
+              options={PERMISSION_OPTIONS}
+              value={share.permission}
+              onChange={(val) => onPermissionChange(share.id, val)}
+              disabled={editingShareId === share.id}
+            />
+            <Button
+              variant="plain"
+              tone="critical"
+              onClick={() => onRevoke(share.id)}
+              loading={revokingId === share.id}
+              disabled={revokingId === share.id}
+            >
+              Revoke
+            </Button>
+          </InlineStack>
+        </InlineStack>
+
+        {confirmRevokeSelf === share.id && (
+          <Banner tone="warning">
+            <BlockStack gap="200">
+              <Text as="p" variant="bodySm">
+                You will lose access to this dashboard. Continue?
+              </Text>
+              <InlineStack gap="200">
+                <Button
+                  variant="primary"
+                  tone="critical"
+                  size="slim"
+                  onClick={() => onRevoke(share.id)}
+                >
+                  Confirm
+                </Button>
+                <Button
+                  size="slim"
+                  onClick={onDismissConfirm}
+                >
+                  Cancel
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </Banner>
+        )}
+      </BlockStack>
+    </Card>
+  );
+}
+
+interface ExpiredShareRowProps {
+  share: DashboardShare;
+  editingShareId: string | null;
+  revokingId: string | null;
+  renewingShareId: string | null;
+  renewDate: string;
+  onRenew: (shareId: string) => void;
+  onRevoke: (shareId: string) => void;
+  onStartRenew: (shareId: string) => void;
+  onCancelRenew: () => void;
+  onRenewDateChange: (value: string) => void;
+}
+
+function ExpiredShareRow({
+  share,
+  editingShareId,
+  revokingId,
+  renewingShareId,
+  renewDate,
+  onRenew,
+  onRevoke,
+  onStartRenew,
+  onCancelRenew,
+  onRenewDateChange,
+}: ExpiredShareRowProps) {
+  return (
+    <Box opacity="60">
+      <Card padding="300">
+        <BlockStack gap="200">
+          <InlineStack align="space-between" blockAlign="center">
+            <BlockStack gap="050">
+              <Text as="p" variant="bodyMd">
+                {share.shared_with_user_id ?? share.shared_with_role ?? 'Unknown'}
+              </Text>
+              <Badge tone="warning">Expired</Badge>
+            </BlockStack>
+            <InlineStack gap="200">
+              <Button
+                variant="plain"
+                size="slim"
+                onClick={() => onStartRenew(share.id)}
+              >
+                Renew
+              </Button>
+              <Button
+                variant="plain"
+                tone="critical"
+                size="slim"
+                onClick={() => onRevoke(share.id)}
+                loading={revokingId === share.id}
+              >
+                Remove
+              </Button>
+            </InlineStack>
+          </InlineStack>
+
+          {renewingShareId === share.id && (
+            <InlineStack gap="200" blockAlign="end">
+              <Box minWidth="180px">
+                <TextField
+                  label="New expiry date"
+                  type="date"
+                  value={renewDate}
+                  onChange={onRenewDateChange}
+                  autoComplete="off"
+                />
+              </Box>
+              <Button
+                variant="primary"
+                size="slim"
+                onClick={() => onRenew(share.id)}
+                disabled={!renewDate}
+                loading={editingShareId === share.id}
+              >
+                Set
+              </Button>
+              <Button
+                size="slim"
+                onClick={onCancelRenew}
+              >
+                Cancel
+              </Button>
+            </InlineStack>
+          )}
+        </BlockStack>
+      </Card>
+    </Box>
+  );
+}
+
+// ============================================================================
+// Main component
+// ============================================================================
 
 export function ShareModal({
   dashboardId,
@@ -390,68 +567,16 @@ export function ShareModal({
 
             {!loading &&
               activeShares.map((share) => (
-                <Card key={share.id} padding="300">
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="050">
-                        <Text as="p" variant="bodyMd">
-                          {share.shared_with_user_id ?? share.shared_with_role ?? 'Unknown'}
-                        </Text>
-                        {share.expires_at && (
-                          <Text as="p" variant="bodySm" tone="subdued">
-                            Expires: {new Date(share.expires_at).toLocaleDateString()}
-                          </Text>
-                        )}
-                      </BlockStack>
-                      <InlineStack gap="200" blockAlign="center">
-                        <Select
-                          label=""
-                          labelHidden
-                          options={PERMISSION_OPTIONS}
-                          value={share.permission}
-                          onChange={(val) => handlePermissionChange(share.id, val)}
-                          disabled={editingShareId === share.id}
-                        />
-                        <Button
-                          variant="plain"
-                          tone="critical"
-                          onClick={() => handleRevoke(share.id)}
-                          loading={revokingId === share.id}
-                          disabled={revokingId === share.id}
-                        >
-                          Revoke
-                        </Button>
-                      </InlineStack>
-                    </InlineStack>
-
-                    {/* Revoke-self confirmation */}
-                    {confirmRevokeSelf === share.id && (
-                      <Banner tone="warning">
-                        <BlockStack gap="200">
-                          <Text as="p" variant="bodySm">
-                            You will lose access to this dashboard. Continue?
-                          </Text>
-                          <InlineStack gap="200">
-                            <Button
-                              variant="primary"
-                              tone="critical"
-                              size="slim"
-                              onClick={() => handleRevoke(share.id)}
-                            >
-                              Confirm
-                            </Button>
-                            <Button
-                              size="slim"
-                              onClick={() => setConfirmRevokeSelf(null)}
-                            >
-                              Cancel
-                            </Button>
-                          </InlineStack>
-                        </BlockStack>
-                      </Banner>
-                    )}
-                  </BlockStack>
-                </Card>
+                <ActiveShareRow
+                  key={share.id}
+                  share={share}
+                  editingShareId={editingShareId}
+                  revokingId={revokingId}
+                  confirmRevokeSelf={confirmRevokeSelf}
+                  onPermissionChange={handlePermissionChange}
+                  onRevoke={handleRevoke}
+                  onDismissConfirm={() => setConfirmRevokeSelf(null)}
+                />
               ))}
           </BlockStack>
 
@@ -465,71 +590,22 @@ export function ShareModal({
                 </Text>
 
                 {expiredShares.map((share) => (
-                  <Box key={share.id} opacity="60">
-                    <Card padding="300">
-                      <BlockStack gap="200">
-                        <InlineStack align="space-between" blockAlign="center">
-                          <BlockStack gap="050">
-                            <Text as="p" variant="bodyMd">
-                              {share.shared_with_user_id ?? share.shared_with_role ?? 'Unknown'}
-                            </Text>
-                            <Badge tone="warning">Expired</Badge>
-                          </BlockStack>
-                          <InlineStack gap="200">
-                            <Button
-                              variant="plain"
-                              size="slim"
-                              onClick={() => {
-                                setRenewingShareId(share.id);
-                                setRenewDate('');
-                              }}
-                            >
-                              Renew
-                            </Button>
-                            <Button
-                              variant="plain"
-                              tone="critical"
-                              size="slim"
-                              onClick={() => handleRevoke(share.id)}
-                              loading={revokingId === share.id}
-                            >
-                              Remove
-                            </Button>
-                          </InlineStack>
-                        </InlineStack>
-
-                        {/* Renew date picker */}
-                        {renewingShareId === share.id && (
-                          <InlineStack gap="200" blockAlign="end">
-                            <Box minWidth="180px">
-                              <TextField
-                                label="New expiry date"
-                                type="date"
-                                value={renewDate}
-                                onChange={setRenewDate}
-                                autoComplete="off"
-                              />
-                            </Box>
-                            <Button
-                              variant="primary"
-                              size="slim"
-                              onClick={() => handleRenew(share.id)}
-                              disabled={!renewDate}
-                              loading={editingShareId === share.id}
-                            >
-                              Set
-                            </Button>
-                            <Button
-                              size="slim"
-                              onClick={() => setRenewingShareId(null)}
-                            >
-                              Cancel
-                            </Button>
-                          </InlineStack>
-                        )}
-                      </BlockStack>
-                    </Card>
-                  </Box>
+                  <ExpiredShareRow
+                    key={share.id}
+                    share={share}
+                    editingShareId={editingShareId}
+                    revokingId={revokingId}
+                    renewingShareId={renewingShareId}
+                    renewDate={renewDate}
+                    onRenew={handleRenew}
+                    onRevoke={handleRevoke}
+                    onStartRenew={(id) => {
+                      setRenewingShareId(id);
+                      setRenewDate('');
+                    }}
+                    onCancelRenew={() => setRenewingShareId(null)}
+                    onRenewDateChange={setRenewDate}
+                  />
                 ))}
               </BlockStack>
             </>

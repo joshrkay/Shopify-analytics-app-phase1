@@ -88,8 +88,8 @@ const Analytics: React.FC = () => {
           setHasMoreCustom(response.has_more);
         }
       })
-      .catch(() => {
-        // Silently ignore — custom dashboards are optional enhancement
+      .catch((err) => {
+        console.error('Failed to fetch custom dashboards:', err);
       });
     return () => { cancelled = true; };
   }, []);
@@ -110,9 +110,8 @@ const Analytics: React.FC = () => {
     setSelectedDashboard(value);
   };
 
-  // Handle dashboard load
   const handleDashboardLoad = () => {
-    console.log('Dashboard loaded successfully');
+    // no-op: load tracking handled by ShopifyEmbeddedSuperset
   };
 
   // Handle dashboard error
