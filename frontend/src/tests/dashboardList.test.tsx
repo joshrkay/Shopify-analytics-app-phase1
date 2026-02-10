@@ -35,17 +35,10 @@ vi.mock('react-router-dom', async () => {
 // Auto-mock API services
 vi.mock('../services/customDashboardsApi');
 vi.mock('../services/entitlementsApi');
-vi.mock('../services/apiUtils', () => ({
-  API_BASE_URL: 'http://test',
-  isApiError: vi.fn(() => false),
-  createHeaders: vi.fn(() => ({})),
-  createHeadersAsync: vi.fn().mockResolvedValue({}),
-  handleResponse: vi.fn(),
-  buildQueryString: vi.fn(() => ''),
-}));
+vi.mock('../services/apiUtils');
 
 // ---------------------------------------------------------------------------
-// Helpers & mock data
+// Factories & helpers
 // ---------------------------------------------------------------------------
 
 const mockTranslations = {
@@ -54,7 +47,17 @@ const mockTranslations = {
   },
 };
 
-const mockDashboard: Dashboard = {
+const renderWithProviders = (ui: React.ReactElement) => {
+  return render(
+    <AppProvider i18n={mockTranslations as any}>
+      <MemoryRouter>
+        {ui}
+      </MemoryRouter>
+    </AppProvider>,
+  );
+};
+
+const createMockDashboard = (overrides?: Partial<Dashboard>): Dashboard => ({
   id: 'db-1',
   name: 'My Dashboard',
   description: 'Test description',
@@ -69,9 +72,10 @@ const mockDashboard: Dashboard = {
   created_by: 'user-1',
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
-};
+  ...overrides,
+});
 
-const mockEntitlements: EntitlementsResponse = {
+const createMockEntitlements = (overrides?: Partial<EntitlementsResponse>): EntitlementsResponse => ({
   billing_state: 'active',
   plan_id: 'plan-1',
   plan_name: 'Pro',
@@ -88,7 +92,8 @@ const mockEntitlements: EntitlementsResponse = {
     },
   },
   grace_period_days_remaining: null,
-};
+  ...overrides,
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -98,36 +103,24 @@ describe('DashboardList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(listDashboards).mockResolvedValue({
-      dashboards: [mockDashboard],
+      dashboards: [createMockDashboard()],
       total: 1,
       offset: 0,
       limit: 10,
       has_more: false,
     });
-    vi.mocked(fetchEntitlements).mockResolvedValue(mockEntitlements);
+    vi.mocked(fetchEntitlements).mockResolvedValue(createMockEntitlements());
     vi.mocked(isFeatureEntitled).mockReturnValue(true);
   });
 
   it("renders 'Dashboards' page title", () => {
-    render(
-      <AppProvider i18n={mockTranslations as any}>
-        <MemoryRouter>
-          <DashboardList />
-        </MemoryRouter>
-      </AppProvider>,
-    );
+    renderWithProviders(<DashboardList />);
 
     expect(screen.getByText('Dashboards')).toBeInTheDocument();
   });
 
   it('shows status tabs', () => {
-    render(
-      <AppProvider i18n={mockTranslations as any}>
-        <MemoryRouter>
-          <DashboardList />
-        </MemoryRouter>
-      </AppProvider>,
-    );
+    renderWithProviders(<DashboardList />);
 
     // Polaris Tabs renders both visible tabs and hidden measurer tabs,
     // so each tab label appears more than once in the DOM.
@@ -138,13 +131,7 @@ describe('DashboardList', () => {
   });
 
   it('shows dashboard name in the table after loading', async () => {
-    render(
-      <AppProvider i18n={mockTranslations as any}>
-        <MemoryRouter>
-          <DashboardList />
-        </MemoryRouter>
-      </AppProvider>,
-    );
+    renderWithProviders(<DashboardList />);
 
     await waitFor(() => {
       expect(screen.getByText('My Dashboard')).toBeInTheDocument();
@@ -160,13 +147,7 @@ describe('DashboardList', () => {
       has_more: false,
     });
 
-    render(
-      <AppProvider i18n={mockTranslations as any}>
-        <MemoryRouter>
-          <DashboardList />
-        </MemoryRouter>
-      </AppProvider>,
-    );
+    renderWithProviders(<DashboardList />);
 
     await waitFor(() => {
       expect(screen.getByText('Create your first dashboard')).toBeInTheDocument();

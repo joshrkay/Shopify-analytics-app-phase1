@@ -36,7 +36,7 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock react-grid-layout default export as a simple div
+// Mock react-grid-layout default export
 vi.mock('react-grid-layout', async () => {
   const R = await import('react');
   return {
@@ -49,17 +49,10 @@ vi.mock('react-grid-layout', async () => {
 vi.mock('../services/customDashboardsApi');
 vi.mock('../services/customReportsApi');
 vi.mock('../services/datasetsApi');
-vi.mock('../services/apiUtils', () => ({
-  API_BASE_URL: 'http://test',
-  isApiError: vi.fn(() => false),
-  createHeadersAsync: vi.fn().mockResolvedValue({}),
-  createHeaders: vi.fn(() => ({})),
-  handleResponse: vi.fn(),
-  buildQueryString: vi.fn(() => ''),
-}));
+vi.mock('../services/apiUtils');
 
 // ---------------------------------------------------------------------------
-// Helpers & mock data
+// Factories & helpers
 // ---------------------------------------------------------------------------
 
 const mockTranslations = {
@@ -68,7 +61,17 @@ const mockTranslations = {
   },
 };
 
-const mockDashboard: Dashboard = {
+const renderWithProviders = (ui: React.ReactElement, initialEntries?: string[]) => {
+  return render(
+    <AppProvider i18n={mockTranslations as any}>
+      <MemoryRouter initialEntries={initialEntries}>
+        {ui}
+      </MemoryRouter>
+    </AppProvider>,
+  );
+};
+
+const createMockDashboard = (overrides?: Partial<Dashboard>): Dashboard => ({
   id: 'db-1',
   name: 'Test Dashboard',
   description: 'Test description',
@@ -83,9 +86,10 @@ const mockDashboard: Dashboard = {
   created_by: 'user-1',
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
-};
+  ...overrides,
+});
 
-const mockReport: Report = {
+const createMockReport = (overrides?: Partial<Report>): Report => ({
   id: 'report-1',
   dashboard_id: 'db-1',
   name: 'Test Report',
@@ -106,7 +110,8 @@ const mockReport: Report = {
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
   warnings: [],
-};
+  ...overrides,
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -116,17 +121,11 @@ describe('DashboardBuilder', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockParams = { dashboardId: 'db-1' };
-    vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
+    vi.mocked(getDashboard).mockResolvedValue(createMockDashboard());
   });
 
   it('shows the dashboard name after loading', async () => {
-    render(
-      <AppProvider i18n={mockTranslations as any}>
-        <MemoryRouter initialEntries={['/dashboards/db-1/edit']}>
-          <DashboardBuilder />
-        </MemoryRouter>
-      </AppProvider>,
-    );
+    renderWithProviders(<DashboardBuilder />, ['/dashboards/db-1/edit']);
 
     await waitFor(() => {
       expect(screen.getByText('Test Dashboard')).toBeInTheDocument();
@@ -136,30 +135,17 @@ describe('DashboardBuilder', () => {
   it("shows 'No dashboard ID provided' banner when dashboardId is missing", () => {
     mockParams = {};
 
-    render(
-      <AppProvider i18n={mockTranslations as any}>
-        <MemoryRouter>
-          <DashboardBuilder />
-        </MemoryRouter>
-      </AppProvider>,
-    );
+    renderWithProviders(<DashboardBuilder />);
 
     expect(screen.getByText('No dashboard ID provided')).toBeInTheDocument();
   });
 
   it('renders the grid container after loading', async () => {
-    vi.mocked(getDashboard).mockResolvedValue({
-      ...mockDashboard,
-      reports: [mockReport],
-    });
-
-    render(
-      <AppProvider i18n={mockTranslations as any}>
-        <MemoryRouter initialEntries={['/dashboards/db-1/edit']}>
-          <DashboardBuilder />
-        </MemoryRouter>
-      </AppProvider>,
+    vi.mocked(getDashboard).mockResolvedValue(
+      createMockDashboard({ reports: [createMockReport()] }),
     );
+
+    renderWithProviders(<DashboardBuilder />, ['/dashboards/db-1/edit']);
 
     await waitFor(() => {
       expect(screen.getByTestId('grid-layout')).toBeInTheDocument();
