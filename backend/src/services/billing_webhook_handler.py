@@ -21,6 +21,7 @@ from src.models.webhook_event import WebhookEvent
 from src.models.billing_event import BillingEvent, BillingEventType
 from src.models.store import ShopifyStore
 from src.services.billing_service import BillingService
+from src.entitlements.cache import on_billing_state_change
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +243,16 @@ class BillingWebhookHandler:
             # Record successful processing
             self._record_event(shopify_event_id, topic, shop_domain, payload)
             self.db.commit()
+
+            # Immediately invalidate entitlement cache so the next request
+            # recomputes with the new billing state (EC1).
+            old_status = subscription.status if subscription else "none"
+            on_billing_state_change(
+                tenant_id=store.tenant_id,
+                old_state=old_status,
+                new_state=shopify_status.lower() if shopify_status else "unknown",
+                plan_id=subscription.plan_id if subscription else None,
+            )
 
             logger.info("Webhook processed successfully", extra={
                 "shopify_event_id": shopify_event_id,
@@ -478,6 +489,15 @@ class BillingWebhookHandler:
             # Record event
             self._record_event(shopify_event_id, "app/uninstalled", shop_domain, payload)
             self.db.commit()
+
+            # Invalidate entitlement cache for the uninstalled store (EC1)
+            if store:
+                on_billing_state_change(
+                    tenant_id=store.tenant_id,
+                    old_state="active",
+                    new_state="cancelled",
+                    plan_id=None,
+                )
 
             return WebhookProcessingResult(
                 processed=True,

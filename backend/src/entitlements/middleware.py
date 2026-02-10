@@ -233,9 +233,36 @@ class EntitlementMiddleware(BaseHTTPMiddleware):
                     )
 
         except Exception as e:
-            logger.error(f"Failed to build entitlement context: {e}")
-            # Don't block requests on entitlement errors - log and continue
-            request.state.entitlements = None
+            # FAIL CLOSED (EC2): entitlement evaluation failure MUST deny
+            # access.  Returning 503 ensures the UI shows a clear error
+            # rather than silently granting full access.
+            logger.critical(
+                "Entitlement evaluation failed — fail-closed",
+                extra={
+                    "tenant_id": tenant_id,
+                    "path": path,
+                    "error": str(e),
+                    "alert_type": "entitlement_eval_failed",
+                },
+            )
+
+            self._audit_logger.log_denial(AccessDenialEvent(
+                tenant_id=tenant_id,
+                feature_name="*",
+                billing_state="unknown",
+                endpoint=path,
+                method=request.method,
+                reason=f"Entitlement evaluation failed: {e}",
+            ))
+
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "error": "ENTITLEMENT_EVAL_FAILED",
+                    "error_code": "ENTITLEMENT_EVAL_FAILED",
+                    "message": "Unable to verify feature entitlements. Please retry.",
+                },
+            )
 
         response = await call_next(request)
 
@@ -388,8 +415,16 @@ def require_entitlement(
             # Get entitlement context
             ctx: Optional[EntitlementContext] = getattr(request.state, 'entitlements', None)
             if not ctx:
-                # No entitlement context - allow (for unauthenticated endpoints)
-                return await func(*args, **kwargs)
+                # Fail-closed: if an endpoint explicitly requires an
+                # entitlement but no context was built, deny access rather
+                # than silently allowing it.  Unauthenticated/excluded
+                # endpoints never reach this decorator because they are
+                # excluded at the middleware level.
+                raise PaymentRequiredError(
+                    detail="Entitlement context unavailable",
+                    feature=feature_key,
+                    billing_state="unknown",
+                )
 
             # Check feature access
             decision = ctx.check_feature(feature_key, operation)

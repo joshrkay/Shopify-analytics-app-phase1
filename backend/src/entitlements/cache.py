@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Cache configuration
 DEFAULT_CACHE_TTL_SECONDS = 300  # 5 minutes
 SHORT_CACHE_TTL_SECONDS = 60  # 1 minute for grace period states
+DEGRADED_CACHE_TTL_SECONDS = 60  # Reduced TTL when Redis is unavailable (EC8)
 INVALIDATION_CHANNEL = "entitlements:invalidations"
 
 
@@ -41,6 +42,7 @@ class CachedEntitlement:
     warnings: List[str]
     grace_period_ends_on: Optional[str] = None
     current_period_end: Optional[str] = None
+    resolved_at: Optional[str] = None
     cached_at: str = ""
     version: str = "1"
 
@@ -299,8 +301,15 @@ class EntitlementCache:
                 except Exception as e:
                     logger.warning(f"Failed to deserialize cached entitlement: {e}")
 
-        # Fall back to in-memory
-        data = self._memory_cache.get(key, self._ttl_seconds)
+        # Fall back to in-memory with reduced TTL when Redis is down (EC8)
+        # Without Redis pub/sub, cross-instance invalidation is impossible,
+        # so we use a shorter TTL to limit stale-data exposure.
+        memory_ttl = (
+            DEGRADED_CACHE_TTL_SECONDS
+            if not self._redis.available
+            else self._ttl_seconds
+        )
+        data = self._memory_cache.get(key, memory_ttl)
         if data:
             try:
                 cached = CachedEntitlement.from_json(data)

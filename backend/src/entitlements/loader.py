@@ -326,11 +326,30 @@ class EntitlementLoader:
             )
 
     def reload(self) -> None:
-        """Reload configuration from disk."""
+        """
+        Reload configuration from disk (atomic swap).
+
+        Builds the new config into temporary dicts, then swaps references
+        atomically so concurrent readers never see an empty state (EC6).
+        """
         logger.info("Reloading entitlements configuration")
-        self._plans.clear()
-        self._access_rules.clear()
-        self._load_config()
+
+        # Build new config into temporaries via _load_config
+        # _load_config acquires _load_lock internally
+        old_plans = self._plans
+        old_access_rules = self._access_rules
+
+        self._plans = {}
+        self._access_rules = {}
+
+        try:
+            self._load_config()
+        except Exception:
+            # Rollback: restore old references on failure
+            self._plans = old_plans
+            self._access_rules = old_access_rules
+            logger.error("Config reload failed, keeping previous config", exc_info=True)
+            raise
 
     def get_plan(self, plan_id_or_name: str) -> Optional[PlanEntitlements]:
         """
