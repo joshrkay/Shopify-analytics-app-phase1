@@ -90,6 +90,21 @@ async def instantiate_template(
             detail=f"Custom dashboards require a {result.required_tier or 'paid'} plan",
         )
 
+    # Check dashboard count limit before creating
+    max_dashboards = ent_service.get_feature_limit("custom_reports")
+    if max_dashboards is not None and max_dashboards != -1:
+        dashboard_service = CustomDashboardService(db, ctx.tenant_id, ctx.user_id)
+        current_count = dashboard_service.get_dashboard_count()
+        if current_count >= max_dashboards:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "message": f"Dashboard limit reached ({current_count}/{max_dashboards})",
+                    "current_count": current_count,
+                    "max_count": max_dashboards,
+                },
+            )
+
     tier = ent_service.get_billing_tier()
     template_service = ReportTemplateService(db, tier)
 

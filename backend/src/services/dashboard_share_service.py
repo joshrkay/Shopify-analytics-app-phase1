@@ -193,10 +193,6 @@ class DashboardShareService:
         3. Role-based share -> highest matching permission
         4. No match -> "none"
         """
-        dashboard = self.db.query(DashboardShare).filter(
-            DashboardShare.dashboard_id == dashboard_id,
-        ).first()
-
         # Check all shares for this dashboard
         shares = (
             self.db.query(DashboardShare)
@@ -209,9 +205,13 @@ class DashboardShareService:
         best_rank = 0
 
         for share in shares:
-            # Skip expired shares
-            if share.expires_at and share.expires_at < now:
-                continue
+            # Skip expired shares (handle naive datetimes from SQLite)
+            if share.expires_at:
+                expiry = share.expires_at
+                if expiry.tzinfo is None:
+                    expiry = expiry.replace(tzinfo=timezone.utc)
+                if expiry < now:
+                    continue
 
             # Direct user share
             if share.shared_with_user_id == user_id:

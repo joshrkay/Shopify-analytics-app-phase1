@@ -9,6 +9,7 @@ Phase: Custom Reports & Dashboard Builder
 """
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, HTTPException, Depends, status
 
@@ -42,9 +43,13 @@ def _get_share_service(request: Request, db=Depends(get_db_session)) -> Dashboar
 
 def _share_to_response(share) -> ShareResponse:
     """Convert a DashboardShare model to response, computing is_expired."""
-    from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
-    is_expired = share.expires_at is not None and share.expires_at < now
+    is_expired = False
+    if share.expires_at is not None:
+        expiry = share.expires_at
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        is_expired = expiry < now
 
     return ShareResponse(
         id=share.id,
