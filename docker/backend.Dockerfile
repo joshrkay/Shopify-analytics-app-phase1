@@ -20,6 +20,9 @@ COPY frontend/ ./
 ARG VITE_CLERK_PUBLISHABLE_KEY
 ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
 
+# Diagnostic: confirm whether the build arg was received from Render
+RUN echo "==> VITE_CLERK_PUBLISHABLE_KEY is set: $(test -n \"$VITE_CLERK_PUBLISHABLE_KEY\" && echo 'YES' || echo 'NO (will fall back to .env.production)')"
+
 # Use npx vite build directly instead of "npm run build" (which runs
 # tsc && vite build). The codebase has pre-existing TypeScript errors
 # that block tsc, but Vite/esbuild transpiles fine without strict
