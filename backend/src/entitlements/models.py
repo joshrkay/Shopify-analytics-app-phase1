@@ -313,7 +313,6 @@ class TenantEntitlementOverride(Base, TimestampMixin, TenantScopedMixin):
         Index(
             "idx_tenant_overrides_expiry",
             "expires_at",
-            postgresql_where=text("expires_at > NOW()"),
         ),
         Index(
             "idx_tenant_overrides_tenant_active",
