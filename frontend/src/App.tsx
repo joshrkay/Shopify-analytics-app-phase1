@@ -75,7 +75,7 @@ function AuthenticatedApp() {
   const { entitlements } = useEntitlements();
 
   return (
-    <>
+    <DataHealthProvider>
       <AppHeader />
       <Routes>
         <Route path="/admin/plans" element={<AdminPlans />} />
@@ -108,7 +108,7 @@ function AuthenticatedApp() {
 
         <Route path="/" element={<Navigate to="/analytics" replace />} />
       </Routes>
-    </>
+    </DataHealthProvider>
   );
 }
 
@@ -130,16 +130,14 @@ function App() {
       }}
     >
       <AppProvider i18n={enTranslations}>
-        <DataHealthProvider>
-          <BrowserRouter>
-            <SignedIn>
-              <AuthenticatedApp />
-            </SignedIn>
-            <SignedOut>
-              <RedirectToSignIn />
-            </SignedOut>
-          </BrowserRouter>
-        </DataHealthProvider>
+        <BrowserRouter>
+          <SignedIn>
+            <AuthenticatedApp />
+          </SignedIn>
+          <SignedOut>
+            <RedirectToSignIn />
+          </SignedOut>
+        </BrowserRouter>
       </AppProvider>
     </ErrorBoundary>
   );
