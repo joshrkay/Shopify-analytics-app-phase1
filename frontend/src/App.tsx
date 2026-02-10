@@ -1,4 +1,4 @@
- * Main App Component
+/** Main App Component
  *
  * Sets up Shopify Polaris provider, data health context, and routing.
  * Includes root-level error boundary for graceful error handling.
