@@ -519,7 +519,7 @@ class TenantContextMiddleware:
         # hashed bundles from the Vite build and contain no tenant data.
         # The SPA catch-all also serves files like vite.svg, favicon.ico,
         # etc. from the static directory — these must not require auth.
-        PUBLIC_PATHS = {"/", "/health", "/docs", "/redoc", "/openapi.json"}
+        PUBLIC_PATHS = {"/", "/health", "/docs", "/redoc", "/openapi.json", "/api/v1/embed/health"}
         # Static file extensions served by the SPA catch-all route
         STATIC_EXTENSIONS = (".svg", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".woff", ".woff2", ".ttf", ".map")
         if (
