@@ -18,25 +18,23 @@ COPY frontend/ ./
 # VITE_CLERK_PUBLISHABLE_KEY must be available at build time since Vite
 # inlines environment variables into the bundle.
 #
-# Priority order:
-#   1. Render build-arg (if provided and non-empty)
-#   2. frontend/.env.production (committed fallback)
-#
-# IMPORTANT: Do NOT use ENV here. Setting ENV with an empty ARG creates
-# VITE_CLERK_PUBLISHABLE_KEY="" in the process environment, which Vite
-# treats as "already set" and skips loading from .env.production.
+# Strategy: Explicitly source .env.production and export its variables
+# before running vite build. This is more reliable than depending on
+# Vite's .env file loading or Docker ARG/ENV interactions.
 ARG VITE_CLERK_PUBLISHABLE_KEY
 
-# Diagnostic: show which source will provide the Clerk key
-RUN echo "==> Build-arg VITE_CLERK_PUBLISHABLE_KEY: $(test -n \"$VITE_CLERK_PUBLISHABLE_KEY\" && echo 'YES (from Render)' || echo 'not set (will use .env.production)')" \
-    && if [ -f .env.production ]; then echo "==> .env.production exists: YES"; else echo "==> .env.production exists: NO"; fi
-
-# Build the frontend bundle. If the build-arg is empty, unset it so
-# Vite falls through to .env.production.
-RUN if [ -z "$VITE_CLERK_PUBLISHABLE_KEY" ]; then \
-      echo "==> Unsetting empty VITE_CLERK_PUBLISHABLE_KEY so Vite reads .env.production"; \
-      unset VITE_CLERK_PUBLISHABLE_KEY; \
-    fi \
+# Build: if build-arg is provided use it, otherwise source .env.production
+RUN echo "==> .env.production contents:" && cat .env.production 2>/dev/null || echo "(file not found)" \
+    && echo "==> Build-arg value length: $(echo -n "$VITE_CLERK_PUBLISHABLE_KEY" | wc -c)" \
+    && if [ -n "$VITE_CLERK_PUBLISHABLE_KEY" ]; then \
+         echo "==> Using VITE_CLERK_PUBLISHABLE_KEY from build arg"; \
+       elif [ -f .env.production ]; then \
+         echo "==> Sourcing .env.production"; \
+         set -a && . ./.env.production && set +a; \
+       else \
+         echo "==> WARNING: No key source found!"; \
+       fi \
+    && echo "==> Final VITE_CLERK_PUBLISHABLE_KEY length: $(echo -n "$VITE_CLERK_PUBLISHABLE_KEY" | wc -c)" \
     && npx vite build
 
 
