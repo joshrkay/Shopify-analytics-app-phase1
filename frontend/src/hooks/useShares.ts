@@ -19,7 +19,7 @@ import {
   updateShare,
   revokeShare,
 } from '../services/dashboardSharesApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseSharesResult {
   shares: DashboardShare[];
@@ -74,11 +74,7 @@ export function useShares(dashboardId: string | null): UseSharesResult {
       setTotal(data.total);
     } catch (err) {
       console.error('Failed to fetch shares:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load shares');
-      }
+      setError(getErrorMessage(err, 'Failed to load shares'));
     } finally {
       setLoading(false);
     }
@@ -102,10 +98,7 @@ export function useShares(dashboardId: string | null): UseSharesResult {
       return result;
     } catch (err) {
       console.error('Failed to create share:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to create share';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to create share'));
       throw err;
     } finally {
       setSaving(false);
@@ -129,10 +122,7 @@ export function useShares(dashboardId: string | null): UseSharesResult {
       return result;
     } catch (err) {
       console.error('Failed to update share:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to update share';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to update share'));
       throw err;
     } finally {
       setSaving(false);
@@ -152,10 +142,7 @@ export function useShares(dashboardId: string | null): UseSharesResult {
       await loadShares();
     } catch (err) {
       console.error('Failed to revoke share:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to revoke share';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to revoke share'));
       throw err;
     } finally {
       setSaving(false);

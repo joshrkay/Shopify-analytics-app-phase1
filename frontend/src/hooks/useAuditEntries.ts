@@ -10,7 +10,7 @@
 import { useState, useCallback } from 'react';
 import type { AuditEntry } from '../types/customDashboards';
 import { listAuditEntries } from '../services/customDashboardsApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseAuditEntriesResult {
   entries: AuditEntry[];
@@ -59,11 +59,7 @@ export function useAuditEntries(dashboardId: string | null): UseAuditEntriesResu
       setTotal(data.total);
     } catch (err) {
       console.error('Failed to fetch audit entries:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load audit trail');
-      }
+      setError(getErrorMessage(err, 'Failed to load audit trail'));
     } finally {
       setLoading(false);
     }
@@ -80,11 +76,7 @@ export function useAuditEntries(dashboardId: string | null): UseAuditEntriesResu
       setTotal(data.total);
     } catch (err) {
       console.error('Failed to load more audit entries:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load more entries');
-      }
+      setError(getErrorMessage(err, 'Failed to load more entries'));
     } finally {
       setLoadingMore(false);
     }

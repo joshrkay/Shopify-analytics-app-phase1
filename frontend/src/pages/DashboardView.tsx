@@ -30,8 +30,11 @@ import {
 import ReactGridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import '../styles/dashboard-print.css';
 import { getDashboard } from '../services/customDashboardsApi';
+import { getErrorMessage, getErrorStatus } from '../services/apiUtils';
 import { ViewReportCard } from '../components/dashboards/ViewReportCard';
+import { FilterBar, type ActiveFilter } from '../components/dashboards/FilterBar';
 import { ShareModal } from '../components/dashboards/ShareModal';
 import { VersionHistory } from '../components/dashboards/VersionHistory';
 import type { Dashboard, Report } from '../types/customDashboards';
@@ -47,8 +50,16 @@ export function DashboardView() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+  const [filterVersion, setFilterVersion] = useState(0);
+
+  const handleFilterChange = useCallback((filters: ActiveFilter[]) => {
+    setActiveFilters(filters);
+    setFilterVersion((v) => v + 1);
+  }, []);
 
   // Fetch dashboard on mount
   useEffect(() => {
@@ -68,9 +79,8 @@ export function DashboardView() {
       } catch (err) {
         if (!cancelled) {
           console.error('Failed to fetch dashboard:', err);
-          setError(
-            err instanceof Error ? err.message : 'Failed to load dashboard',
-          );
+          setError(getErrorMessage(err, 'Failed to load dashboard'));
+          setErrorStatus(getErrorStatus(err));
         }
       } finally {
         if (!cancelled) {
@@ -127,9 +137,23 @@ export function DashboardView() {
 
   // Error state
   if (error || !dashboard) {
+    const errorTitle =
+      errorStatus === 403
+        ? 'Access denied'
+        : errorStatus === 404
+          ? 'Dashboard not found'
+          : 'Error loading dashboard';
+
     return (
-      <Page title="Dashboard">
-        <Banner tone="critical">
+      <Page
+        title="Dashboard"
+        breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
+      >
+        <Banner
+          tone="critical"
+          title={errorTitle}
+          action={{ content: 'Back to dashboards', onAction: () => navigate('/dashboards') }}
+        >
           {error || 'Dashboard not found'}
         </Banner>
       </Page>
@@ -156,6 +180,10 @@ export function DashboardView() {
       onAction: () => setShowHistory(true),
     });
   }
+  secondaryActions.push({
+    content: 'Print',
+    onAction: () => window.print(),
+  });
 
   // Status badge
   const statusBadge =
@@ -177,6 +205,12 @@ export function DashboardView() {
     >
       <Layout>
         <Layout.Section>
+          {dashboard.filters_json && dashboard.filters_json.length > 0 && (
+            <FilterBar
+              filters={dashboard.filters_json}
+              onFilterChange={handleFilterChange}
+            />
+          )}
           {reports.length === 0 ? (
             <Box paddingBlockStart="800">
               <EmptyState
@@ -213,7 +247,11 @@ export function DashboardView() {
             >
               {reports.map((report: Report) => (
                 <div key={report.id}>
-                  <ViewReportCard report={report} />
+                  <ViewReportCard
+                    report={report}
+                    activeFilters={activeFilters}
+                    filterVersion={filterVersion}
+                  />
                 </div>
               ))}
             </ReactGridLayout>

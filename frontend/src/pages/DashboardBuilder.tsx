@@ -13,9 +13,9 @@
  * Phase 4A - Version History Integration
  */
 
-import { useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Page, SkeletonPage, Banner, Layout } from '@shopify/polaris';
+import { useState, useCallback, useEffect } from 'react';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { Page, SkeletonPage, Banner, Layout, Modal, Text } from '@shopify/polaris';
 import { DashboardBuilderProvider, useDashboardBuilder } from '../contexts/DashboardBuilderContext';
 import { DashboardToolbar } from '../components/dashboards/DashboardToolbar';
 import { DashboardGrid } from '../components/dashboards/DashboardGrid';
@@ -25,10 +25,34 @@ import { VersionHistory } from '../components/dashboards/VersionHistory';
 import type { Dashboard } from '../types/customDashboards';
 
 function BuilderContent() {
-  const { dashboard, isSaving, saveError, publishDashboard, clearError, refreshDashboard } = useDashboardBuilder();
+  const {
+    dashboard,
+    loadError,
+    isDirty,
+    isSaving,
+    saveError,
+    saveErrorStatus,
+    autoSaveMessage,
+    publishDashboard,
+    clearError,
+    refreshDashboard,
+  } = useDashboardBuilder();
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+
+  // Block navigation when there are unsaved changes
+  const blocker = useBlocker(isDirty);
+
+  // Also guard browser close / refresh
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   const handleRestore = useCallback((restored: Dashboard) => {
     // Refresh the builder context to pick up restored state
@@ -37,6 +61,20 @@ function BuilderContent() {
     }
     setShowHistory(false);
   }, [refreshDashboard]);
+
+  // Error state: show error page instead of skeleton forever
+  if (!dashboard && loadError) {
+    return (
+      <Page
+        title="Dashboard"
+        breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
+      >
+        <Banner tone="critical" title="Failed to load dashboard">
+          {loadError}
+        </Banner>
+      </Page>
+    );
+  }
 
   if (!dashboard) return <SkeletonPage primaryAction />;
 
@@ -57,8 +95,21 @@ function BuilderContent() {
       breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
     >
       {saveError && (
-        <Banner tone="critical" onDismiss={clearError}>
+        <Banner
+          tone="critical"
+          onDismiss={clearError}
+          action={
+            saveErrorStatus === 409
+              ? { content: 'Reload dashboard', onAction: refreshDashboard }
+              : undefined
+          }
+        >
           {saveError}
+        </Banner>
+      )}
+      {autoSaveMessage && !saveError && (
+        <Banner tone="warning">
+          {autoSaveMessage}
         </Banner>
       )}
       <Layout>
@@ -79,6 +130,30 @@ function BuilderContent() {
         onClose={() => setShowHistory(false)}
         onRestore={handleRestore}
       />
+
+      {/* Unsaved changes confirmation modal */}
+      <Modal
+        open={blocker.state === 'blocked'}
+        onClose={() => blocker.reset?.()}
+        title="You have unsaved changes"
+        primaryAction={{
+          content: 'Leave anyway',
+          destructive: true,
+          onAction: () => blocker.proceed?.(),
+        }}
+        secondaryActions={[
+          {
+            content: 'Stay on page',
+            onAction: () => blocker.reset?.(),
+          },
+        ]}
+      >
+        <Modal.Section>
+          <Text as="p" variant="bodyMd">
+            Your unsaved changes will be lost if you leave this page.
+          </Text>
+        </Modal.Section>
+      </Modal>
     </Page>
   );
 }

@@ -27,7 +27,7 @@ import {
 } from '@shopify/polaris';
 import { useDashboardBuilder } from '../../contexts/DashboardBuilderContext';
 import { ChartRenderer } from '../charts/ChartRenderer';
-import { chartPreview } from '../../services/datasetsApi';
+import { chartPreview, validateConfig } from '../../services/datasetsApi';
 import type {
   Report,
   ChartPreviewResponse,
@@ -46,6 +46,7 @@ export function ReportCard({ report }: ReportCardProps) {
   const [previewData, setPreviewData] = useState<Record<string, unknown>[] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [configWarnings, setConfigWarnings] = useState<string[]>([]);
   const [menuActive, setMenuActive] = useState(false);
 
   // Fetch chart preview on mount
@@ -55,6 +56,26 @@ export function ReportCard({ report }: ReportCardProps) {
     async function fetchPreview() {
       setPreviewLoading(true);
       setPreviewError(null);
+
+      // Validate config columns against current dataset schema
+      try {
+        const referencedColumns = [
+          ...report.config_json.metrics.map((m) => m.column),
+          ...report.config_json.dimensions,
+          ...report.config_json.filters.map((f) => f.column),
+        ].filter(Boolean);
+        if (referencedColumns.length > 0) {
+          const validation = await validateConfig({
+            dataset_name: report.dataset_name,
+            referenced_columns: referencedColumns,
+          });
+          if (!cancelled && validation.warnings.length > 0) {
+            setConfigWarnings(validation.warnings.map((w) => w.message));
+          }
+        }
+      } catch {
+        // Non-critical: validation failure shouldn't block preview
+      }
 
       try {
         const validMetrics = report.config_json.metrics.filter((m) => m.column !== '');
@@ -177,10 +198,10 @@ export function ReportCard({ report }: ReportCardProps) {
           </InlineStack>
 
           {/* Warnings */}
-          {report.warnings.length > 0 && (
+          {(report.warnings.length > 0 || configWarnings.length > 0) && (
             <Banner tone="warning">
               <BlockStack gap="100">
-                {report.warnings.map((warning, idx) => (
+                {[...report.warnings, ...configWarnings].map((warning, idx) => (
                   <Text key={idx} as="p" variant="bodySm">
                     {warning}
                   </Text>

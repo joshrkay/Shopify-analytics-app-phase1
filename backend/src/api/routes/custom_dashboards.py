@@ -30,6 +30,7 @@ from src.services.custom_report_service import (
     CustomReportService,
     ReportNotFoundError,
     ReportNameConflictError,
+    DatasetNotFoundError,
 )
 from src.api.schemas.custom_dashboards import (
     CreateDashboardRequest,
@@ -404,6 +405,8 @@ async def add_report(
         )
     except DashboardNotFoundError:
         raise HTTPException(status_code=404, detail="Dashboard not found")
+    except DatasetNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except ReportNameConflictError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:

@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Dataset } from '../types/customDashboards';
 import { listDatasets } from '../services/datasetsApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseDatasetsResult {
   datasets: Dataset[];
@@ -52,11 +52,7 @@ export function useDatasets(): UseDatasetsResult {
       setStale(data.stale);
     } catch (err) {
       console.error('Failed to fetch datasets:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load datasets');
-      }
+      setError(getErrorMessage(err, 'Failed to load datasets'));
     } finally {
       setLoading(false);
     }

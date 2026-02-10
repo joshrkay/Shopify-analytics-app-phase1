@@ -22,10 +22,13 @@ from sqlalchemy.exc import IntegrityError
 
 from src.models.dashboard_share import DashboardShare, SharePermission
 from src.models.dashboard_audit import DashboardAudit, DashboardAuditAction
+from src.models.user import User
+from src.models.user_tenant_roles import UserTenantRole
 from src.services.custom_dashboard_service import (
     CustomDashboardService,
     DashboardNotFoundError,
 )
+from src.services.billing_entitlements import BillingEntitlementsService
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,10 @@ class ShareConflictError(Exception):
 
 class ShareValidationError(Exception):
     """Share request fails validation."""
+
+
+class ShareLimitExceededError(Exception):
+    """Share count exceeds the billing tier limit."""
 
 
 # Permission ranking for resolution (higher = more access)
@@ -98,6 +105,13 @@ class DashboardShareService:
         # Cannot share with yourself
         if shared_with_user_id and shared_with_user_id == dashboard.created_by:
             raise ShareValidationError("Cannot share a dashboard with its owner")
+
+        # Validate recipient has access to this tenant
+        if shared_with_user_id:
+            self._validate_recipient_tenant_access(shared_with_user_id)
+
+        # Enforce share count limit per billing tier
+        self._check_share_limit(dashboard.id)
 
         share = DashboardShare(
             id=str(uuid.uuid4()),
@@ -232,6 +246,50 @@ class DashboardShareService:
     # =========================================================================
     # Internal Helpers
     # =========================================================================
+
+    def _check_share_limit(self, dashboard_id: str) -> None:
+        """Enforce billing tier share count limit."""
+        try:
+            entitlements = BillingEntitlementsService(self.db, self.tenant_id)
+            max_shares = entitlements.get_max_dashboard_shares()
+            current_count = self.db.query(DashboardShare).filter(
+                DashboardShare.dashboard_id == dashboard_id,
+            ).count()
+            if current_count >= max_shares:
+                raise ShareLimitExceededError(
+                    f"You've reached the maximum of {max_shares} shares for your current plan. "
+                    "Upgrade to share with more users."
+                )
+        except ShareLimitExceededError:
+            raise
+        except Exception as exc:
+            # Don't block sharing if entitlement check itself fails
+            logger.warning(
+                "dashboard_share.limit_check_failed",
+                extra={"dashboard_id": dashboard_id, "error": str(exc)},
+            )
+
+    def _validate_recipient_tenant_access(self, shared_with_user_id: str) -> None:
+        """Verify the recipient user belongs to the same tenant."""
+        recipient = self.db.query(User).filter(
+            User.clerk_user_id == shared_with_user_id,
+        ).first()
+
+        if not recipient:
+            raise ShareValidationError(
+                "User does not exist or cannot be found"
+            )
+
+        has_tenant_access = self.db.query(UserTenantRole).filter(
+            UserTenantRole.user_id == recipient.id,
+            UserTenantRole.tenant_id == self.tenant_id,
+            UserTenantRole.is_active == True,
+        ).first() is not None
+
+        if not has_tenant_access:
+            raise ShareValidationError(
+                "User does not have access to this workspace"
+            )
 
     def _check_share_manage_access(self, dashboard) -> None:
         """Verify caller can manage shares (owner or admin)."""

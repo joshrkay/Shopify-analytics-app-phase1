@@ -21,6 +21,7 @@ from src.services.custom_dashboard_service import (
     CustomDashboardService,
     DashboardNotFoundError,
 )
+from src.services.dataset_discovery_service import DatasetDiscoveryService
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,10 @@ class ReportNotFoundError(Exception):
 
 class ReportNameConflictError(Exception):
     """Report name already exists within the dashboard."""
+
+
+class DatasetNotFoundError(Exception):
+    """Dataset name is not in the set of discoverable datasets."""
 
 
 class CustomReportService:
@@ -85,6 +90,7 @@ class CustomReportService:
         dashboard = self._dashboard_service.get_dashboard(dashboard_id)
         self._check_dashboard_write_access(dashboard)
         self._validate_position_for_chart_type(chart_type, position_json)
+        self._validate_dataset_access(dataset_name)
 
         # Determine sort order (append to end)
         max_sort = (
@@ -245,6 +251,27 @@ class CustomReportService:
     # =========================================================================
     # Internal Helpers
     # =========================================================================
+
+    def _validate_dataset_access(self, dataset_name: str) -> None:
+        """Verify the dataset exists in Superset's discoverable datasets."""
+        try:
+            discovery = DatasetDiscoveryService()
+            result = discovery.discover_datasets()
+            known_names = {ds.dataset_name for ds in result.datasets}
+            if dataset_name not in known_names:
+                raise DatasetNotFoundError(
+                    f"Dataset '{dataset_name}' is not available. "
+                    "Check the dataset name or contact your administrator."
+                )
+        except DatasetNotFoundError:
+            raise
+        except Exception as exc:
+            # If Superset is unreachable, allow the operation but log a warning.
+            # This avoids blocking dashboard creation when Superset is temporarily down.
+            logger.warning(
+                "custom_report.dataset_validation_skipped",
+                extra={"dataset_name": dataset_name, "error": str(exc)},
+            )
 
     def _check_dashboard_write_access(self, dashboard: CustomDashboard) -> None:
         """Verify caller can write to the parent dashboard."""

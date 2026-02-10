@@ -155,3 +155,43 @@ export function buildQueryString<T extends object>(filters: T): string {
   const queryString = params.toString();
   return queryString ? `?${queryString}` : '';
 }
+
+/**
+ * Get the HTTP status code from an error, or null if not an API error.
+ */
+export function getErrorStatus(err: unknown): number | null {
+  return isApiError(err) ? err.status : null;
+}
+
+/**
+ * Map API error to a user-friendly message with status-specific defaults.
+ *
+ * Provides distinct messages for:
+ * - 402: Plan limit / upgrade required
+ * - 403: Permission denied
+ * - 404: Resource not found
+ * - 409: Concurrent edit conflict
+ * - 422: Validation error
+ *
+ * The backend's `detail` field always takes priority when present.
+ */
+export function getErrorMessage(err: unknown, fallback: string): string {
+  if (!isApiError(err)) {
+    return err instanceof Error ? err.message : fallback;
+  }
+
+  switch (err.status) {
+    case 402:
+      return err.detail || 'You\'ve reached your plan limit. Upgrade to continue.';
+    case 403:
+      return err.detail || 'You don\'t have permission to perform this action.';
+    case 404:
+      return err.detail || 'The requested resource was not found.';
+    case 409:
+      return err.detail || 'This resource was modified by another user. Please reload and try again.';
+    case 422:
+      return err.detail || 'Invalid input. Please check your data and try again.';
+    default:
+      return err.detail || err.message || fallback;
+  }
+}

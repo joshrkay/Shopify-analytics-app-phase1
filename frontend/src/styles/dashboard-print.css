@@ -1,0 +1,37 @@
+@media print {
+  /* Hide navigation, filter bar, action buttons during print */
+  .Polaris-TopBar,
+  .Polaris-Navigation,
+  .Polaris-Frame__Navigation,
+  .Polaris-Page__Header .Polaris-Page-Header__Row:last-child,
+  .dashboard-filter-bar,
+  .Polaris-Frame__TopBar {
+    display: none !important;
+  }
+
+  /* Make content full width */
+  .Polaris-Frame__Content,
+  .Polaris-Frame__Main,
+  .Polaris-Page {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Size charts for A4 */
+  .dashboard-grid-layout {
+    width: 100% !important;
+  }
+
+  /* Avoid page breaks inside chart widgets */
+  .react-grid-item {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Remove card shadows for cleaner print */
+  .Polaris-Card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+}

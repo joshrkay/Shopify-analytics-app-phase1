@@ -13,7 +13,7 @@ import type {
   TemplateFilters,
 } from '../types/customDashboards';
 import { listTemplates } from '../services/templatesApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseTemplatesResult {
   templates: ReportTemplate[];
@@ -51,11 +51,7 @@ export function useTemplates(filters: TemplateFilters = {}): UseTemplatesResult 
       setTotal(data.total);
     } catch (err) {
       console.error('Failed to fetch templates:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load templates');
-      }
+      setError(getErrorMessage(err, 'Failed to load templates'));
     } finally {
       setLoading(false);
     }

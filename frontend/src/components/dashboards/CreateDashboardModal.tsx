@@ -20,15 +20,22 @@ import {
 } from '@shopify/polaris';
 import { useNavigate } from 'react-router-dom';
 import { createDashboard } from '../../services/customDashboardsApi';
+import { getErrorMessage } from '../../services/apiUtils';
 
 interface CreateDashboardModalProps {
   open: boolean;
   onClose: () => void;
+  atLimit?: boolean;
+  maxCount?: number | null;
+  onSuccess?: () => void;
 }
 
 export function CreateDashboardModal({
   open,
   onClose,
+  atLimit = false,
+  maxCount = null,
+  onSuccess,
 }: CreateDashboardModalProps) {
   const navigate = useNavigate();
 
@@ -80,10 +87,11 @@ export function CreateDashboardModal({
       });
       resetForm();
       onClose();
+      onSuccess?.();
       navigate(`/dashboards/${dashboard.id}/edit`);
     } catch (err) {
       console.error('Failed to create dashboard:', err);
-      setError('Failed to create dashboard. Please try again.');
+      setError(getErrorMessage(err, 'Failed to create dashboard. Please try again.'));
     } finally {
       setIsCreating(false);
     }
@@ -110,6 +118,12 @@ export function CreateDashboardModal({
     >
       <Modal.Section>
         <BlockStack gap="400">
+          {atLimit && (
+            <Banner tone="warning">
+              You&apos;ve reached the maximum of {maxCount} dashboards for your current plan.
+              Delete an existing dashboard or upgrade to create more.
+            </Banner>
+          )}
           {error && (
             <Banner tone="critical" onDismiss={() => setError(null)}>
               {error}
@@ -148,7 +162,7 @@ export function CreateDashboardModal({
               variant="primary"
               onClick={handleCreateBlank}
               loading={isCreating}
-              disabled={isCreating}
+              disabled={isCreating || atLimit}
             >
               Create blank dashboard
             </Button>

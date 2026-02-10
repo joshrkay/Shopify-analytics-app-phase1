@@ -14,7 +14,7 @@ import type {
   ChartPreviewResponse,
 } from '../types/customDashboards';
 import { chartPreview } from '../services/datasetsApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseChartPreviewResult {
   previewData: ChartPreviewResponse | null;
@@ -65,10 +65,7 @@ export function useChartPreview(): UseChartPreviewResult {
       return data;
     } catch (err) {
       console.error('Failed to fetch chart preview:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to load chart preview';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to load chart preview'));
       setPreviewData(null);
       return null;
     } finally {

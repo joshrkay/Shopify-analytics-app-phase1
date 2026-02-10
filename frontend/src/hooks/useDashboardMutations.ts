@@ -23,7 +23,7 @@ import {
   publishDashboard,
   duplicateDashboard,
 } from '../services/customDashboardsApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseDashboardMutationsResult {
   saving: boolean;
@@ -65,10 +65,7 @@ export function useDashboardMutations(): UseDashboardMutationsResult {
       return result;
     } catch (err) {
       console.error('Failed to create dashboard:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to create dashboard';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to create dashboard'));
       throw err;
     } finally {
       setSaving(false);
@@ -86,10 +83,7 @@ export function useDashboardMutations(): UseDashboardMutationsResult {
       return result;
     } catch (err) {
       console.error('Failed to update dashboard:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to update dashboard';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to update dashboard'));
       throw err;
     } finally {
       setSaving(false);
@@ -103,10 +97,7 @@ export function useDashboardMutations(): UseDashboardMutationsResult {
       await deleteDashboard(dashboardId);
     } catch (err) {
       console.error('Failed to delete dashboard:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to delete dashboard';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to delete dashboard'));
       throw err;
     } finally {
       setSaving(false);
@@ -121,10 +112,7 @@ export function useDashboardMutations(): UseDashboardMutationsResult {
       return result;
     } catch (err) {
       console.error('Failed to publish dashboard:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to publish dashboard';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to publish dashboard'));
       throw err;
     } finally {
       setSaving(false);
@@ -142,10 +130,7 @@ export function useDashboardMutations(): UseDashboardMutationsResult {
       return result;
     } catch (err) {
       console.error('Failed to duplicate dashboard:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to duplicate dashboard';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to duplicate dashboard'));
       throw err;
     } finally {
       setSaving(false);

@@ -20,6 +20,7 @@ from src.services.dashboard_share_service import (
     ShareNotFoundError,
     ShareConflictError,
     ShareValidationError,
+    ShareLimitExceededError,
 )
 from src.services.custom_dashboard_service import DashboardNotFoundError
 from src.api.schemas.custom_dashboards import (
@@ -103,6 +104,8 @@ async def create_share(
         raise HTTPException(status_code=404, detail="Dashboard not found")
     except ShareValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ShareLimitExceededError as e:
+        raise HTTPException(status_code=402, detail=str(e))
     except ShareConflictError as e:
         raise HTTPException(status_code=409, detail=str(e))
 

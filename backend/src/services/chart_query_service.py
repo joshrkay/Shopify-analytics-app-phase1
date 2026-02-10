@@ -280,6 +280,50 @@ class ChartQueryService:
             return results[0]["id"]
         return None
 
+    def _get_dataset_columns(self, dataset_id: int, client: httpx.Client) -> set[str]:
+        """Fetch the set of valid column names for a dataset."""
+        try:
+            resp = client.get(
+                f"{self._superset_url}/api/v1/dataset/{dataset_id}",
+                headers=self._auth_headers(),
+                params={"q": json.dumps({"columns": ["columns"]})},
+            )
+            if resp.status_code == 401:
+                self._clear_auth()
+            resp.raise_for_status()
+            result = resp.json().get("result", {})
+            columns = result.get("columns", [])
+            return {c.get("column_name", "") for c in columns if c.get("column_name")}
+        except Exception:
+            # If we can't fetch columns, skip validation rather than blocking
+            return set()
+
+    def _validate_config_columns(
+        self,
+        config: ChartConfig,
+        valid_columns: set[str],
+    ) -> list[str]:
+        """Check that all referenced columns exist. Returns list of invalid column names."""
+        if not valid_columns:
+            return []
+        referenced = set()
+        for m in config.metrics:
+            if isinstance(m, str):
+                referenced.add(m)
+            elif isinstance(m, dict):
+                col = m.get("column", {})
+                if isinstance(col, dict):
+                    referenced.add(col.get("column_name", ""))
+                elif isinstance(col, str):
+                    referenced.add(col)
+        referenced.update(config.dimensions)
+        for f in config.filters:
+            referenced.add(f.get("column", ""))
+        if config.time_column:
+            referenced.add(config.time_column)
+        referenced.discard("")
+        return sorted(referenced - valid_columns)
+
     def execute_preview(
         self,
         config: ChartConfig,
@@ -318,6 +362,16 @@ class ChartQueryService:
                 if dataset_id is None:
                     return ChartPreviewResult(
                         message=f"Dataset '{config.dataset_name}' not found",
+                        viz_type=_resolve_viz_type(config.viz_type),
+                    )
+
+                # Validate referenced columns exist in dataset
+                valid_columns = self._get_dataset_columns(dataset_id, client)
+                invalid_cols = self._validate_config_columns(config, valid_columns)
+                if invalid_cols:
+                    return ChartPreviewResult(
+                        message=f"Unknown columns referenced: {', '.join(invalid_cols)}. "
+                        "These columns may have been renamed or removed from the dataset.",
                         viz_type=_resolve_viz_type(config.viz_type),
                     )
 

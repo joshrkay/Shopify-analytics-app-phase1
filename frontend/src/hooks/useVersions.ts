@@ -17,7 +17,7 @@ import {
   listVersions,
   restoreVersion,
 } from '../services/customDashboardsApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseVersionsResult {
   versions: DashboardVersion[];
@@ -82,11 +82,7 @@ export function useVersions(dashboardId: string | null): UseVersionsResult {
       initialTotalRef.current = data.total;
     } catch (err) {
       console.error('Failed to fetch versions:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load version history');
-      }
+      setError(getErrorMessage(err, 'Failed to load version history'));
     } finally {
       setLoading(false);
     }
@@ -108,11 +104,7 @@ export function useVersions(dashboardId: string | null): UseVersionsResult {
       }
     } catch (err) {
       console.error('Failed to load more versions:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load more versions');
-      }
+      setError(getErrorMessage(err, 'Failed to load more versions'));
     } finally {
       setLoadingMore(false);
     }
@@ -132,10 +124,7 @@ export function useVersions(dashboardId: string | null): UseVersionsResult {
       return result;
     } catch (err) {
       console.error('Failed to restore version:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to restore version';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to restore version'));
       throw err;
     } finally {
       setRestoring(false);

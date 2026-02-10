@@ -62,6 +62,7 @@ BILLING_TIER_FEATURES = {
         BillingFeature.LLM_ROUTING: False,  # Story 8.8
         BillingFeature.CUSTOM_PROMPTS: False,  # Story 8.8
         'max_dashboard_access': 3,
+        'max_dashboard_shares': 0,
         'max_users': 2,
     },
     'growth': {
@@ -77,6 +78,7 @@ BILLING_TIER_FEATURES = {
         BillingFeature.LLM_ROUTING: True,   # Story 8.8
         BillingFeature.CUSTOM_PROMPTS: False,  # Story 8.8 - Enterprise only
         'max_dashboard_access': 10,
+        'max_dashboard_shares': 5,
         'max_users': 10,
         'max_agency_stores': 5,
     },
@@ -93,6 +95,7 @@ BILLING_TIER_FEATURES = {
         BillingFeature.LLM_ROUTING: True,    # Story 8.8
         BillingFeature.CUSTOM_PROMPTS: True,  # Story 8.8 - Custom prompt templates
         'max_dashboard_access': 999,
+        'max_dashboard_shares': 999,
         'max_users': 999,
         'max_agency_stores': 999,
     },
@@ -280,6 +283,12 @@ class BillingEntitlementsService:
             revoked_roles=revoked_roles,
             reason=f"Roles {revoked_roles} not allowed for tier '{billing_tier}'" if revoked_roles else None,
         )
+
+    def get_max_dashboard_shares(self) -> int:
+        """Get the maximum number of dashboard shares allowed per dashboard."""
+        billing_tier = self.get_billing_tier()
+        tier_features = BILLING_TIER_FEATURES.get(billing_tier, {})
+        return tier_features.get('max_dashboard_shares', 0)
 
     def get_max_agency_stores(self) -> int:
         """

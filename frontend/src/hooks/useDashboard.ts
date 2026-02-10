@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Dashboard } from '../types/customDashboards';
 import { getDashboard } from '../services/customDashboardsApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseDashboardResult {
   dashboard: Dashboard | null;
@@ -52,11 +52,7 @@ export function useDashboard(dashboardId: string | null): UseDashboardResult {
       setDashboard(data);
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-      }
+      setError(getErrorMessage(err, 'Failed to load dashboard'));
     } finally {
       setLoading(false);
     }

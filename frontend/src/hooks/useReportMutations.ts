@@ -22,7 +22,7 @@ import {
   deleteReport,
   reorderReports,
 } from '../services/customReportsApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseReportMutationsResult {
   saving: boolean;
@@ -71,10 +71,7 @@ export function useReportMutations(): UseReportMutationsResult {
       return result;
     } catch (err) {
       console.error('Failed to create report:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to create report';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to create report'));
       throw err;
     } finally {
       setSaving(false);
@@ -93,10 +90,7 @@ export function useReportMutations(): UseReportMutationsResult {
       return result;
     } catch (err) {
       console.error('Failed to update report:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to update report';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to update report'));
       throw err;
     } finally {
       setSaving(false);
@@ -113,10 +107,7 @@ export function useReportMutations(): UseReportMutationsResult {
       await deleteReport(dashboardId, reportId);
     } catch (err) {
       console.error('Failed to delete report:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to delete report';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to delete report'));
       throw err;
     } finally {
       setSaving(false);
@@ -134,10 +125,7 @@ export function useReportMutations(): UseReportMutationsResult {
       return result;
     } catch (err) {
       console.error('Failed to reorder reports:', err);
-      const message = isApiError(err)
-        ? err.detail || err.message
-        : err instanceof Error ? err.message : 'Failed to reorder reports';
-      setError(message);
+      setError(getErrorMessage(err, 'Failed to reorder reports'));
       throw err;
     } finally {
       setSaving(false);

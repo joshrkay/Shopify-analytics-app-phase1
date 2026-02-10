@@ -14,7 +14,7 @@ import type {
   DashboardListResponse,
 } from '../types/customDashboards';
 import { listDashboards } from '../services/customDashboardsApi';
-import { isApiError } from '../services/apiUtils';
+import { getErrorMessage } from '../services/apiUtils';
 
 interface UseDashboardsResult {
   dashboards: Dashboard[];
@@ -55,11 +55,7 @@ export function useDashboards(filters: DashboardFilters = {}): UseDashboardsResu
       setHasMore(data.has_more);
     } catch (err) {
       console.error('Failed to fetch dashboards:', err);
-      if (isApiError(err)) {
-        setError(err.detail || err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboards');
-      }
+      setError(getErrorMessage(err, 'Failed to load dashboards'));
     } finally {
       setLoading(false);
     }

@@ -37,7 +37,9 @@ import {
   listDashboards,
   deleteDashboard,
   duplicateDashboard,
+  getDashboardCount,
 } from '../services/customDashboardsApi';
+import type { DashboardCountResponse } from '../types/customDashboards';
 import { fetchEntitlements, isFeatureEntitled } from '../services/entitlementsApi';
 import type { EntitlementsResponse } from '../services/entitlementsApi';
 import { CreateDashboardModal } from '../components/dashboards/CreateDashboardModal';
@@ -94,6 +96,9 @@ export function DashboardList() {
   // Entitlements state
   const [entitlements, setEntitlements] = useState<EntitlementsResponse | null>(null);
 
+  // Dashboard count/limit state
+  const [dashboardCount, setDashboardCount] = useState<DashboardCountResponse | null>(null);
+
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
@@ -133,7 +138,7 @@ export function DashboardList() {
     }
   }, [buildFilters]);
 
-  // Fetch entitlements on mount
+  // Fetch entitlements and dashboard count on mount
   useEffect(() => {
     async function loadEntitlements() {
       try {
@@ -143,7 +148,16 @@ export function DashboardList() {
         console.error('Failed to fetch entitlements:', err);
       }
     }
+    async function loadDashboardCount() {
+      try {
+        const data = await getDashboardCount();
+        setDashboardCount(data);
+      } catch (err) {
+        console.error('Failed to fetch dashboard count:', err);
+      }
+    }
     loadEntitlements();
+    loadDashboardCount();
   }, []);
 
   // Fetch dashboards on mount and when filters change
@@ -151,8 +165,10 @@ export function DashboardList() {
     fetchDashboards();
   }, [fetchDashboards]);
 
-  // Check if user can create dashboards
-  const canCreate = isFeatureEntitled(entitlements, 'custom_dashboards');
+  // Check if user can create dashboards (entitlement + count limit)
+  const hasEntitlement = isFeatureEntitled(entitlements, 'custom_dashboards');
+  const canCreate = hasEntitlement && (dashboardCount?.can_create ?? true);
+  const atLimit = hasEntitlement && dashboardCount !== null && !dashboardCount.can_create;
 
   // Tab change handler
   const handleTabChange = useCallback((selectedTabIndex: number) => {
@@ -203,14 +219,26 @@ export function DashboardList() {
     setCreateModalOpen(true);
   }, []);
 
+  // Refresh dashboard count (after create/duplicate/delete)
+  const refreshCount = useCallback(async () => {
+    try {
+      const data = await getDashboardCount();
+      setDashboardCount(data);
+    } catch {
+      // Non-critical
+    }
+  }, []);
+
   // Success callbacks for modals
   const handleDuplicateSuccess = useCallback(() => {
     fetchDashboards();
-  }, [fetchDashboards]);
+    refreshCount();
+  }, [fetchDashboards, refreshCount]);
 
   const handleDeleteSuccess = useCallback(() => {
     fetchDashboards();
-  }, [fetchDashboards]);
+    refreshCount();
+  }, [fetchDashboards, refreshCount]);
 
   // Retry handler for error state
   const handleRetry = useCallback(() => {
@@ -422,6 +450,14 @@ export function DashboardList() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
+            {/* Limit banner */}
+            {atLimit && (
+              <Banner tone="warning" title="Dashboard limit reached">
+                You&apos;ve reached the maximum of {dashboardCount?.max_count} dashboards
+                for your current plan. Delete an existing dashboard or upgrade
+                your plan to create more.
+              </Banner>
+            )}
             {/* Status filter tabs */}
             <Card padding="0">
               <Tabs
@@ -457,6 +493,9 @@ export function DashboardList() {
       <CreateDashboardModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
+        atLimit={atLimit}
+        maxCount={dashboardCount?.max_count ?? null}
+        onSuccess={refreshCount}
       />
 
       {/* Duplicate Dashboard Modal */}
