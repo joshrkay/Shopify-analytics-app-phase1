@@ -3,12 +3,14 @@
  *
  * Global header with navigation links and status indicators.
  * Includes ChangelogBadge and WhatChangedButton for stories 9.7 and 9.8.
+ * Adds "Analytics" and "Dashboards" nav items for Phase 4D.
  *
  * Story 9.7 - In-App Changelog & Release Notes
  * Story 9.8 - "What Changed?" Debug Panel
+ * Phase 4D  - Integration & Navigation Polish
  */
 
-import { InlineStack, Box } from '@shopify/polaris';
+import { Button, InlineStack, Box } from '@shopify/polaris';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChangelogBadge } from '../changelog/ChangelogBadge';
 import { WhatChangedButton } from '../whatChanged/WhatChangedButton';
@@ -21,8 +23,9 @@ export function AppHeader() {
     navigate('/whats-new');
   };
 
-  // Don't show header on the What's New page itself
   const isOnWhatsNewPage = location.pathname === '/whats-new';
+  const isOnAnalytics = location.pathname === '/analytics';
+  const isOnDashboards = location.pathname.startsWith('/dashboards');
 
   return (
     <Box
@@ -34,23 +37,39 @@ export function AppHeader() {
       borderBlockEndWidth="025"
       borderColor="border"
     >
-      <InlineStack align="end" gap="400" blockAlign="center">
-        {/* What's New badge with unread count */}
-        {!isOnWhatsNewPage && (
-          <ChangelogBadge
-            onClick={handleWhatsNewClick}
-            showLabel
-            label="What's New"
+      <InlineStack align="space-between" gap="400" blockAlign="center">
+        {/* Left: Navigation links */}
+        <InlineStack gap="200" blockAlign="center">
+          <Button
+            variant={isOnAnalytics ? 'primary' : 'plain'}
+            onClick={() => navigate('/analytics')}
+          >
+            Analytics
+          </Button>
+          <Button
+            variant={isOnDashboards ? 'primary' : 'plain'}
+            onClick={() => navigate('/dashboards')}
+          >
+            Dashboards
+          </Button>
+        </InlineStack>
+
+        {/* Right: Status indicators */}
+        <InlineStack gap="400" blockAlign="center">
+          {!isOnWhatsNewPage && (
+            <ChangelogBadge
+              onClick={handleWhatsNewClick}
+              showLabel
+              label="What's New"
+              refreshInterval={60000}
+            />
+          )}
+          <WhatChangedButton
+            variant="inline"
+            showBadge
             refreshInterval={60000}
           />
-        )}
-
-        {/* What Changed debug panel button */}
-        <WhatChangedButton
-          variant="inline"
-          showBadge
-          refreshInterval={60000}
-        />
+        </InlineStack>
       </InlineStack>
     </Box>
   );

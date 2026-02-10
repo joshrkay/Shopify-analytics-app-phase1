@@ -381,6 +381,33 @@ export interface AuditListResponse {
 }
 
 // =============================================================================
+// Version Snapshot Types (for version preview)
+// =============================================================================
+
+export interface VersionSnapshot {
+  dashboard: {
+    name: string;
+    description: string | null;
+    layout_json: Record<string, unknown>;
+    filters_json: DashboardFilter[] | null;
+  };
+  reports: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    chart_type: ChartType;
+    dataset_name: string;
+    config_json: Record<string, unknown>;
+    position_json: GridPosition;
+    sort_order: number;
+  }>;
+}
+
+export interface DashboardVersionDetail extends DashboardVersion {
+  snapshot_json: VersionSnapshot;
+}
+
+// =============================================================================
 // Helpers
 // =============================================================================
 

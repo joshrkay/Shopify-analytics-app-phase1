@@ -105,6 +105,25 @@ export function formatRowCount(count?: number): string {
  * @param dateString - ISO date string of expiry time
  * @returns Formatted string (e.g., "Expires in 2h" or "Expired")
  */
+/**
+ * Format a date string as a localized short date.
+ *
+ * @param dateString - ISO date string
+ * @returns Formatted string (e.g., "Mar 10, 2025")
+ */
+export function formatDate(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return dateString;
+  }
+}
+
 export function formatExpiryTime(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();

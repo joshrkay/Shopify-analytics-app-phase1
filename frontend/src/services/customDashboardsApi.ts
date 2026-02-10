@@ -24,6 +24,7 @@ import type {
   DashboardFilters,
   DashboardCountResponse,
   VersionListResponse,
+  DashboardVersionDetail,
   AuditListResponse,
 } from '../types/customDashboards';
 import {
@@ -193,6 +194,24 @@ export async function listVersions(
     },
   );
   return handleResponse<VersionListResponse>(response);
+}
+
+/**
+ * Get a single version with its full snapshot for preview.
+ */
+export async function getVersion(
+  dashboardId: string,
+  versionNumber: number,
+): Promise<DashboardVersionDetail> {
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/dashboards/${dashboardId}/versions/${versionNumber}`,
+    {
+      method: 'GET',
+      headers,
+    },
+  );
+  return handleResponse<DashboardVersionDetail>(response);
 }
 
 /**

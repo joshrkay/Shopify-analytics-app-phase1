@@ -12,7 +12,9 @@ import {
   Card,
   Select,
   BlockStack,
+  InlineStack,
   Text,
+  Button,
   Banner,
   SkeletonPage,
   SkeletonBodyText,
@@ -30,6 +32,8 @@ import {
   PageErrorFallback,
   ComponentErrorFallback,
 } from '../components/ErrorFallback';
+import { listDashboards } from '../services/customDashboardsApi';
+import type { Dashboard } from '../types/customDashboards';
 
 const Analytics: React.FC = () => {
   const navigate = useNavigate();
@@ -38,6 +42,8 @@ const Analytics: React.FC = () => {
   const [selectedDashboard, setSelectedDashboard] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [customDashboards, setCustomDashboards] = useState<Dashboard[]>([]);
+  const [hasMoreCustom, setHasMoreCustom] = useState(false);
 
   // Load embed configuration on mount
   useEffect(() => {
@@ -72,14 +78,40 @@ const Analytics: React.FC = () => {
     loadConfig();
   }, []);
 
+  // Fetch custom published dashboards for the dropdown
+  useEffect(() => {
+    let cancelled = false;
+    listDashboards({ status: 'published', limit: 5 })
+      .then((response) => {
+        if (!cancelled) {
+          setCustomDashboards(response.dashboards);
+          setHasMoreCustom(response.has_more);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch custom dashboards:', err);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   // Handle dashboard selection
   const handleDashboardChange = (value: string) => {
+    // Navigate to custom dashboard view
+    if (value.startsWith('custom:')) {
+      const id = value.replace('custom:', '');
+      navigate(`/dashboards/${id}`);
+      return;
+    }
+    // Navigate to all custom dashboards
+    if (value === '__view_all__') {
+      navigate('/dashboards');
+      return;
+    }
     setSelectedDashboard(value);
   };
 
-  // Handle dashboard load
   const handleDashboardLoad = () => {
-    console.log('Dashboard loaded successfully');
+    // no-op: load tracking handled by ShopifyEmbeddedSuperset
   };
 
   // Handle dashboard error
@@ -120,11 +152,29 @@ const Analytics: React.FC = () => {
     );
   }
 
-  // Build dashboard options for select
-  const dashboardOptions = config?.allowed_dashboards.map((id) => ({
+  // Build dashboard options for select (system + custom)
+  const systemOptions = config?.allowed_dashboards.map((id) => ({
     label: formatDashboardName(id),
     value: id,
   })) || [];
+
+  const customOptions = customDashboards.map((d) => ({
+    label: d.name,
+    value: `custom:${d.id}`,
+  }));
+
+  const dashboardOptions = [
+    ...systemOptions,
+    ...(customOptions.length > 0
+      ? [
+          { label: '\u2500\u2500 Custom Dashboards \u2500\u2500', value: '__separator__', disabled: true },
+          ...customOptions,
+          ...(hasMoreCustom
+            ? [{ label: 'View all dashboards...', value: '__view_all__' }]
+            : []),
+        ]
+      : []),
+  ];
 
   return (
     <ErrorBoundary
@@ -200,6 +250,28 @@ const Analytics: React.FC = () => {
                   />
                 </ErrorBoundary>
               )}
+            </Layout.Section>
+
+            {/* CTA: Create Custom Dashboard */}
+            <Layout.Section>
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">
+                    Want more? Build your own dashboard
+                  </Text>
+                  <Text as="p" tone="subdued">
+                    Create custom dashboards with the metrics that matter most to your business.
+                  </Text>
+                  <InlineStack>
+                    <Button
+                      variant="primary"
+                      onClick={() => navigate('/dashboards')}
+                    >
+                      Create Custom Dashboard
+                    </Button>
+                  </InlineStack>
+                </BlockStack>
+              </Card>
             </Layout.Section>
           </Layout>
         </Page>
