@@ -52,6 +52,8 @@ from src.api.routes import auth_refresh_jwt
 from src.api.routes import audit_logs
 from src.api.routes import audit_export
 from src.api.routes import shopify_embed_entry
+from src.api.routes import datasets
+from src.api.routes import templates
 from src.api.routes import custom_dashboards
 from src.api.routes import dashboard_shares
 from src.api.routes import report_templates
