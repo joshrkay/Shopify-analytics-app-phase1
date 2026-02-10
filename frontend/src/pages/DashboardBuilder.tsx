@@ -7,11 +7,13 @@
  * - Drag-and-drop grid of report cards
  * - Report configurator modal
  * - Dashboard settings modal
+ * - Version history panel (Phase 4A)
  *
  * Phase 3 - Dashboard Builder UI
+ * Phase 4A - Version History Integration
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Page, SkeletonPage, Banner, Layout } from '@shopify/polaris';
 import { DashboardBuilderProvider, useDashboardBuilder } from '../contexts/DashboardBuilderContext';
@@ -19,11 +21,22 @@ import { DashboardToolbar } from '../components/dashboards/DashboardToolbar';
 import { DashboardGrid } from '../components/dashboards/DashboardGrid';
 import { ReportConfiguratorModal } from '../components/dashboards/ReportConfiguratorModal';
 import { DashboardSettingsModal } from '../components/dashboards/DashboardSettingsModal';
+import { VersionHistory } from '../components/dashboards/VersionHistory';
+import type { Dashboard } from '../types/customDashboards';
 
 function BuilderContent() {
-  const { dashboard, isSaving, saveError, publishDashboard, clearError } = useDashboardBuilder();
+  const { dashboard, isSaving, saveError, publishDashboard, clearError, refreshDashboard } = useDashboardBuilder();
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const handleRestore = useCallback((restored: Dashboard) => {
+    // Refresh the builder context to pick up restored state
+    if (refreshDashboard) {
+      refreshDashboard();
+    }
+    setShowHistory(false);
+  }, [refreshDashboard]);
 
   if (!dashboard) return <SkeletonPage primaryAction />;
 
@@ -39,6 +52,7 @@ function BuilderContent() {
       }}
       secondaryActions={[
         { content: 'Settings', onAction: () => setShowSettings(true) },
+        { content: 'History', onAction: () => setShowHistory(true) },
       ]}
       breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
     >
@@ -57,6 +71,13 @@ function BuilderContent() {
       <DashboardSettingsModal
         open={showSettings}
         onClose={() => setShowSettings(false)}
+      />
+      <VersionHistory
+        dashboardId={dashboard.id}
+        currentVersionNumber={dashboard.version_number}
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+        onRestore={handleRestore}
       />
     </Page>
   );

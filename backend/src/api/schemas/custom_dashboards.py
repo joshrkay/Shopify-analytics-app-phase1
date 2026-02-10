@@ -340,6 +340,12 @@ class DashboardVersionResponse(BaseModel):
     created_at: datetime
 
 
+class DashboardVersionDetailResponse(DashboardVersionResponse):
+    """Response model for a single version with its full snapshot."""
+
+    snapshot_json: dict
+
+
 class VersionListResponse(BaseModel):
     """Paginated response for listing versions."""
 
