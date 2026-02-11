@@ -198,6 +198,47 @@ Code review uses parallel agents. At minimum, every PR should pass:
 - Code quality agent
 - Security scan (for changes in scope above)
 
+### Daily Workflow Examples
+
+#### Starting a New Feature
+
+```
+You: /workflows:plan
+     "I need to add rate limiting to the API gateway"
+Claude: [creates structured plan with tasks, affected files, risks]
+
+You: /workflows:work
+     [executes plan, commits incrementally]
+
+You: "Review this PR with the PR review toolkit — run all agents"
+Claude: [runs 5 parallel review agents, reports findings]
+
+You: /workflows:compound
+     [captures what was learned about the rate limiting approach]
+```
+
+#### Quick Bug Fix (Lighter Process)
+
+For small fixes, you can skip the full plan step:
+
+```
+You: "Fix the null pointer in UserService.getProfile — review when done"
+Claude: [fixes bug, runs review agents, reports]
+
+You: /workflows:compound
+     [optional but recommended — even small fixes teach patterns]
+```
+
+#### Security-Focused Work
+
+When touching sensitive code paths:
+
+```
+You: "Audit the authentication middleware for vulnerabilities"
+Claude: [uses Trail of Bits skills — static analysis, variant analysis,
+         differential review against known vulnerability patterns]
+```
+
 ## Environment Variables
 
 Key variables (see `.env.example` for full list):
