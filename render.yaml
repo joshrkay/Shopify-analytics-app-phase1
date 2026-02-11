@@ -147,13 +147,14 @@ services:
   # ============================================
   - type: cron
     name: markinsight-reconcile-subscriptions
+    runtime: docker
     # Schedule: runs every hour
     schedule: "0 * * * *"
     # Uses worker Dockerfile (same runtime environment)
     dockerfilePath: ./docker/worker.Dockerfile
     dockerContext: .
     # Command to execute
-    command: python -m src.jobs.reconcile_subscriptions
+    startCommand: python -m src.jobs.reconcile_subscriptions
     region: oregon
     # Environment variables (same as worker)
     envVars:
@@ -221,8 +222,6 @@ services:
     name: markinsight-redis
     plan: starter
     region: oregon
-    # Redis eviction policy
-    redisMaxmemoryPolicy: allkeys-lru
 
 # ============================================
 # DATABASE: POSTGRES
