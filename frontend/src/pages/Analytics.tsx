@@ -5,7 +5,7 @@
  * Displays within Shopify Admin iframe.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Page,
   Layout,
@@ -20,8 +20,11 @@ import {
   SkeletonBodyText,
 } from '@shopify/polaris';
 import ShopifyEmbeddedSuperset from '../components/ShopifyEmbeddedSuperset';
-import { getEmbedConfig, checkEmbedHealth } from '../services/embedApi';
-import type { EmbedConfig, EmbedHealthResponse } from '../services/embedApi';
+import { getEmbedConfig, checkEmbedReadiness } from '../services/embedApi';
+import type {
+  EmbedConfig,
+  EmbedReadinessResponse,
+} from '../services/embedApi';
 import { IncidentBanner } from '../components/health/IncidentBanner';
 import { DataFreshnessBadge } from '../components/health/DataFreshnessBadge';
 import { DashboardFreshnessIndicator } from '../components/health/DashboardFreshnessIndicator';
@@ -33,50 +36,79 @@ import {
   ComponentErrorFallback,
 } from '../components/ErrorFallback';
 import { listDashboards } from '../services/customDashboardsApi';
+import { isApiError } from '../services/apiUtils';
+import { AnalyticsHealthBanner } from '../components/AnalyticsHealthBanner';
 import type { Dashboard } from '../types/customDashboards';
+
+const RETRY_DELAY_MS = 1500;
 
 const Analytics: React.FC = () => {
   const navigate = useNavigate();
   const [config, setConfig] = useState<EmbedConfig | null>(null);
-  const [health, setHealth] = useState<EmbedHealthResponse | null>(null);
+  const [readiness, setReadiness] = useState<EmbedReadinessResponse | null>(null);
   const [selectedDashboard, setSelectedDashboard] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<string>('unknown');
   const [customDashboards, setCustomDashboards] = useState<Dashboard[]>([]);
   const [hasMoreCustom, setHasMoreCustom] = useState(false);
 
+  const loadConfig = useCallback(async () => {
+    setError(null);
+    setErrorType('unknown');
+
+    try {
+      const readinessResponse = await checkEmbedReadiness();
+      setReadiness(readinessResponse);
+
+      if (readinessResponse.status !== 'ready') {
+        setError(readinessResponse.message || 'Analytics service is not available');
+        setErrorType('readiness_not_ready');
+        return;
+      }
+
+      const configResponse = await getEmbedConfig();
+      setConfig(configResponse);
+
+      if (configResponse.allowed_dashboards.length > 0) {
+        setSelectedDashboard(configResponse.allowed_dashboards[0]);
+      }
+    } catch (err) {
+      console.error('Failed to load analytics config:', err);
+      if (isApiError(err)) {
+        if (err.status === 401) {
+          setError('Your session has expired. Please sign in again.');
+          setErrorType('auth_expired');
+        } else if (err.status === 403) {
+          setError('Your account does not have access to Analytics.');
+          setErrorType('permission_denied');
+        } else {
+          setError('Analytics is temporarily unavailable. Please try again.');
+          setErrorType('api_error');
+        }
+      } else {
+        setError('Analytics is temporarily unavailable. Please try again.');
+        setErrorType('network_or_unknown');
+      }
+    } finally {
+      setLoading(false);
+      setIsRetrying(false);
+    }
+  }, []);
+
   // Load embed configuration on mount
   useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        // Check health first
-        const healthResponse = await checkEmbedHealth();
-        setHealth(healthResponse);
-
-        if (healthResponse.status !== 'healthy') {
-          setError(healthResponse.message || 'Analytics service is not available');
-          setLoading(false);
-          return;
-        }
-
-        // Load full config
-        const configResponse = await getEmbedConfig();
-        setConfig(configResponse);
-
-        // Set default dashboard
-        if (configResponse.allowed_dashboards.length > 0) {
-          setSelectedDashboard(configResponse.allowed_dashboards[0]);
-        }
-      } catch (err) {
-        console.error('Failed to load analytics config:', err);
-        setError('Failed to load analytics configuration');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadConfig();
-  }, []);
+  }, [loadConfig]);
+
+  const retryLoadConfig = useCallback(() => {
+    setIsRetrying(true);
+    setLoading(true);
+    window.setTimeout(() => {
+      loadConfig();
+    }, RETRY_DELAY_MS);
+  }, [loadConfig]);
 
   // Fetch custom published dashboards for the dropdown
   useEffect(() => {
@@ -135,7 +167,7 @@ const Analytics: React.FC = () => {
   }
 
   // Error state
-  if (error || health?.status !== 'healthy') {
+  if (error || readiness?.status !== 'ready') {
     return (
       <Page title="Analytics">
         <Layout>
@@ -144,8 +176,15 @@ const Analytics: React.FC = () => {
               title="Analytics Unavailable"
               tone="warning"
             >
-              <p>{error || health?.message || 'Analytics service is currently unavailable'}</p>
+              <p>{error || readiness?.message || 'Analytics service is currently unavailable'}</p>
             </Banner>
+          </Layout.Section>
+          <Layout.Section>
+            <AnalyticsHealthBanner
+              onRetry={retryLoadConfig}
+              isRetrying={isRetrying}
+              errorType={errorType}
+            />
           </Layout.Section>
         </Layout>
       </Page>

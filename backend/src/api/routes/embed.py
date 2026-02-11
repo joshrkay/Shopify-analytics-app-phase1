@@ -72,6 +72,15 @@ class EmbedConfigResponse(BaseModel):
     csp_frame_ancestors: list[str]
 
 
+class EmbedReadinessResponse(BaseModel):
+    """Response with strict embed readiness checks for frontend bootstrap."""
+    status: Literal["ready", "not_ready"]
+    embed_configured: bool
+    superset_url_configured: bool
+    allowed_dashboards_configured: bool
+    message: Optional[str] = None
+
+
 # CSP headers for Shopify Admin embedding
 def add_embed_csp_headers(response: Response) -> Response:
     """
@@ -385,6 +394,62 @@ async def get_embed_config(
         allowed_dashboards=[d.strip() for d in allowed_dashboards],
         session_refresh_interval_ms=refresh_interval_minutes * 60 * 1000,
         csp_frame_ancestors=["self", "https://admin.shopify.com", "https://*.myshopify.com"],
+    )
+
+
+
+
+@router.get("/health/readiness", response_model=EmbedReadinessResponse)
+async def embed_readiness(response: Response):
+    """
+    Readiness check for embed service.
+
+    Stricter than /health: validates all configuration required by frontend
+    bootstrap flow before calling authenticated embed endpoints.
+    """
+    jwt_secret_configured = bool(os.getenv("SUPERSET_JWT_SECRET"))
+    superset_url = os.getenv("SUPERSET_EMBED_URL", "")
+    allowed_dashboards = os.getenv("ALLOWED_EMBED_DASHBOARDS", "")
+
+    superset_url_configured = bool(superset_url.strip())
+    allowed_dashboards_configured = bool(
+        [d.strip() for d in allowed_dashboards.split(",") if d.strip()]
+    )
+
+    add_embed_csp_headers(response)
+
+    if not jwt_secret_configured:
+        return EmbedReadinessResponse(
+            status="not_ready",
+            embed_configured=False,
+            superset_url_configured=superset_url_configured,
+            allowed_dashboards_configured=allowed_dashboards_configured,
+            message="SUPERSET_JWT_SECRET not configured",
+        )
+
+    if not superset_url_configured:
+        return EmbedReadinessResponse(
+            status="not_ready",
+            embed_configured=True,
+            superset_url_configured=False,
+            allowed_dashboards_configured=allowed_dashboards_configured,
+            message="SUPERSET_EMBED_URL not configured",
+        )
+
+    if not allowed_dashboards_configured:
+        return EmbedReadinessResponse(
+            status="not_ready",
+            embed_configured=True,
+            superset_url_configured=True,
+            allowed_dashboards_configured=False,
+            message="ALLOWED_EMBED_DASHBOARDS not configured",
+        )
+
+    return EmbedReadinessResponse(
+        status="ready",
+        embed_configured=True,
+        superset_url_configured=True,
+        allowed_dashboards_configured=True,
     )
 
 
