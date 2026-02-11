@@ -154,6 +154,50 @@ Triggered on push/PR to `main` and `develop`. All jobs must pass for PR merge:
 - Structured logging via structlog (JSON key/value, correlation IDs)
 - Parameterized queries only — no SQL string concatenation
 
+## Engineering Workflow
+
+This project follows a structured development cycle using Claude Code plugins.
+
+### Standard Development Cycle
+
+1. **Plan** — `/workflows:plan` — Before writing code, create a structured plan
+   - Define the problem, constraints, and approach
+   - Break work into discrete, reviewable units
+   - Identify files that will be touched
+
+2. **Work** — `/workflows:work` — Execute the plan with tracking
+   - Follow the plan step by step
+   - Use git worktrees for isolation when appropriate
+   - Commit frequently with clear messages
+
+3. **Review** — Use PR Review Toolkit agents for multi-pass review
+   - Bug detection and edge cases
+   - CLAUDE.md compliance check
+   - Historical context review (does this match project patterns?)
+   - Security scan via Trail of Bits skills
+
+4. **Compound** — `/workflows:compound` — Capture learnings
+   - Document patterns discovered during this work
+   - Update project knowledge for future sessions
+   - Note any architectural decisions and their rationale
+
+### Security Requirements
+
+All PRs touching authentication, data handling, API endpoints, or infrastructure
+must include a security review pass using Trail of Bits skills before merge.
+Focus areas:
+- Input validation and injection vectors
+- Authentication and authorization flows
+- Secrets management
+- Dependency vulnerabilities
+
+### Review Standards
+
+Code review uses parallel agents. At minimum, every PR should pass:
+- Bug detection agent
+- Code quality agent
+- Security scan (for changes in scope above)
+
 ## Environment Variables
 
 Key variables (see `.env.example` for full list):
