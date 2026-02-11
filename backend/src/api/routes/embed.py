@@ -440,6 +440,15 @@ async def embed_readiness(response: Response):
             message="SUPERSET_EMBED_URL not configured",
         )
 
+    if not allowed_dashboards_configured:
+        return EmbedReadinessResponse(
+            status="not_ready",
+            embed_configured=True,
+            superset_url_configured=True,
+            allowed_dashboards_configured=False,
+            message="ALLOWED_EMBED_DASHBOARDS not configured",
+        )
+
     return EmbedReadinessResponse(
         status="ready",
         embed_configured=True,
