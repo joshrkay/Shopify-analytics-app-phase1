@@ -24,6 +24,7 @@ import '@shopify/polaris/build/esm/styles.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RootErrorFallback } from './components/ErrorFallback';
 import { DataHealthProvider } from './contexts/DataHealthContext';
+import { AgencyProvider } from './contexts/AgencyContext';
 import { AppHeader } from './components/layout/AppHeader';
 import { useAutoOrganization } from './hooks/useAutoOrganization';
 import { useClerkToken } from './hooks/useClerkToken';
@@ -114,47 +115,49 @@ function AppWithOrg() {
   }
 
   return (
-    <DataHealthProvider>
-      <SidebarProvider>
-      <AppHeader />
-      <RootLayout>
-        <Routes>
-          <Route path="/admin/plans" element={<AdminPlans />} />
-          <Route path="/admin/diagnostics" element={<RootCausePanel />} />
-          <Route path="/home" element={<DashboardHome />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/paywall" element={<Paywall />} />
-          <Route path="/insights" element={<InsightsFeed />} />
-          <Route path="/approvals" element={<ApprovalsInbox />} />
-          <Route path="/whats-new" element={<WhatsNew />} />
-          <Route path="/data-sources" element={<DataSources />} />
-          <Route path="/settings" element={<Settings />} />
+    <AgencyProvider>
+      <DataHealthProvider>
+        <SidebarProvider>
+        <AppHeader />
+        <RootLayout>
+          <Routes>
+            <Route path="/admin/plans" element={<AdminPlans />} />
+            <Route path="/admin/diagnostics" element={<RootCausePanel />} />
+            <Route path="/home" element={<DashboardHome />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/paywall" element={<Paywall />} />
+            <Route path="/insights" element={<InsightsFeed />} />
+            <Route path="/approvals" element={<ApprovalsInbox />} />
+            <Route path="/whats-new" element={<WhatsNew />} />
+            <Route path="/data-sources" element={<DataSources />} />
+            <Route path="/settings" element={<Settings />} />
 
-          {/* Custom Dashboards — gated routes */}
-          <Route
-            path="/dashboards"
-            element={
-              <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
-                <DashboardList />
-              </FeatureGateRoute>
-            }
-          />
-          <Route
-            path="/dashboards/:dashboardId/edit"
-            element={
-              <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
-                <DashboardBuilder />
-              </FeatureGateRoute>
-            }
-          />
-          {/* View route is NOT gated — shared dashboards viewable on any plan */}
-          <Route path="/dashboards/:dashboardId" element={<DashboardView />} />
+            {/* Custom Dashboards — gated routes */}
+            <Route
+              path="/dashboards"
+              element={
+                <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
+                  <DashboardList />
+                </FeatureGateRoute>
+              }
+            />
+            <Route
+              path="/dashboards/:dashboardId/edit"
+              element={
+                <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
+                  <DashboardBuilder />
+                </FeatureGateRoute>
+              }
+            />
+            {/* View route is NOT gated — shared dashboards viewable on any plan */}
+            <Route path="/dashboards/:dashboardId" element={<DashboardView />} />
 
-          <Route path="/" element={<Navigate to="/home" replace />} />
-        </Routes>
-      </RootLayout>
-      </SidebarProvider>
-    </DataHealthProvider>
+            <Route path="/" element={<Navigate to="/home" replace />} />
+          </Routes>
+        </RootLayout>
+        </SidebarProvider>
+      </DataHealthProvider>
+    </AgencyProvider>
   );
 }
 
