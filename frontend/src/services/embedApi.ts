@@ -40,6 +40,14 @@ export interface EmbedHealthResponse {
   message?: string;
 }
 
+export interface EmbedReadinessResponse {
+  status: 'ready' | 'not_ready';
+  embed_configured: boolean;
+  superset_url_configured: boolean;
+  allowed_dashboards_configured: boolean;
+  message?: string;
+}
+
 /**
  * Generate an embed token for a specific dashboard.
  *
@@ -123,6 +131,19 @@ export async function checkEmbedHealth(): Promise<EmbedHealthResponse> {
     method: 'GET',
   });
   return handleResponse<EmbedHealthResponse>(response);
+}
+
+/**
+ * Check embed service readiness.
+ *
+ * Readiness is stricter than health and validates configuration required
+ * for frontend dashboard bootstrap.
+ */
+export async function checkEmbedReadiness(): Promise<EmbedReadinessResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/embed/health/readiness`, {
+    method: 'GET',
+  });
+  return handleResponse<EmbedReadinessResponse>(response);
 }
 
 /**
