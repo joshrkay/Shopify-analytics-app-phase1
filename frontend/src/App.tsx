@@ -43,6 +43,7 @@ import { DashboardBuilder } from './pages/DashboardBuilder';
 import { RootLayout, SidebarProvider } from './components/layout';
 import DataSources from './pages/DataSources';
 import Settings from './pages/Settings';
+import { DashboardHome } from './pages/DashboardHome';
 
 // =============================================================================
 // FeatureGateRoute — redirects to paywall if feature not entitled
@@ -120,6 +121,7 @@ function AppWithOrg() {
         <Routes>
           <Route path="/admin/plans" element={<AdminPlans />} />
           <Route path="/admin/diagnostics" element={<RootCausePanel />} />
+          <Route path="/home" element={<DashboardHome />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/paywall" element={<Paywall />} />
           <Route path="/insights" element={<InsightsFeed />} />
@@ -148,7 +150,7 @@ function AppWithOrg() {
           {/* View route is NOT gated — shared dashboards viewable on any plan */}
           <Route path="/dashboards/:dashboardId" element={<DashboardView />} />
 
-          <Route path="/" element={<Navigate to="/analytics" replace />} />
+          <Route path="/" element={<Navigate to="/home" replace />} />
         </Routes>
       </RootLayout>
       </SidebarProvider>

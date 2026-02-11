@@ -34,12 +34,14 @@ const mockTranslations = {
   },
 };
 
-// Mock Clerk useUser + useOrganization
+// Mock Clerk useUser + useOrganization + useClerk
 const mockUseUser = vi.fn();
 const mockUseOrganization = vi.fn();
+const mockSignOut = vi.fn();
 vi.mock('@clerk/clerk-react', () => ({
   useUser: () => mockUseUser(),
   useOrganization: () => mockUseOrganization(),
+  useClerk: () => ({ signOut: mockSignOut }),
   SignedIn: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SignedOut: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   RedirectToSignIn: () => <div data-testid="redirect-to-sign-in">Redirecting...</div>,
@@ -72,6 +74,32 @@ vi.mock('../../services/changelogApi', () => ({
 vi.mock('../../services/whatChangedApi', () => ({
   hasCriticalIssues: vi.fn().mockResolvedValue(false),
   getWhatChangedSummary: vi.fn().mockResolvedValue(null),
+}));
+
+// Mock insightsApi (used by NotificationBadge in AppHeader)
+vi.mock('../../services/insightsApi', () => ({
+  getUnreadInsightsCount: vi.fn().mockResolvedValue(0),
+  listInsights: vi.fn().mockResolvedValue({ insights: [], total: 0, has_more: false }),
+}));
+
+// Mock AgencyContext (used by ProfileMenu in AppHeader)
+vi.mock('../../contexts/AgencyContext', () => ({
+  useAgency: () => ({
+    getActiveStore: () => null,
+    isAgencyUser: false,
+    activeTenantId: null,
+    loading: false,
+    error: null,
+    assignedStores: [],
+    allowedTenants: [],
+    userRoles: [],
+    billingTier: 'free',
+    userId: null,
+    accessExpiringAt: null,
+    switchStore: vi.fn(),
+    refreshStores: vi.fn(),
+    canAccessStore: vi.fn().mockReturnValue(false),
+  }),
 }));
 
 // Helper: create entitlements with specified features
@@ -141,7 +169,7 @@ describe('RootLayout', () => {
       <RootLayout>
         <div data-testid="child-content">Hello from page</div>
       </RootLayout>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
     // Children should be visible
@@ -157,7 +185,7 @@ describe('RootLayout', () => {
       <RootLayout>
         <div>Page content</div>
       </RootLayout>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });
@@ -185,7 +213,7 @@ describe('Sidebar signed-out behavior', () => {
 
     expect(screen.getByTestId('signed-out-content')).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Main navigation' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Analytics')).not.toBeInTheDocument();
+    expect(screen.queryByText('Home')).not.toBeInTheDocument();
   });
 });
 
@@ -201,14 +229,14 @@ describe('AppHeader (slim utility bar)', () => {
   });
 
   it('contains changelog elements', () => {
-    renderWithProviders(<AppHeader />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<AppHeader />, { initialEntries: ['/home'] });
 
     // ChangelogBadge renders "What's New" label
     expect(screen.getByText("What's New")).toBeInTheDocument();
   });
 
   it('does not contain removed nav items', () => {
-    renderWithProviders(<AppHeader />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<AppHeader />, { initialEntries: ['/home'] });
 
     // Analytics and Dashboards buttons should have been removed from the header
     const buttons = screen.queryAllByRole('button');
@@ -238,12 +266,12 @@ describe('Sidebar navigation', () => {
   });
 
   it('renders all nav links', () => {
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
-    expect(screen.getByText('Analytics')).toBeInTheDocument();
-    expect(screen.getByText('Dashboards')).toBeInTheDocument();
+    expect(screen.getByText('Home')).toBeInTheDocument();
+    expect(screen.getByText('Builder')).toBeInTheDocument();
     expect(screen.getByText('Insights')).toBeInTheDocument();
-    expect(screen.getByText('Data Sources')).toBeInTheDocument();
+    expect(screen.getByText('Sources')).toBeInTheDocument();
     // "Settings" appears as both section header and nav item
     const settingsNavItem = screen.getAllByText('Settings').find(
       (el) => el.closest('.sidebar-nav-item') !== null
@@ -252,7 +280,7 @@ describe('Sidebar navigation', () => {
   });
 
   it('renders MAIN, CONNECTIONS, and SETTINGS sections', () => {
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
     expect(screen.getByText('Main')).toBeInTheDocument();
     expect(screen.getByText('Connections')).toBeInTheDocument();
@@ -262,7 +290,7 @@ describe('Sidebar navigation', () => {
   });
 
   it('renders user section in footer', () => {
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByText('jane@example.com')).toBeInTheDocument();
@@ -279,7 +307,7 @@ describe('Sidebar navigation', () => {
       },
     });
 
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
     expect(screen.getByText('User')).toBeInTheDocument();
     expect(screen.getByText('U')).toBeInTheDocument();
@@ -292,25 +320,25 @@ describe('Sidebar navigation', () => {
       <>
         <Sidebar />
         <Routes>
-          <Route path="/analytics" element={<div data-testid="page">Analytics Page</div>} />
+          <Route path="/home" element={<div data-testid="page">Home Page</div>} />
           <Route path="/dashboards" element={<div data-testid="page">Dashboards Page</div>} />
           <Route path="/insights" element={<div data-testid="page">Insights Page</div>} />
           <Route path="/data-sources" element={<div data-testid="page">Data Sources Page</div>} />
           <Route path="/settings" element={<div data-testid="page">Settings Page</div>} />
         </Routes>
       </>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
-    // Start on Analytics
-    expect(screen.getByText('Analytics Page')).toBeInTheDocument();
+    // Start on Home
+    expect(screen.getByText('Home Page')).toBeInTheDocument();
 
-    // Click Dashboards nav item
-    await user.click(screen.getByText('Dashboards'));
+    // Click Builder nav item
+    await user.click(screen.getByText('Builder'));
     expect(screen.getByText('Dashboards Page')).toBeInTheDocument();
 
-    // Click Data Sources nav item
-    await user.click(screen.getByText('Data Sources'));
+    // Click Sources nav item
+    await user.click(screen.getByText('Sources'));
     expect(screen.getByText('Data Sources Page')).toBeInTheDocument();
   });
 
@@ -321,11 +349,11 @@ describe('Sidebar navigation', () => {
       <>
         <Sidebar />
         <Routes>
-          <Route path="/analytics" element={<div>Analytics Page</div>} />
+          <Route path="/home" element={<div>Home Page</div>} />
           <Route path="/insights" element={<div>Insights Page</div>} />
         </Routes>
       </>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
     // Focus on Insights nav item and press Enter
@@ -356,10 +384,10 @@ describe('Active route highlighting', () => {
   });
 
   const routes = [
-    { path: '/analytics', label: 'Analytics' },
-    { path: '/dashboards', label: 'Dashboards' },
+    { path: '/home', label: 'Home' },
+    { path: '/dashboards', label: 'Builder' },
     { path: '/insights', label: 'Insights' },
-    { path: '/data-sources', label: 'Data Sources' },
+    { path: '/data-sources', label: 'Sources' },
     { path: '/settings', label: 'Settings' },
   ];
 
@@ -393,17 +421,17 @@ describe('Active route highlighting', () => {
     }
   );
 
-  it('highlights Dashboards for sub-routes like /dashboards/:id/edit', () => {
+  it('highlights Builder for sub-routes like /dashboards/:id/edit', () => {
     renderWithProviders(<Sidebar />, {
       initialEntries: ['/dashboards/abc-123/edit'],
     });
 
-    const dashboardsItem = screen.getByText('Dashboards').closest('.sidebar-nav-item');
-    expect(dashboardsItem).toHaveClass('sidebar-nav-item--active');
+    const builderItem = screen.getByText('Builder').closest('.sidebar-nav-item');
+    expect(builderItem).toHaveClass('sidebar-nav-item--active');
 
-    // Analytics should NOT be active
-    const analyticsItem = screen.getByText('Analytics').closest('.sidebar-nav-item');
-    expect(analyticsItem).not.toHaveClass('sidebar-nav-item--active');
+    // Home should NOT be active
+    const homeItem = screen.getByText('Home').closest('.sidebar-nav-item');
+    expect(homeItem).not.toHaveClass('sidebar-nav-item--active');
   });
 });
 
@@ -431,9 +459,9 @@ describe('Feature-gated nav items (Story 0.2.3)', () => {
       error: null,
     });
 
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
-    expect(screen.queryByText('Dashboards')).not.toBeInTheDocument();
+    expect(screen.queryByText('Builder')).not.toBeInTheDocument();
     expect(screen.getByText('Insights')).toBeInTheDocument();
   });
 
@@ -444,28 +472,28 @@ describe('Feature-gated nav items (Story 0.2.3)', () => {
       error: null,
     });
 
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
-    expect(screen.getByText('Dashboards')).toBeInTheDocument();
+    expect(screen.getByText('Builder')).toBeInTheDocument();
     expect(screen.getByText('Insights')).toBeInTheDocument();
   });
 
   it('hides section header when all items in section are not entitled', () => {
-    // Main section: Analytics (no feature gate, always visible), Dashboards + Insights both gated and false
+    // Main section: Home (no feature gate, always visible), Builder + Insights both gated and false
     mockUseEntitlements.mockReturnValue({
       entitlements: makeEntitlements({ custom_reports: false, ai_insights: false }),
       loading: false,
       error: null,
     });
 
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
-    // Main section should still be visible because Analytics has no feature gate
+    // Main section should still be visible because Home has no feature gate
     expect(screen.getByText('Main')).toBeInTheDocument();
-    expect(screen.getByText('Analytics')).toBeInTheDocument();
+    expect(screen.getByText('Home')).toBeInTheDocument();
 
-    // Dashboards and Insights should be hidden
-    expect(screen.queryByText('Dashboards')).not.toBeInTheDocument();
+    // Builder and Insights should be hidden
+    expect(screen.queryByText('Builder')).not.toBeInTheDocument();
     expect(screen.queryByText('Insights')).not.toBeInTheDocument();
   });
 
@@ -476,14 +504,14 @@ describe('Feature-gated nav items (Story 0.2.3)', () => {
       error: null,
     });
 
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
     // Non-gated items should still appear
-    expect(screen.getByText('Analytics')).toBeInTheDocument();
-    expect(screen.getByText('Data Sources')).toBeInTheDocument();
+    expect(screen.getByText('Home')).toBeInTheDocument();
+    expect(screen.getByText('Sources')).toBeInTheDocument();
 
     // Gated items should be hidden when entitlements is null
-    expect(screen.queryByText('Dashboards')).not.toBeInTheDocument();
+    expect(screen.queryByText('Builder')).not.toBeInTheDocument();
     expect(screen.queryByText('Insights')).not.toBeInTheDocument();
   });
 });
@@ -508,7 +536,7 @@ describe('Admin nav section (Story 0.2.4)', () => {
   it('admin sees Plans and Diagnostics links', () => {
     mockUseOrganization.mockReturnValue({ membership: { role: 'org:admin' } });
 
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
     expect(screen.getByText('Admin')).toBeInTheDocument();
     expect(screen.getByText('Plans')).toBeInTheDocument();
@@ -518,7 +546,7 @@ describe('Admin nav section (Story 0.2.4)', () => {
   it('non-admin does not see admin links', () => {
     mockUseOrganization.mockReturnValue({ membership: { role: 'org:member' } });
 
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
     expect(screen.queryByText('Admin')).not.toBeInTheDocument();
     expect(screen.queryByText('Plans')).not.toBeInTheDocument();
@@ -533,12 +561,12 @@ describe('Admin nav section (Story 0.2.4)', () => {
       <>
         <Sidebar />
         <Routes>
-          <Route path="/analytics" element={<div>Analytics Page</div>} />
+          <Route path="/home" element={<div>Home Page</div>} />
           <Route path="/admin/plans" element={<div>Plans Page</div>} />
           <Route path="/admin/diagnostics" element={<div>Diagnostics Page</div>} />
         </Routes>
       </>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
     await user.click(screen.getByText('Plans'));
@@ -569,7 +597,7 @@ describe('Mobile hamburger toggle (Story 0.3.1)', () => {
       <RootLayout>
         <div>Content</div>
       </RootLayout>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
     const sidebar = screen.getByRole('navigation', { name: 'Main navigation' });
@@ -586,7 +614,7 @@ describe('Mobile hamburger toggle (Story 0.3.1)', () => {
           <div>Content</div>
         </RootLayout>
       </>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
     const hamburger = screen.getByLabelText('Toggle navigation');
@@ -614,7 +642,7 @@ describe('Mobile hamburger toggle (Story 0.3.1)', () => {
           <div>Content</div>
         </RootLayout>
       </>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
     const hamburger = screen.getByLabelText('Toggle navigation');
@@ -635,7 +663,7 @@ describe('Mobile hamburger toggle (Story 0.3.1)', () => {
   it('hamburger has correct aria-expanded state', async () => {
     const user = userEvent.setup();
 
-    renderWithProviders(<AppHeader />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<AppHeader />, { initialEntries: ['/home'] });
 
     const hamburger = screen.getByLabelText('Toggle navigation');
     expect(hamburger).toHaveAttribute('aria-expanded', 'false');
@@ -667,7 +695,7 @@ describe('Keyboard navigation and ARIA (Story 0.3.2)', () => {
   });
 
   it('all sidebar nav items are tabbable', () => {
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
     const navItems = document.querySelectorAll('.sidebar-nav-item');
     navItems.forEach((item) => {
@@ -686,7 +714,7 @@ describe('Keyboard navigation and ARIA (Story 0.3.2)', () => {
           <div>Content</div>
         </RootLayout>
       </>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
     const hamburger = screen.getByLabelText('Toggle navigation');
@@ -703,14 +731,14 @@ describe('Keyboard navigation and ARIA (Story 0.3.2)', () => {
   });
 
   it('active nav item has aria-current="page"', () => {
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
-    const analyticsItem = screen.getByText('Analytics').closest('.sidebar-nav-item');
-    expect(analyticsItem).toHaveAttribute('aria-current', 'page');
+    const homeItem = screen.getByText('Home').closest('.sidebar-nav-item');
+    expect(homeItem).toHaveAttribute('aria-current', 'page');
 
     // Non-active items should not have aria-current
-    const dataSourcesItem = screen.getByText('Data Sources').closest('.sidebar-nav-item');
-    expect(dataSourcesItem).not.toHaveAttribute('aria-current');
+    const sourcesItem = screen.getByText('Sources').closest('.sidebar-nav-item');
+    expect(sourcesItem).not.toHaveAttribute('aria-current');
   });
 
   it('nav items activate with Space key', async () => {
@@ -720,29 +748,29 @@ describe('Keyboard navigation and ARIA (Story 0.3.2)', () => {
       <>
         <Sidebar />
         <Routes>
-          <Route path="/analytics" element={<div>Analytics Page</div>} />
+          <Route path="/home" element={<div>Home Page</div>} />
           <Route path="/data-sources" element={<div>Data Sources Page</div>} />
         </Routes>
       </>,
-      { initialEntries: ['/analytics'] }
+      { initialEntries: ['/home'] }
     );
 
-    const dataSourcesItem = screen.getByText('Data Sources').closest('[role="link"]') as HTMLElement;
-    dataSourcesItem.focus();
+    const sourcesItem = screen.getByText('Sources').closest('[role="link"]') as HTMLElement;
+    sourcesItem.focus();
     await user.keyboard(' ');
 
     expect(screen.getByText('Data Sources Page')).toBeInTheDocument();
   });
 
   it('sidebar nav element has id for aria-controls', () => {
-    renderWithProviders(<Sidebar />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<Sidebar />, { initialEntries: ['/home'] });
 
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(nav).toHaveAttribute('id', 'sidebar-nav');
   });
 
   it('hamburger references sidebar via aria-controls', () => {
-    renderWithProviders(<AppHeader />, { initialEntries: ['/analytics'] });
+    renderWithProviders(<AppHeader />, { initialEntries: ['/home'] });
 
     const hamburger = screen.getByLabelText('Toggle navigation');
     expect(hamburger).toHaveAttribute('aria-controls', 'sidebar-nav');

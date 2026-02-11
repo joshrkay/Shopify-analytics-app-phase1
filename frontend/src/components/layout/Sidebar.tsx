@@ -52,15 +52,15 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Main',
     items: [
-      { label: 'Analytics', path: '/analytics', icon: HomeIcon },
-      { label: 'Dashboards', path: '/dashboards', icon: ChartVerticalIcon, matchPrefix: true, feature: 'custom_reports' },
+      { label: 'Home', path: '/home', icon: HomeIcon },
+      { label: 'Builder', path: '/dashboards', icon: ChartVerticalIcon, matchPrefix: true, feature: 'custom_reports' },
       { label: 'Insights', path: '/insights', icon: LightbulbIcon, feature: 'ai_insights' },
     ],
   },
   {
     title: 'Connections',
     items: [
-      { label: 'Data Sources', path: '/data-sources', icon: DatabaseIcon },
+      { label: 'Sources', path: '/data-sources', icon: DatabaseIcon },
     ],
   },
   {

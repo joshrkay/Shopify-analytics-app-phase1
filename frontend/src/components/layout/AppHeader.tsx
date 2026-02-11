@@ -1,14 +1,15 @@
 /**
  * AppHeader Component
  *
- * Slim top utility bar with changelog and debug controls.
- * Navigation has moved to the Sidebar component (Phase 0).
+ * Slim top utility bar with changelog, debug controls, notifications,
+ * and profile menu. Navigation lives in the Sidebar component (Phase 0).
  * Includes hamburger toggle for mobile sidebar.
  *
  * Story 9.7 - In-App Changelog & Release Notes
  * Story 9.8 - "What Changed?" Debug Panel
  * Story 0.1.2 - AppHeader becomes slim top utility bar
  * Story 0.3.1 - Mobile hamburger toggles sidebar
+ * Phase 1 - Header & ProfileSwitcher
  */
 
 import { InlineStack, Box, Icon } from '@shopify/polaris';
@@ -16,7 +17,10 @@ import { MenuIcon } from '@shopify/polaris-icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChangelogBadge } from '../changelog/ChangelogBadge';
 import { WhatChangedButton } from '../whatChanged/WhatChangedButton';
+import { NotificationBadge } from '../common/NotificationBadge';
+import { ProfileMenu } from './ProfileMenu';
 import { useSidebar } from './RootLayout';
+import { getUnreadInsightsCount } from '../../services/insightsApi';
 import './AppHeader.css';
 
 export function AppHeader() {
@@ -26,6 +30,10 @@ export function AppHeader() {
 
   const handleWhatsNewClick = () => {
     navigate('/whats-new');
+  };
+
+  const handleInsightsClick = () => {
+    navigate('/insights');
   };
 
   const isOnWhatsNewPage = location.pathname === '/whats-new';
@@ -53,7 +61,7 @@ export function AppHeader() {
           <Icon source={MenuIcon} />
         </button>
 
-        {/* Right: Status indicators */}
+        {/* Right: Status indicators + profile */}
         <InlineStack gap="400" blockAlign="center">
           {!isOnWhatsNewPage && (
             <ChangelogBadge
@@ -68,6 +76,15 @@ export function AppHeader() {
             showBadge
             refreshInterval={60000}
           />
+          <NotificationBadge
+            fetchCount={getUnreadInsightsCount}
+            onClick={handleInsightsClick}
+            refreshInterval={60000}
+            singularNoun="insight"
+            pluralNoun="insights"
+            tone="info"
+          />
+          <ProfileMenu />
         </InlineStack>
       </InlineStack>
     </Box>
