@@ -620,7 +620,7 @@ class TenantContextMiddleware:
             if not roles and org_role:
                 # Map Clerk org_role to application roles
                 role_mapping = {
-                    "org:admin": "OWNER",
+                    "org:admin": "MERCHANT_ADMIN",
                     "org:member": "MERCHANT_VIEWER",
                     "admin": "ADMIN",
                     "owner": "OWNER",

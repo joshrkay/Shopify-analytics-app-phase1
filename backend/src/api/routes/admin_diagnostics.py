@@ -55,7 +55,7 @@ def verify_admin_role(request: Request) -> TenantContext:
     """
     tenant_ctx = get_tenant_context(request)
 
-    admin_roles = ["admin", "Admin", "ADMIN", "owner", "Owner", "OWNER"]
+    admin_roles = ["admin", "Admin", "ADMIN", "owner", "Owner", "OWNER", "MERCHANT_ADMIN", "merchant_admin"]
     has_admin = any(role in tenant_ctx.roles for role in admin_roles)
 
     if not has_admin:
