@@ -38,6 +38,7 @@ import jwt
 from jwt import PyJWKClient, PyJWKClientError
 from jwt.exceptions import InvalidTokenError, DecodeError
 import json
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.constants.permissions import has_multi_tenant_access, RoleCategory, get_primary_role_category
 from src.database.session import get_db_session_sync
@@ -739,10 +740,11 @@ class TenantContextMiddleware:
             # - Role changes mid-session
             # - Billing downgrades that invalidate roles
             TenantGuard = _get_tenant_guard_class()
-
-            db_gen = get_db_session_sync()
-            db = next(db_gen)
+            db = None
             try:
+                db_gen = get_db_session_sync()
+                db = next(db_gen)
+
                 guard = TenantGuard(db)
                 authz_result = guard.enforce_authorization(
                     clerk_user_id=str(user_id),
@@ -821,9 +823,18 @@ class TenantContextMiddleware:
                         },
                         exc_info=True,
                     )
-
+            except (RuntimeError, ValueError, SQLAlchemyError) as db_error:
+                logger.warning(
+                    f"DB authorization enforcement skipped: {type(db_error).__name__}: {str(db_error)}",
+                    extra={
+                        "user_id": str(user_id),
+                        "tenant_id": active_tenant_id,
+                        "path": request.url.path,
+                    },
+                )
             finally:
-                db.close()
+                if db is not None:
+                    db.close()
 
             # Attach to request state
             request.state.tenant_context = tenant_context
@@ -862,7 +873,7 @@ class TenantContextMiddleware:
                 content={"detail": he.detail},
             )
         except Exception as e:
-            logger.error("Unexpected error during tenant context extraction", extra={
+            logger.error(f"Unexpected error during tenant context extraction: {type(e).__name__}: {str(e)}", extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
                 "path": request.url.path
