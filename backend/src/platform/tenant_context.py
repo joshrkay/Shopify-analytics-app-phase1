@@ -835,7 +835,7 @@ class TenantContextMiddleware:
             logger.info("Request authenticated", extra=log_extra)
             
         except (InvalidTokenError, DecodeError, PyJWKClientError) as e:
-            logger.warning("JWT verification failed", extra={
+            logger.warning(f"JWT verification failed: {type(e).__name__}: {str(e)}", extra={
                 "error": str(e),
                 "path": request.url.path
             })
