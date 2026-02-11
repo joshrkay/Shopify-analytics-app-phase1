@@ -13,7 +13,6 @@ services:
     staticPublishPath: frontend/dist
     branch: main
     autoDeploy: true
-    region: oregon
     headers:
       - path: /*
         name: Cache-Control
@@ -153,8 +152,8 @@ services:
     # Uses worker Dockerfile (same runtime environment)
     dockerfilePath: ./docker/worker.Dockerfile
     dockerContext: .
-    # Command to execute
-    startCommand: python -m src.jobs.reconcile_subscriptions
+    # Command to execute (Docker runtime uses dockerCommand)
+    dockerCommand: python -m src.jobs.reconcile_subscriptions
     region: oregon
     # Environment variables (same as worker)
     envVars:
@@ -222,6 +221,9 @@ services:
     name: markinsight-redis
     plan: starter
     region: oregon
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: Allow access from Render services and approved external clients
 
 # ============================================
 # DATABASE: POSTGRES
