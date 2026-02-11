@@ -142,6 +142,14 @@ function AppWithOrg() {
               }
             />
             <Route
+              path="/builder"
+              element={
+                <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
+                  <DashboardList />
+                </FeatureGateRoute>
+              }
+            />
+            <Route
               path="/dashboards/:dashboardId/edit"
               element={
                 <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
@@ -151,6 +159,9 @@ function AppWithOrg() {
             />
             {/* View route is NOT gated — shared dashboards viewable on any plan */}
             <Route path="/dashboards/:dashboardId" element={<DashboardView />} />
+
+            {/* Route aliases */}
+            <Route path="/sources" element={<DataSources />} />
 
             <Route path="/" element={<Navigate to="/home" replace />} />
           </Routes>
