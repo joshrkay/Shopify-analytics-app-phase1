@@ -67,7 +67,7 @@ This application uses Render's Blueprint feature for one-click deployment of the
 - **Web API**: FastAPI application running on port 8000 (auto-configured by Render)
 - **Worker**: Background job processor for async tasks
 - **Cron Job**: Runs hourly to reconcile subscriptions
-- **Database**: PostgreSQL 15 (starter plan)
+- **Database**: PostgreSQL 15 (Professional plan)
 - **Redis**: Starter plan for caching and queue management
 
 ### Health Checks

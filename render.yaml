@@ -59,7 +59,7 @@ services:
       # Database connection (auto-injected from database service)
       - key: DATABASE_URL
         fromDatabase:
-          name: markinsight-db
+          name: signals-ai-db
           property: connectionString
       # Redis connection (auto-injected from Redis service)
       - key: REDIS_URL
@@ -108,7 +108,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: markinsight-db
+          name: signals-ai-db
           property: connectionString
       - key: REDIS_URL
         fromService:
@@ -161,7 +161,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: markinsight-db
+          name: signals-ai-db
           property: connectionString
       - key: REDIS_URL
         fromService:
@@ -229,10 +229,10 @@ services:
 # DATABASE: POSTGRES
 # ============================================
 databases:
-  - name: markinsight-db
+  - name: signals-ai-db
     databaseName: markinsight
     user: markinsight_user
-    plan: starter
+    plan: professional
     region: oregon
     # PostgreSQL version
     postgresMajorVersion: 15
@@ -241,6 +241,6 @@ databases:
   - name: markinsight-superset-db
     databaseName: superset_metadata
     user: superset_user
-    plan: starter
+    plan: standard
     region: oregon
     postgresMajorVersion: 15
