@@ -50,6 +50,7 @@ export function useLlmConfig() {
 export function useAIUsageStats() {
   const [stats, setStats] = useState<AIUsageStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
   useEffect(() => () => {
@@ -59,11 +60,16 @@ export function useAIUsageStats() {
   const refetch = useCallback(async () => {
     if (isMountedRef.current) {
       setIsLoading(true);
+      setError(null);
     }
     try {
       const nextStats = await getAIUsageStats();
       if (isMountedRef.current) {
         setStats(nextStats);
+      }
+    } catch (err) {
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load AI usage stats');
       }
     } finally {
       if (isMountedRef.current) {
@@ -76,7 +82,7 @@ export function useAIUsageStats() {
     refetch();
   }, [refetch]);
 
-  return { stats, isLoading, refetch };
+  return { stats, isLoading, error, refetch };
 }
 
 export function useSetApiKey() {
