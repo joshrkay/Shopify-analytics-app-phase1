@@ -126,6 +126,25 @@ export const MIN_GRID_DIMENSIONS: Record<ChartType, { w: number; h: number }> = 
 
 export const GRID_COLS = 12;
 
+/** Widget size labels for layout customizer */
+export type WidgetSize = 'small' | 'medium' | 'large' | 'full';
+
+/** Mapping from widget size to column span (12-column grid) */
+export const SIZE_TO_COLUMNS: Record<WidgetSize, number> = {
+  small: 3,
+  medium: 6,
+  large: 9,
+  full: 12,
+};
+
+/** Mapping from column span to widget size label */
+export const COLUMNS_TO_SIZE: Record<number, WidgetSize> = {
+  3: 'small',
+  6: 'medium',
+  9: 'large',
+  12: 'full',
+};
+
 // =============================================================================
 // Dashboard Filter (dashboard-level filters)
 // =============================================================================

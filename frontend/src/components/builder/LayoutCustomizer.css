@@ -1,0 +1,19 @@
+/**
+ * Layout Customizer Styles
+ *
+ * CSS Grid layout for the widget customizer step.
+ * 12-column grid matching the production dashboard grid.
+ */
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--p-space-400, 16px);
+  margin: var(--p-space-600, 24px) 0;
+  width: 100%;
+}
+
+/* Ensure grid items respect their column span */
+.layout-grid > * {
+  min-width: 0; /* Prevent grid blowout */
+}

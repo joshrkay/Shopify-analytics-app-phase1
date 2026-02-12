@@ -139,9 +139,11 @@ export function ReportConfiguratorModal() {
     isReportConfigOpen,
     selectedReportId,
     dashboard,
+    wizardState,
     closeReportConfig,
     addReport,
     updateReport,
+    updateWizardWidget,
   } = useDashboardBuilder();
 
   // ---------------------------------------------------------------------------
@@ -185,9 +187,20 @@ export function ReportConfiguratorModal() {
   // ---------------------------------------------------------------------------
   const isEditing = selectedReportId !== null;
   const existingReport = useMemo(() => {
-    if (!isEditing || !dashboard) return null;
+    if (!isEditing) return null;
+
+    // Check wizard widgets first (for wizard mode)
+    if (wizardState.isWizardMode) {
+      const wizardWidget = wizardState.selectedWidgets.find(
+        (w) => w.id === selectedReportId,
+      );
+      if (wizardWidget) return wizardWidget;
+    }
+
+    // Fallback to dashboard reports (for regular edit mode)
+    if (!dashboard) return null;
     return dashboard.reports.find((r) => r.id === selectedReportId) ?? null;
-  }, [isEditing, selectedReportId, dashboard]);
+  }, [isEditing, selectedReportId, dashboard, wizardState]);
 
   // ---------------------------------------------------------------------------
   // Fetch datasets on modal open
@@ -379,6 +392,19 @@ export function ReportConfiguratorModal() {
     setSaveError(null);
 
     try {
+      // Handle wizard mode save
+      if (wizardState.isWizardMode && selectedReportId) {
+        updateWizardWidget(selectedReportId, {
+          name: name.trim(),
+          description: description.trim() || undefined,
+          chart_type: chartType,
+          config_json: configJson,
+        });
+        closeReportConfig();
+        return;
+      }
+
+      // Handle regular dashboard mode
       if (isEditing && selectedReportId) {
         const updateBody: UpdateReportRequest = {
           name: name.trim(),
@@ -428,8 +454,10 @@ export function ReportConfiguratorModal() {
     display,
     isEditing,
     selectedReportId,
+    wizardState,
     addReport,
     updateReport,
+    updateWizardWidget,
     closeReportConfig,
   ]);
 

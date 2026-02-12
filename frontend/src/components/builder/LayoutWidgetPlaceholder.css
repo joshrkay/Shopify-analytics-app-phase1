@@ -1,0 +1,88 @@
+/**
+ * Layout Widget Placeholder Styles
+ *
+ * Styles for widget preview cards in the layout customizer.
+ * Features dashed borders, gradient backgrounds, and hover effects.
+ */
+
+.widget-placeholder {
+  border: 2px dashed var(--p-color-border-subdued, #c9cccf);
+  border-radius: var(--p-border-radius-300, 8px);
+  background: linear-gradient(
+    135deg,
+    rgba(227, 229, 232, 0.2) 0%,
+    rgba(227, 229, 232, 0.05) 100%
+  );
+  padding: var(--p-space-400, 16px);
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-space-300, 12px);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.widget-placeholder:hover {
+  border-color: var(--p-color-border-emphasis, #8c9196);
+  background: linear-gradient(
+    135deg,
+    rgba(227, 229, 232, 0.3) 0%,
+    rgba(227, 229, 232, 0.1) 100%
+  );
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.widget-placeholder-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--p-space-200, 8px);
+}
+
+.widget-drag-handle {
+  color: var(--p-color-text-subdued, #6d7175);
+  cursor: move;
+  user-select: none;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.size-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--p-color-bg-surface-secondary, #f1f2f4);
+  border: 1px solid var(--p-color-border-subdued, #c9cccf);
+  border-radius: var(--p-border-radius-100, 4px);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--p-color-text-subdued, #6d7175);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.widget-icon-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  opacity: 0.4;
+}
+
+.widget-icon-placeholder svg {
+  width: 48px;
+  height: 48px;
+}
+
+.widget-actions {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  margin-top: auto;
+}
+
+.widget-placeholder:hover .widget-actions {
+  opacity: 1;
+}
