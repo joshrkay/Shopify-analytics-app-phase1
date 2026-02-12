@@ -1,0 +1,14 @@
+# Prevent host node_modules (with native binaries built for the host
+# Node/OS version) from being copied into the Docker build context.
+# The Dockerfile runs `npm install` inside the container to get the
+# correct platform-specific binaries.
+**/node_modules
+
+# Git history is not needed in the build context
+.git
+
+# IDE / OS artifacts
+.vscode
+.idea
+*.swp
+.DS_Store
