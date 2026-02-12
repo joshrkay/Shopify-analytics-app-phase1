@@ -253,6 +253,7 @@ export function useConnectionWizard(): UseConnectionWizardResult {
 interface UseSourceMutationsResult {
   disconnecting: boolean;
   testing: boolean;
+  testingSourceId: string | null;
   configuring: boolean;
   error: string | null;
   disconnect: (sourceId: string) => Promise<void>;
@@ -280,6 +281,7 @@ interface UseSourceMutationsResult {
 export function useSourceMutations(): UseSourceMutationsResult {
   const [disconnecting, setDisconnecting] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [testingSourceId, setTestingSourceId] = useState<string | null>(null);
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -304,6 +306,7 @@ export function useSourceMutations(): UseSourceMutationsResult {
   const testConnection = useCallback(async (sourceId: string): Promise<ConnectionTestResult> => {
     try {
       setTesting(true);
+      setTestingSourceId(sourceId);
       setError(null);
       const result = await apiTestConnection(sourceId);
       return result;
@@ -313,6 +316,7 @@ export function useSourceMutations(): UseSourceMutationsResult {
       throw err;
     } finally {
       setTesting(false);
+      setTestingSourceId(null);
     }
   }, []);
 
@@ -336,6 +340,7 @@ export function useSourceMutations(): UseSourceMutationsResult {
   return {
     disconnecting,
     testing,
+    testingSourceId,
     configuring,
     error,
     disconnect,
