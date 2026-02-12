@@ -193,3 +193,56 @@ export interface ConnectedAccount {
  * Result from completing the OAuth callback flow.
  */
 export type OAuthCallbackResult = OAuthCompleteResponse;
+
+// =============================================================================
+// 6-Step Connect Source Wizard Types (Subphase 3.4/3.5)
+// =============================================================================
+
+/**
+ * Step in the 6-step connect source wizard.
+ */
+export type WizardStep = 'intro' | 'oauth' | 'accounts' | 'syncConfig' | 'syncing' | 'success';
+
+/**
+ * Metadata about each wizard step for the step indicator.
+ */
+export interface WizardStepMeta {
+  key: WizardStep;
+  label: string;
+  order: number;
+}
+
+/**
+ * Account option for the account selection step.
+ */
+export interface AccountOption {
+  id: string;
+  accountId: string;
+  accountName: string;
+  platform: string;
+  isEnabled: boolean;
+}
+
+/**
+ * Sync configuration collected during the wizard.
+ */
+export interface WizardSyncConfig {
+  historicalRange: '30d' | '90d' | '365d' | 'all';
+  frequency: SyncFrequency;
+  enabledMetrics: string[];
+}
+
+/**
+ * Full state object for the 6-step connect source wizard.
+ */
+export interface ConnectSourceWizardState {
+  step: WizardStep;
+  platform: DataSourceDefinition | null;
+  connectionId: string | null;
+  oauthState: string | null;
+  accounts: AccountOption[];
+  selectedAccountIds: string[];
+  syncConfig: WizardSyncConfig;
+  error: string | null;
+  loading: boolean;
+}

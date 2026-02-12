@@ -32,7 +32,7 @@ import {
 import { RefreshIcon } from '@shopify/polaris-icons';
 
 import type { Source } from '../types/sources';
-import { ConnectSourceModal } from '../components/sources/ConnectSourceModal';
+import { ConnectSourceWizard } from '../components/sources/ConnectSourceWizard';
 import { DisconnectConfirmationModal } from '../components/sources/DisconnectConfirmationModal';
 import { SyncConfigModal } from '../components/sources/SyncConfigModal';
 import { ConnectedSourceCard } from '../components/sources/ConnectedSourceCard';
@@ -83,7 +83,7 @@ export default function DataSources() {
     setConnectPlatform(null);
   }, []);
 
-  const handleConnectionSuccess = useCallback(async () => {
+  const handleConnectionSuccess = useCallback(async (_connectionId?: string) => {
     closeConnectModal();
     await refetch();
     await refreshHealth();
@@ -210,11 +210,11 @@ export default function DataSources() {
           </Layout.Section>
         </Layout>
 
-        <ConnectSourceModal
+        <ConnectSourceWizard
           open={showConnectModal}
+          platform={connectPlatform}
           onClose={closeConnectModal}
           onSuccess={handleConnectionSuccess}
-          initialPlatform={connectPlatform}
         />
       </Page>
     );
@@ -299,11 +299,11 @@ export default function DataSources() {
         </Layout.Section>
       </Layout>
 
-      <ConnectSourceModal
+      <ConnectSourceWizard
         open={showConnectModal}
+        platform={connectPlatform}
         onClose={closeConnectModal}
         onSuccess={handleConnectionSuccess}
-        initialPlatform={connectPlatform}
       />
 
       <DisconnectConfirmationModal

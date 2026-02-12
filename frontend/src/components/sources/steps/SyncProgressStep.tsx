@@ -1,0 +1,134 @@
+/**
+ * Sync Progress Step Component
+ *
+ * Step 5 of the connection wizard.
+ * Shows real-time sync progress with a progress bar and stage indicators.
+ *
+ * Phase 3 — Subphase 3.5: Connection Wizard Steps 4-6
+ */
+
+import { BlockStack, Text, ProgressBar, Spinner, Banner, InlineStack } from '@shopify/polaris';
+import type { DataSourceDefinition, SyncProgress } from '../../../types/sourceConnection';
+
+interface SyncProgressStepProps {
+  platform: DataSourceDefinition;
+  progress: SyncProgress | null;
+  error: string | null;
+}
+
+function getSyncStages(progress: SyncProgress | null) {
+  if (!progress) {
+    return [
+      { label: 'Connecting to source', status: 'pending' as const },
+      { label: 'Retrieving account information', status: 'pending' as const },
+      { label: 'Fetching data', status: 'pending' as const },
+      { label: 'Processing metrics', status: 'pending' as const },
+    ];
+  }
+
+  const isRunning = progress.status === 'running';
+  const isComplete = progress.status === 'completed' || progress.lastSyncStatus === 'succeeded';
+  const isFailed = progress.status === 'failed' || progress.lastSyncStatus === 'failed';
+
+  if (isComplete) {
+    return [
+      { label: 'Connected to source', status: 'completed' as const },
+      { label: 'Retrieved account information', status: 'completed' as const },
+      { label: 'Fetched data', status: 'completed' as const },
+      { label: 'Processed metrics', status: 'completed' as const },
+    ];
+  }
+
+  if (isFailed) {
+    return [
+      { label: 'Connected to source', status: 'completed' as const },
+      { label: 'Retrieved account information', status: 'completed' as const },
+      { label: 'Fetching data', status: 'failed' as const },
+      { label: 'Processing metrics', status: 'pending' as const },
+    ];
+  }
+
+  if (isRunning) {
+    return [
+      { label: 'Connected to source', status: 'completed' as const },
+      { label: 'Retrieved account information', status: 'completed' as const },
+      { label: 'Fetching data', status: 'in_progress' as const },
+      { label: 'Processing metrics', status: 'pending' as const },
+    ];
+  }
+
+  return [
+    { label: 'Connecting to source', status: 'in_progress' as const },
+    { label: 'Retrieving account information', status: 'pending' as const },
+    { label: 'Fetching data', status: 'pending' as const },
+    { label: 'Processing metrics', status: 'pending' as const },
+  ];
+}
+
+function getStageIcon(status: 'completed' | 'in_progress' | 'pending' | 'failed') {
+  switch (status) {
+    case 'completed': return '✓';
+    case 'in_progress': return '◎';
+    case 'failed': return '✗';
+    default: return '○';
+  }
+}
+
+function derivePercent(progress: SyncProgress | null): number {
+  if (!progress) return 0;
+  if (progress.status === 'completed' || progress.lastSyncStatus === 'succeeded') return 100;
+  if (progress.status === 'running') return 50;
+  return 0;
+}
+
+export function SyncProgressStep({ platform, progress, error }: SyncProgressStepProps) {
+  const stages = getSyncStages(progress);
+  const percent = derivePercent(progress);
+
+  return (
+    <BlockStack gap="500">
+      <BlockStack gap="200" inlineAlign="center">
+        <InlineStack align="center" gap="200">
+          <Spinner size="small" />
+          <Text as="h2" variant="headingLg" alignment="center">
+            Syncing your {platform.displayName} data
+          </Text>
+        </InlineStack>
+      </BlockStack>
+
+      <ProgressBar progress={percent} size="small" />
+
+      <BlockStack gap="200">
+        {stages.map((stage) => (
+          <InlineStack key={stage.label} gap="200" blockAlign="center">
+            <Text
+              as="span"
+              variant="bodyMd"
+              tone={stage.status === 'failed' ? 'critical' : stage.status === 'completed' ? 'success' : 'subdued'}
+            >
+              {getStageIcon(stage.status)}
+            </Text>
+            <Text
+              as="span"
+              variant="bodyMd"
+              fontWeight={stage.status === 'in_progress' ? 'semibold' : 'regular'}
+              tone={stage.status === 'pending' ? 'subdued' : undefined}
+            >
+              {stage.label}
+            </Text>
+          </InlineStack>
+        ))}
+      </BlockStack>
+
+      {error && (
+        <Banner tone="critical" title="Sync Error">
+          <p>{error}</p>
+        </Banner>
+      )}
+
+      <Banner tone="info">
+        <p>Feel free to explore the app while your data syncs. We'll notify you when it's complete.</p>
+      </Banner>
+    </BlockStack>
+  );
+}

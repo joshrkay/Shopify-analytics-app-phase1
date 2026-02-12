@@ -50,9 +50,13 @@ vi.mock('../contexts/DataHealthContext', () => ({
   }),
 }));
 
-vi.mock('../components/sources/ConnectSourceModal', () => ({
-  ConnectSourceModal: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="connect-modal">Connect Modal</div> : null,
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
+vi.mock('../components/sources/ConnectSourceWizard', () => ({
+  ConnectSourceWizard: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="connect-wizard">Connect Wizard</div> : null,
 }));
 
 vi.mock('../components/sources/DisconnectConfirmationModal', () => ({
@@ -137,7 +141,7 @@ describe('DataSources Page Integration', () => {
     // Click the "Add Source" primary action
     await user.click(screen.getByRole('button', { name: 'Add Source' }));
 
-    expect(screen.getByTestId('connect-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('connect-wizard')).toBeInTheDocument();
   });
 
   it('empty state renders when no connections and shows catalog', async () => {

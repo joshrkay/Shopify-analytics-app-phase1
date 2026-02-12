@@ -16,6 +16,7 @@ import type {
   SyncProgress,
   GlobalSyncSettings,
   ConnectedAccount,
+  AccountOption,
 } from '../types/sourceConnection';
 
 // Re-exports from sourcesApi — callers can import from either module
@@ -283,4 +284,89 @@ export async function updateGlobalSyncSettings(
   );
   const data = await handleResponse<RawGlobalSyncSettings>(response);
   return normalizeGlobalSettings(data);
+}
+
+// =============================================================================
+// Available Accounts (Wizard Step 3)
+// =============================================================================
+
+interface RawAccountListResponse {
+  accounts: RawConnectionSummary[];
+}
+
+function normalizeAccountOption(raw: RawConnectionSummary): AccountOption {
+  return {
+    id: raw.id,
+    accountId: raw.account_id,
+    accountName: raw.account_name,
+    platform: raw.platform,
+    isEnabled: raw.is_enabled,
+  };
+}
+
+/**
+ * Get available ad accounts for a connection after OAuth.
+ */
+export async function getAvailableAccounts(connectionId: string): Promise<AccountOption[]> {
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/ad-platform-ingestion/connections/${connectionId}/accounts`,
+    { method: 'GET', headers },
+  );
+  const data = await handleResponse<RawAccountListResponse>(response);
+  return data.accounts.map(normalizeAccountOption);
+}
+
+// =============================================================================
+// Detailed Sync Progress (Wizard Step 5)
+// =============================================================================
+
+interface RawSyncProgressDetailed {
+  connection_id: string;
+  status: string;
+  percent_complete?: number;
+  current_stream?: string | null;
+  message?: string | null;
+  last_sync_at: string | null;
+  last_sync_status: string | null;
+  is_enabled: boolean;
+  can_sync: boolean;
+}
+
+function derivePercentComplete(status: string, raw?: number): number {
+  if (raw !== undefined) return raw;
+  switch (status) {
+    case 'completed': return 100;
+    case 'running': return 50;
+    case 'failed': return 0;
+    default: return 0;
+  }
+}
+
+/**
+ * Get detailed sync progress for the wizard progress bar.
+ * Falls back to deriving percentage from status if backend doesn't provide it.
+ */
+export async function getSyncProgressDetailed(connectionId: string): Promise<SyncProgress & {
+  percentComplete: number;
+  currentStream: string | null;
+  message: string | null;
+}> {
+  const headers = await createHeadersAsync();
+  const response = await fetch(
+    `${API_BASE_URL}/api/sync/state/${connectionId}`,
+    { method: 'GET', headers },
+  );
+  const data = await handleResponse<RawSyncProgressDetailed>(response);
+  return {
+    connectionId: data.connection_id,
+    status: data.status,
+    lastSyncAt: data.last_sync_at,
+    lastSyncStatus: data.last_sync_status,
+    isEnabled: data.is_enabled,
+    canSync: data.can_sync,
+    percentComplete: derivePercentComplete(data.status, data.percent_complete),
+    currentStream: data.current_stream ?? null,
+    message: data.message ?? null,
+  };
 }

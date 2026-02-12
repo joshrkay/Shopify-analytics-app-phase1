@@ -34,6 +34,8 @@ import {
   triggerSync,
   getGlobalSyncSettings,
   updateGlobalSyncSettings,
+  getAvailableAccounts,
+  getSyncProgressDetailed,
 } from '../services/dataSourcesApi';
 
 beforeEach(() => {
@@ -266,6 +268,83 @@ describe('updateGlobalSyncSettings', () => {
       }),
     );
     expect(result.defaultFrequency).toBe('hourly');
+  });
+});
+
+// =============================================================================
+// New wizard API functions
+// =============================================================================
+
+describe('getAvailableAccounts', () => {
+  it('calls GET /api/ad-platform-ingestion/connections/{connectionId}/accounts and normalizes', async () => {
+    mockFetch({
+      accounts: [
+        {
+          id: 'acc-1',
+          platform: 'meta_ads',
+          account_id: 'act_123',
+          account_name: 'Summer Campaign',
+          connection_id: 'conn-1',
+          airbyte_connection_id: 'ab-123',
+          status: 'active',
+          is_enabled: true,
+          last_sync_at: null,
+          last_sync_status: null,
+        },
+      ],
+    });
+
+    const result = await getAvailableAccounts('conn-1');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/ad-platform-ingestion/connections/conn-1/accounts',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].accountName).toBe('Summer Campaign');
+    expect(result[0].accountId).toBe('act_123');
+  });
+});
+
+describe('getSyncProgressDetailed', () => {
+  it('normalizes response with percentage derivation from status', async () => {
+    mockFetch({
+      connection_id: 'conn-1',
+      status: 'running',
+      last_sync_at: null,
+      last_sync_status: null,
+      is_enabled: true,
+      can_sync: true,
+    });
+
+    const result = await getSyncProgressDetailed('conn-1');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/sync/state/conn-1',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(result.percentComplete).toBe(50); // running = 50%
+    expect(result.currentStream).toBeNull();
+  });
+
+  it('uses backend percent_complete when provided', async () => {
+    mockFetch({
+      connection_id: 'conn-1',
+      status: 'running',
+      percent_complete: 75,
+      current_stream: 'campaigns',
+      message: 'Syncing campaigns...',
+      last_sync_at: null,
+      last_sync_status: null,
+      is_enabled: true,
+      can_sync: true,
+    });
+
+    const result = await getSyncProgressDetailed('conn-1');
+
+    expect(result.percentComplete).toBe(75);
+    expect(result.currentStream).toBe('campaigns');
+    expect(result.message).toBe('Syncing campaigns...');
   });
 });
 

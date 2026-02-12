@@ -46,9 +46,13 @@ vi.mock('../hooks/useSourceConnection', () => ({
   }),
 }));
 
-vi.mock('../components/sources/ConnectSourceModal', () => ({
-  ConnectSourceModal: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="connect-modal">Connect Modal</div> : null,
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
+vi.mock('../components/sources/ConnectSourceWizard', () => ({
+  ConnectSourceWizard: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="connect-wizard">Connect Wizard</div> : null,
 }));
 
 vi.mock('../components/sources/DisconnectConfirmationModal', () => ({
