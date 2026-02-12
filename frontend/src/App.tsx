@@ -153,7 +153,7 @@ function AppWithOrg() {
               path="/dashboards/wizard"
               element={
                 <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
-                  <DashboardBuilderProvider dashboardId="wizard">
+                  <DashboardBuilderProvider>
                     <WizardFlow />
                   </DashboardBuilderProvider>
                 </FeatureGateRoute>

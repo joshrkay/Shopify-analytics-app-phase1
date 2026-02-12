@@ -164,7 +164,7 @@ const initialState: DashboardBuilderState = {
 // =============================================================================
 
 interface DashboardBuilderProviderProps {
-  dashboardId: string;
+  dashboardId?: string;
   children: ReactNode;
 }
 
@@ -187,13 +187,17 @@ export function DashboardBuilderProvider({
 
   // ---------------------------------------------------------------------------
   // Fetch dashboard on mount (or when dashboardId changes)
+  // Skip fetch if dashboardId is not provided (wizard mode / create mode)
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    // Skip fetch if no dashboardId (wizard/create mode)
+    if (!dashboardId) return;
+
     let cancelled = false;
 
     async function fetchDashboard() {
       try {
-        const dashboard = await getDashboard(dashboardId);
+        const dashboard = await getDashboard(dashboardId!);
         if (cancelled) return;
 
         expectedUpdatedAtRef.current = dashboard.updated_at;
@@ -254,6 +258,9 @@ export function DashboardBuilderProvider({
   // send a stale expected_updated_at and receive a 409 Conflict.
   // ---------------------------------------------------------------------------
   const syncExpectedUpdatedAt = useCallback(async () => {
+    // Skip sync if no dashboardId (wizard/create mode)
+    if (!dashboardId) return;
+
     try {
       const fresh = await getDashboard(dashboardId);
       expectedUpdatedAtRef.current = fresh.updated_at;
@@ -899,6 +906,9 @@ export function DashboardBuilderProvider({
   }, []);
 
   const refreshDashboard = useCallback(async () => {
+    // Skip refresh if no dashboardId (wizard/create mode)
+    if (!dashboardId) return;
+
     try {
       const dashboard = await getDashboard(dashboardId);
       expectedUpdatedAtRef.current = dashboard.updated_at;
