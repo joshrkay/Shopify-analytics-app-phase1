@@ -1,94 +1,113 @@
 /**
  * useWidgetCatalog Hook
  *
- * Custom hook to fetch and manage the widget catalog for the dashboard builder wizard.
- * Extracts individual reports from templates as selectable widgets.
- *
- * Phase 3 - Dashboard Builder Wizard UI
+ * Query hook for widget catalog and category metadata.
+ * Maintains backward-compatible aliases used by current wizard components.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import type { WidgetCatalogItem } from '../types/customDashboards';
-import { fetchWidgetCatalog } from '../utils/widgetCatalog';
+import { useCallback, useMemo } from 'react';
+import { useQueryLite } from './queryClientLite';
+import type { WidgetCatalogItem, WidgetCategory, WidgetCategoryMeta } from '../types/customDashboards';
+import {
+  filterWidgetsByCategory,
+  getWidgetCatalog,
+  getWidgetCategories,
+  getWidgetPreview,
+  type WidgetPreviewData,
+} from '../services/widgetCatalogApi';
 import { getErrorMessage } from '../services/apiUtils';
 
 interface UseWidgetCatalogResult {
+  widgets: WidgetCatalogItem[];
+  categories: WidgetCategoryMeta[];
+  isLoading: boolean;
+  error: Error | null;
+  getFilteredWidgets: (category: WidgetCategory) => WidgetCatalogItem[];
+  refresh: () => Promise<void>;
+
+  // Backward compatibility aliases
   items: WidgetCatalogItem[];
   loading: boolean;
-  error: string | null;
+}
+
+export function useWidgetCatalog(category: WidgetCategory = 'all'): UseWidgetCatalogResult {
+  const widgetsQuery = useQueryLite({
+    queryKey: ['widget-catalog'],
+    queryFn: getWidgetCatalog,
+  });
+
+  const categoriesQuery = useQueryLite({
+    queryKey: ['widget-categories'],
+    queryFn: getWidgetCategories,
+  });
+
+  const widgets = widgetsQuery.data ?? [];
+  const categories = categoriesQuery.data ?? [];
+
+  const isLoading = widgetsQuery.isLoading || categoriesQuery.isLoading;
+
+  const error = useMemo(() => {
+    const err = widgetsQuery.error ?? categoriesQuery.error;
+    if (!err) return null;
+    if (err instanceof Error) return err;
+    return new Error(getErrorMessage(err, 'Failed to load widget catalog'));
+  }, [widgetsQuery.error, categoriesQuery.error]);
+
+  const filteredWidgets = useMemo(
+    () => filterWidgetsByCategory(widgets, category),
+    [widgets, category],
+  );
+
+  return {
+    widgets: filteredWidgets,
+    categories,
+    isLoading,
+    error,
+    getFilteredWidgets: (targetCategory: WidgetCategory) =>
+      filterWidgetsByCategory(widgets, targetCategory),
+    refresh: async () => {
+      await Promise.all([widgetsQuery.refetch(), categoriesQuery.refetch()]);
+    },
+
+    // aliases
+    items: filteredWidgets,
+    loading: isLoading,
+  };
+}
+
+interface UseWidgetPreviewResult {
+  previewData: WidgetPreviewData | null;
+  isLoading: boolean;
+  error: Error | null;
   refresh: () => Promise<void>;
 }
 
-/**
- * Hook to fetch the widget catalog for the dashboard builder wizard.
- *
- * Fetches all templates and extracts their individual reports as WidgetCatalogItems.
- * These items populate the widget gallery in Step 1 of the wizard.
- *
- * Usage:
- * ```tsx
- * const { items, loading, error, refresh } = useWidgetCatalog();
- *
- * if (loading) return <Spinner />;
- * if (error) return <Banner tone="critical">{error}</Banner>;
- *
- * return <WidgetGallery items={items} />;
- * ```
- */
-export function useWidgetCatalog(): UseWidgetCatalogResult {
-  const [items, setItems] = useState<WidgetCatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function useWidgetPreview(
+  widgetId: string,
+  datasetId?: string,
+): UseWidgetPreviewResult {
+  const queryFn = useCallback(
+    () => getWidgetPreview(widgetId, datasetId),
+    [widgetId, datasetId],
+  );
 
-  const loadCatalog = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const catalog = await fetchWidgetCatalog();
-      setItems(catalog);
-    } catch (err) {
-      console.error('Failed to fetch widget catalog:', err);
-      setError(getErrorMessage(err, 'Failed to load widget catalog'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const query = useQueryLite({
+    queryKey: ['widget-preview', widgetId, datasetId],
+    queryFn,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const catalog = await fetchWidgetCatalog();
-
-        if (!cancelled) {
-          setItems(catalog);
-        }
-      } catch (err) {
-        console.error('Failed to fetch widget catalog:', err);
-        if (!cancelled) {
-          setError(getErrorMessage(err, 'Failed to load widget catalog'));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const error = useMemo(() => {
+    if (!query.error) return null;
+    if (query.error instanceof Error) return query.error;
+    return new Error(getErrorMessage(query.error, 'Failed to load widget preview'));
+  }, [query.error]);
 
   return {
-    items,
-    loading,
+    previewData: query.data ?? null,
+    isLoading: query.isLoading,
     error,
-    refresh: loadCatalog,
+    refresh: async () => {
+      await query.refetch();
+    },
   };
 }
