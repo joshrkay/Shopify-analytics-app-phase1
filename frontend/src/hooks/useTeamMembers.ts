@@ -70,21 +70,6 @@ export function useTeamMembers() {
     queryKey: TEAM_MEMBERS_QUERY_KEY,
     queryFn: getTeamMembers,
   });
-  const [optimisticMembers, setOptimisticMembers] = useState<TeamMember[] | null>(null);
-
-  const members = useMemo(() => optimisticMembers ?? query.data ?? [], [optimisticMembers, query.data]);
-
-  const replaceMembers = (updater: (members: TeamMember[]) => TeamMember[]) => {
-    setOptimisticMembers((current) => {
-      const baseMembers = current ?? query.data ?? [];
-      return updater(baseMembers);
-    });
-  };
-
-  const clearOptimisticMembers = () => {
-    setOptimisticMembers(null);
-  };
-
   const [membersSnapshot, setMembersSnapshot] = useState<TeamMember[]>(() => getTeamMembersStoreSnapshot());
 
   useEffect(() => subscribeToTeamMembersStore(() => {
@@ -109,15 +94,12 @@ export function useTeamMembers() {
     isLoading: query.isLoading,
     error: query.error instanceof Error ? query.error.message : null,
     refetch: query.refetch,
-    replaceMembers,
-    clearOptimisticMembers,
   };
 }
 
 export function useInviteMember() {
   const queryClient = useQueryClientLite();
   const optimisticIdRef = useRef(0);
-  const membersQuery = useTeamMembers();
 
   return useMutationLite({
     mutationFn: async (invite: TeamInvite) => {
@@ -146,7 +128,6 @@ export function useInviteMember() {
       }
     },
     onSuccess: () => {
-      membersQuery.clearOptimisticMembers();
       queryClient.invalidateQueries(TEAM_MEMBERS_QUERY_KEY);
     },
   });
@@ -154,7 +135,6 @@ export function useInviteMember() {
 
 export function useUpdateMemberRole() {
   const queryClient = useQueryClientLite();
-  const membersQuery = useTeamMembers();
 
   return useMutationLite({
     mutationFn: async ({ memberId, role }: { memberId: string; role: TeamInviteRole }) => {
@@ -171,7 +151,6 @@ export function useUpdateMemberRole() {
       }
     },
     onSuccess: () => {
-      membersQuery.clearOptimisticMembers();
       queryClient.invalidateQueries(TEAM_MEMBERS_QUERY_KEY);
     },
   });
