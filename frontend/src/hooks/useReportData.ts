@@ -40,6 +40,7 @@ export interface UseReportDataResult {
   error: string | null;
   refetch: () => Promise<void>;
   isFallback: boolean; // True if using sample data due to API failure
+  queryStartTime: number | null; // Timestamp when query started (for slow query detection)
 }
 
 // =============================================================================
@@ -53,6 +54,7 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 60000; // 1 minute
+const MAX_CACHE_SIZE = 50; // Maximum cache entries to prevent memory leaks
 
 function getCacheKey(reportId: string, dateRange: string): string {
   return `${reportId}-${dateRange}`;
@@ -70,11 +72,37 @@ function getCachedData(reportId: string, dateRange: string): ReportDataResponse 
     return null;
   }
 
+  // Validate cached data structure before returning
+  if (!validateCachedData(entry.data)) {
+    console.warn('Invalid cached data structure, removing from cache:', key);
+    cache.delete(key);
+    return null;
+  }
+
   return entry.data;
+}
+
+function validateCachedData(data: ReportDataResponse): boolean {
+  return (
+    data != null &&
+    Array.isArray(data.data) &&
+    Array.isArray(data.columns) &&
+    typeof data.row_count === 'number' &&
+    typeof data.truncated === 'boolean'
+  );
 }
 
 function setCachedData(reportId: string, dateRange: string, data: ReportDataResponse): void {
   const key = getCacheKey(reportId, dateRange);
+
+  // LRU eviction: Remove oldest entry if cache is full
+  if (cache.size >= MAX_CACHE_SIZE && !cache.has(key)) {
+    const firstKey = cache.keys().next().value;
+    if (firstKey) {
+      cache.delete(firstKey);
+    }
+  }
+
   cache.set(key, {
     data,
     timestamp: Date.now(),
@@ -108,6 +136,7 @@ export function useReportData(
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isFallback, setIsFallback] = useState<boolean>(false);
+  const [queryStartTime, setQueryStartTime] = useState<number | null>(null);
 
   // Refs for cancellation and debouncing
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -129,6 +158,7 @@ export function useReportData(
       setIsLoading(false);
       setError(null);
       setIsFallback(false);
+      setQueryStartTime(null);
       return;
     }
 
@@ -144,6 +174,7 @@ export function useReportData(
     setIsLoading(true);
     setError(null);
     setIsFallback(false);
+    setQueryStartTime(Date.now()); // Track when query started
 
     try {
       let responseData: ReportDataResponse;
@@ -175,6 +206,7 @@ export function useReportData(
       setData(responseData);
       setIsLoading(false);
       setIsFallback(false);
+      setQueryStartTime(null); // Clear start time on success
     } catch (err) {
       // Ignore aborted requests (user navigated away or manually cancelled)
       if (err instanceof Error && err.name === 'AbortError') {
@@ -192,6 +224,7 @@ export function useReportData(
           setIsFallback(true);
           setError(null); // Don't show error to user
           setIsLoading(false);
+          setQueryStartTime(null);
           return;
         }
 
@@ -202,6 +235,7 @@ export function useReportData(
           setIsFallback(true);
           setError('Unable to load live data. Showing sample data instead.');
           setIsLoading(false);
+          setQueryStartTime(null);
           return;
         }
 
@@ -209,6 +243,7 @@ export function useReportData(
         if (err.status === 422) {
           setError('Invalid report configuration. Please check your metrics and dimensions.');
           setIsLoading(false);
+          setQueryStartTime(null);
           return;
         }
 
@@ -219,6 +254,7 @@ export function useReportData(
       }
 
       setIsLoading(false);
+      setQueryStartTime(null);
     }
   }, [report, enabled, dateRange, filters]);
 
@@ -294,7 +330,7 @@ export function useReportData(
         abortControllerRef.current.abort();
       }
     };
-  }, [report?.id, enabled, dateRange, refetchKey, fetchData]);
+  }, [report, enabled, dateRange, refetchKey, fetchData]);
 
   /**
    * Effect: Set up refetch interval if specified.
@@ -319,5 +355,6 @@ export function useReportData(
     error,
     refetch,
     isFallback,
+    queryStartTime,
   };
 }

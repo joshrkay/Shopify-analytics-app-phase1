@@ -64,6 +64,7 @@ export function WizardFlow() {
   // Live data preview state (NEW)
   const [previewUseLiveData, setPreviewUseLiveData] = useState(false);
   const [refetchKey, setRefetchKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Enter wizard mode on mount
   useEffect(() => {
@@ -144,9 +145,16 @@ export function WizardFlow() {
 
   // Handle refresh preview (NEW)
   const handleRefresh = useCallback(() => {
+    // Prevent rapid clicks (debounce)
+    if (isRefreshing) return;
+
+    setIsRefreshing(true);
     // Increment refetch key to trigger data refetch in all PreviewReportCards
-    setRefetchKey(prev => prev + 1);
-  }, []);
+    setRefetchKey(prev => (prev + 1) % 1000); // Wrap at 1000 to prevent overflow
+
+    // Re-enable after 2 seconds
+    setTimeout(() => setIsRefreshing(false), 2000);
+  }, [isRefreshing]);
 
   // Render step content
   const renderStepContent = () => {
@@ -238,6 +246,7 @@ export function WizardFlow() {
               useLiveData={previewUseLiveData}
               onUseLiveDataChange={setPreviewUseLiveData}
               onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
             />
 
             {/* Visual Grid Preview with Live or Sample Data */}

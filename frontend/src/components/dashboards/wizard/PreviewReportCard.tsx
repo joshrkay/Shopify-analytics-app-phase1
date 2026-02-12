@@ -9,7 +9,7 @@
  * Phase 2.6 - Preview Step Live Data Integration
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Card, BlockStack, InlineStack, Text, Icon, SkeletonDisplayText, SkeletonBodyText, Banner, Box } from '@shopify/polaris';
 import { ArrowUpIcon, ArrowDownIcon } from '@shopify/polaris-icons';
 import { ChartRenderer } from '../../charts/ChartRenderer';
@@ -27,11 +27,30 @@ interface PreviewReportCardProps {
 
 export function PreviewReportCard({ report, useLiveData = false, dateRange = '30', refetchKey = 0 }: PreviewReportCardProps) {
   // Fetch live data if enabled
-  const { data: liveDataResponse, isLoading, error, isFallback } = useReportData(report, {
+  const { data: liveDataResponse, isLoading, error, isFallback, queryStartTime } = useReportData(report, {
     enabled: useLiveData,
     dateRange,
     refetchKey,
   });
+
+  // Track if query is slow (>5s)
+  const [showSlowQueryWarning, setShowSlowQueryWarning] = useState(false);
+
+  useEffect(() => {
+    if (queryStartTime && isLoading) {
+      // Set timer to show warning after 5 seconds
+      const timer = setTimeout(() => {
+        setShowSlowQueryWarning(true);
+      }, 5000);
+
+      return () => {
+        clearTimeout(timer);
+        setShowSlowQueryWarning(false);
+      };
+    } else {
+      setShowSlowQueryWarning(false);
+    }
+  }, [queryStartTime, isLoading]);
 
   // Generate sample data as fallback
   const sampleData = useMemo(() => {
@@ -71,6 +90,11 @@ export function PreviewReportCard({ report, useLiveData = false, dateRange = '30
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         <Card padding="300">
           <BlockStack gap="200">
+            {showSlowQueryWarning && (
+              <Banner tone="info">
+                Query is taking longer than expected. Please wait...
+              </Banner>
+            )}
             <SkeletonDisplayText size="small" />
             <SkeletonBodyText lines={8} />
           </BlockStack>
