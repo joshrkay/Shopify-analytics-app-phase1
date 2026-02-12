@@ -20,6 +20,7 @@ import {
   createHeadersAsync,
   handleResponse,
 } from './apiUtils';
+import { API_ROUTES } from './apiRoutes';
 
 // =============================================================================
 // Request/Response Types
@@ -173,7 +174,7 @@ export async function previewReportData(
   };
 
   const response = await fetchWithTimeout(
-    `${API_BASE_URL}/api/v1/datasets/preview`,
+    `${API_BASE_URL}${API_ROUTES.datasetsPreview}`,
     {
       method: 'POST',
       headers,
