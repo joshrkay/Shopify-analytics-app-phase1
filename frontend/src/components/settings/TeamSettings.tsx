@@ -147,12 +147,19 @@ export function TeamSettings() {
         </div>
       </div>
 
-      {showInviteModal ? (
+      {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900">Invite Team Member</h3>
-              <button type="button" onClick={() => setShowInviteModal(false)} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close invite modal"><X className="w-5 h-5 text-gray-600" /></button>
+              <button
+                type="button"
+                onClick={() => setShowInviteModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+                aria-label="Close invite modal"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
             </div>
 
             <div className="space-y-4">
