@@ -88,11 +88,12 @@ describe('Settings page shell and tab navigation', () => {
 
     it('URL updates when tab changes (?tab=billing)', async () => {
       const user = userEvent.setup();
-      renderSettings('/settings', 'owner');
+      renderSettings('/settings?utm=campaign', 'owner');
       await act(async () => {
         await user.click(await screen.findByRole('button', { name: 'Billing' }));
       });
-      expect(screen.getByTestId('location-search')).toHaveTextContent('?tab=billing');
+      expect(screen.getByTestId('location-search')).toHaveTextContent('utm=campaign');
+      expect(screen.getByTestId('location-search')).toHaveTextContent('tab=billing');
     });
 
     it('Tab from URL params is selected on mount', async () => {
