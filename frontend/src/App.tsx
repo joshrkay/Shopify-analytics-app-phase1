@@ -41,6 +41,8 @@ import WhatsNew from './pages/WhatsNew';
 import { DashboardList } from './pages/DashboardList';
 import { DashboardView } from './pages/DashboardView';
 import { DashboardBuilder } from './pages/DashboardBuilder';
+import { WizardFlow } from './components/dashboards/wizard/WizardFlow';
+import { DashboardBuilderProvider } from './contexts/DashboardBuilderContext';
 import DataSources from './pages/DataSources';
 import Settings from './pages/Settings';
 import { DashboardHome } from './pages/DashboardHome';
@@ -144,6 +146,16 @@ function AppWithOrg() {
               element={
                 <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
                   <DashboardList />
+                </FeatureGateRoute>
+              }
+            />
+            <Route
+              path="/dashboards/wizard"
+              element={
+                <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
+                  <DashboardBuilderProvider>
+                    <WizardFlow />
+                  </DashboardBuilderProvider>
                 </FeatureGateRoute>
               }
             />
