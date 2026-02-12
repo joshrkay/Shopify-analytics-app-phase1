@@ -8,13 +8,15 @@
  * Phase 3 — Subphase 3.5: Connection Wizard Steps 4-6
  */
 
-import { BlockStack, Text, ProgressBar, Spinner, Banner, InlineStack } from '@shopify/polaris';
+import { useState } from 'react';
+import { BlockStack, Text, ProgressBar, Spinner, Banner, InlineStack, Button } from '@shopify/polaris';
 import type { DataSourceDefinition, DetailedSyncProgress } from '../../../types/sourceConnection';
 
 interface SyncProgressStepProps {
   platform: DataSourceDefinition;
   progress: DetailedSyncProgress | null;
   error: string | null;
+  onNavigateDashboard?: () => void;
 }
 
 function getSyncStages(progress: DetailedSyncProgress | null) {
@@ -75,7 +77,8 @@ function getStageIcon(status: 'completed' | 'in_progress' | 'pending' | 'failed'
   }
 }
 
-export function SyncProgressStep({ platform, progress, error }: SyncProgressStepProps) {
+export function SyncProgressStep({ platform, progress, error, onNavigateDashboard }: SyncProgressStepProps) {
+  const [ctaDismissed, setCtaDismissed] = useState(false);
   const stages = getSyncStages(progress);
   const percent = progress?.percentComplete ?? 0;
 
@@ -123,6 +126,15 @@ export function SyncProgressStep({ platform, progress, error }: SyncProgressStep
       <Banner tone="info">
         <p>Feel free to explore the app while your data syncs. We'll notify you when it's complete.</p>
       </Banner>
+
+      {!error && !ctaDismissed && onNavigateDashboard && (
+        <InlineStack gap="200" align="end">
+          <Button onClick={() => setCtaDismissed(true)}>Stay here</Button>
+          <Button variant="primary" onClick={onNavigateDashboard}>
+            Continue to Dashboard
+          </Button>
+        </InlineStack>
+      )}
     </BlockStack>
   );
 }
