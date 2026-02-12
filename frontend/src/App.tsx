@@ -44,6 +44,7 @@ import { DashboardBuilder } from './pages/DashboardBuilder';
 import { WizardFlow } from './components/dashboards/wizard/WizardFlow';
 import { DashboardBuilderProvider } from './contexts/DashboardBuilderContext';
 import DataSources from './pages/DataSources';
+import OAuthCallback from './pages/OAuthCallback';
 import Settings from './pages/Settings';
 import { DashboardHome } from './pages/DashboardHome';
 import { Dashboard } from './pages/Dashboard';
@@ -129,6 +130,7 @@ function AppWithOrg() {
               </FeatureGateRoute>
             } />
             <Route path="/sources" element={<DataSources />} />
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/home" element={<DashboardHome />} />
             <Route path="/analytics" element={<Analytics />} />
