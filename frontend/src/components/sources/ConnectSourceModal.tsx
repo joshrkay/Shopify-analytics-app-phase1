@@ -14,7 +14,7 @@
  * Phase 3 — Subphase 3.5: Connection Wizard UI
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Modal,
   BlockStack,
@@ -26,7 +26,6 @@ import {
   Spinner,
   InlineStack,
 } from '@shopify/polaris';
-import type { DataSourceDefinition } from '../../types/sourceConnection';
 import { useConnectionWizard, useSourceCatalog } from '../../hooks/useSourceConnection';
 import { ConnectionSteps } from './ConnectionSteps';
 import { PlatformCard } from './PlatformCard';
@@ -35,7 +34,6 @@ interface ConnectSourceModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess?: (connectionId: string) => void;
-  initialPlatform?: DataSourceDefinition | null;
 }
 
 /**
@@ -53,7 +51,7 @@ interface ConnectSourceModalProps {
  * />
  * ```
  */
-export function ConnectSourceModal({ open, onClose, onSuccess, initialPlatform }: ConnectSourceModalProps) {
+export function ConnectSourceModal({ open, onClose, onSuccess }: ConnectSourceModalProps) {
   const { catalog, loading: loadingCatalog } = useSourceCatalog();
   const {
     state,
@@ -69,13 +67,6 @@ export function ConnectSourceModal({ open, onClose, onSuccess, initialPlatform }
   const [shopDomain, setShopDomain] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [configuring, setConfiguring] = useState(false);
-
-  // Auto-select platform when modal opens with an initialPlatform
-  useEffect(() => {
-    if (open && initialPlatform) {
-      selectPlatform(initialPlatform);
-    }
-  }, [open, initialPlatform, selectPlatform]);
 
   const handleClose = useCallback(() => {
     reset();
