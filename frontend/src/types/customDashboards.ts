@@ -471,4 +471,6 @@ export interface BuilderWizardState {
   selectedWidgets: Report[];            // Temporary widgets (not persisted until save)
   dashboardName: string;                // Name for new dashboard
   dashboardDescription: string;         // Description for new dashboard
+  previewDateRange?: string;            // Selected date range in preview ('7', '30', '90', 'custom')
+  saveAsTemplate: boolean;              // Whether to save as template
 }

@@ -41,38 +41,49 @@ export function useWidgetCatalog(): UseWidgetCatalogResult {
   const [error, setError] = useState<string | null>(null);
 
   const loadCatalog = useCallback(async () => {
-    let cancelled = false;
-
     try {
       setLoading(true);
       setError(null);
       const catalog = await fetchWidgetCatalog();
-
-      if (!cancelled) {
-        setItems(catalog);
-      }
+      setItems(catalog);
     } catch (err) {
       console.error('Failed to fetch widget catalog:', err);
-      if (!cancelled) {
-        setError(getErrorMessage(err, 'Failed to load widget catalog'));
-      }
+      setError(getErrorMessage(err, 'Failed to load widget catalog'));
     } finally {
-      if (!cancelled) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const catalog = await fetchWidgetCatalog();
+
+        if (!cancelled) {
+          setItems(catalog);
+        }
+      } catch (err) {
+        console.error('Failed to fetch widget catalog:', err);
+        if (!cancelled) {
+          setError(getErrorMessage(err, 'Failed to load widget catalog'));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
 
     return () => {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    const cleanup = loadCatalog();
-    return () => {
-      cleanup.then((cleanupFn) => cleanupFn && cleanupFn());
-    };
-  }, [loadCatalog]);
 
   return {
     items,

@@ -26,7 +26,10 @@ import { BuilderStepNav } from './BuilderStepNav';
 import { BuilderToolbar } from './BuilderToolbar';
 import { CategorySidebar } from './CategorySidebar';
 import { WidgetGallery } from './WidgetGallery';
-import { SelectedWidgetsList } from './SelectedWidgetsList';
+import { WizardGrid } from './WizardGrid';
+import { LayoutControls } from './LayoutControls';
+import { PreviewGrid } from './PreviewGrid';
+import { PreviewControls } from './PreviewControls';
 
 export function WizardFlow() {
   const navigate = useNavigate();
@@ -38,7 +41,6 @@ export function WizardFlow() {
     setBuilderStep,
     setSelectedCategory,
     addCatalogWidget,
-    removeWizardWidget,
     setWizardDashboardName,
     setWizardDashboardDescription,
     saveDashboard,
@@ -150,7 +152,7 @@ export function WizardFlow() {
             </Box>
 
             {/* Widget Gallery */}
-            <Box style={{ flex: 1 }}>
+            <div style={{ flex: 1 }}>
               <WidgetGallery
                 items={filteredItems}
                 selectedIds={selectedWidgetIds}
@@ -158,7 +160,7 @@ export function WizardFlow() {
                 loading={loading}
                 error={error}
               />
-            </Box>
+            </div>
           </InlineStack>
         );
 
@@ -185,11 +187,11 @@ export function WizardFlow() {
               multiline={3}
             />
 
-            {/* Selected Widgets List */}
-            <SelectedWidgetsList
-              widgets={wizardState.selectedWidgets}
-              onRemove={removeWizardWidget}
-            />
+            {/* Layout Controls */}
+            <LayoutControls />
+
+            {/* Visual Grid with Drag & Drop */}
+            <WizardGrid />
           </BlockStack>
         );
 
@@ -211,11 +213,11 @@ export function WizardFlow() {
               {wizardState.selectedWidgets.length} widget{wizardState.selectedWidgets.length !== 1 ? 's' : ''} selected
             </Text>
 
-            {/* Selected Widgets List (read-only) */}
-            <SelectedWidgetsList
-              widgets={wizardState.selectedWidgets}
-              onRemove={() => {}} // No removal in preview
-            />
+            {/* Preview Controls (date range, filters, save as template) */}
+            <PreviewControls />
+
+            {/* Visual Grid Preview with Sample Data */}
+            <PreviewGrid />
           </BlockStack>
         );
 

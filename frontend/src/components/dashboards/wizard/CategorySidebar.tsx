@@ -36,26 +36,24 @@ export function CategorySidebar({
         <BlockStack gap="200">
           {/* All button */}
           <Button
-            variant="plain"
-            tone={selectedCategory === undefined ? 'primary' : undefined}
+            variant={selectedCategory === undefined ? 'primary' : 'plain'}
             onClick={() => onSelectCategory(undefined)}
             fullWidth
             textAlign="left"
           >
-            All ({widgetCounts.all || 0})
+            All ({String(widgetCounts.all || 0)})
           </Button>
 
           {/* Chart type buttons */}
           {CHART_TYPES.map((type) => (
             <Button
               key={type}
-              variant="plain"
-              tone={selectedCategory === type ? 'primary' : undefined}
+              variant={selectedCategory === type ? 'primary' : 'plain'}
               onClick={() => onSelectCategory(type)}
               fullWidth
               textAlign="left"
             >
-              {getChartTypeLabel(type)} ({widgetCounts[type] || 0})
+              {getChartTypeLabel(type)} ({String(widgetCounts[type] || 0)})
             </Button>
           ))}
         </BlockStack>

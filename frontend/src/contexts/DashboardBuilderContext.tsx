@@ -112,6 +112,8 @@ interface DashboardBuilderActions {
   moveWizardWidget: (reportId: string, newPosition: GridPosition) => void;
   setWizardDashboardName: (name: string) => void;
   setWizardDashboardDescription: (description: string) => void;
+  setPreviewDateRange: (range: string) => void;
+  setSaveAsTemplate: (value: boolean) => void;
   resetWizard: () => void;
   canProceedToCustomize: boolean;
   canProceedToPreview: boolean;
@@ -152,6 +154,8 @@ const initialState: DashboardBuilderState = {
     selectedWidgets: [],
     dashboardName: '',
     dashboardDescription: '',
+    previewDateRange: '30',
+    saveAsTemplate: false,
   },
 };
 
@@ -206,6 +210,7 @@ export function DashboardBuilderProvider({
           autoSaveFailures: 0,
           selectedReportId: null,
           isReportConfigOpen: false,
+          wizardState: initialState.wizardState,
         });
       } catch (err) {
         if (cancelled) return;
@@ -722,6 +727,8 @@ export function DashboardBuilderProvider({
         selectedWidgets: [],
         dashboardName: '',
         dashboardDescription: '',
+        previewDateRange: '30',
+        saveAsTemplate: false,
       },
       isDirty: false,
     }));
@@ -853,6 +860,26 @@ export function DashboardBuilderProvider({
     }));
   }, []);
 
+  const setPreviewDateRange = useCallback((range: string) => {
+    setState((prev) => ({
+      ...prev,
+      wizardState: {
+        ...prev.wizardState,
+        previewDateRange: range,
+      },
+    }));
+  }, []);
+
+  const setSaveAsTemplate = useCallback((value: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      wizardState: {
+        ...prev.wizardState,
+        saveAsTemplate: value,
+      },
+    }));
+  }, []);
+
   const resetWizard = useCallback(() => {
     setState((prev) => ({
       ...prev,
@@ -887,6 +914,7 @@ export function DashboardBuilderProvider({
         autoSaveFailures: 0,
         selectedReportId: null,
         isReportConfigOpen: false,
+        wizardState: initialState.wizardState,
       });
     } catch (err) {
       console.error('Failed to refresh dashboard:', err);
@@ -1015,6 +1043,8 @@ export function DashboardBuilderProvider({
     moveWizardWidget,
     setWizardDashboardName,
     setWizardDashboardDescription,
+    setPreviewDateRange,
+    setSaveAsTemplate,
     resetWizard,
     canProceedToCustomize,
     canProceedToPreview,

@@ -7,7 +7,7 @@
  * Phase 3 - Dashboard Builder Wizard UI
  */
 
-import { InlineStack, Badge, Text, Button } from '@shopify/polaris';
+import { InlineStack, Badge, Text } from '@shopify/polaris';
 import type { BuilderStep } from '../../../types/customDashboards';
 
 interface BuilderStepNavProps {
@@ -72,7 +72,7 @@ export function BuilderStepNav({
 
         const content = (
           <InlineStack gap="200" blockAlign="center">
-            <Badge tone={badgeTone}>{stepInfo.number}</Badge>
+            <Badge tone={badgeTone}>{String(stepInfo.number)}</Badge>
             <Text
               as="span"
               variant="bodyMd"
@@ -86,14 +86,13 @@ export function BuilderStepNav({
         return (
           <InlineStack key={stepInfo.step} gap="200" align="center">
             {isClickable ? (
-              <Button
-                variant="plain"
-                onClick={() => onChangeStep(stepInfo.step)}
-              >
+              <div onClick={() => onChangeStep(stepInfo.step)} style={{ cursor: 'pointer' }}>
                 {content}
-              </Button>
+              </div>
             ) : (
-              <div style={{ opacity: 0.5 }}>{content}</div>
+              <div style={{ opacity: 0.5 }}>
+                {content}
+              </div>
             )}
 
             {/* Connector between steps */}

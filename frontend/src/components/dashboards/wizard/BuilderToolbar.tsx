@@ -35,7 +35,7 @@ export function BuilderToolbar({
   const isPreviewStep = currentStep === 'preview';
 
   return (
-    <Box background="bg-surface" padding="400" borderBlockStart="025">
+    <Box background="bg-surface" padding="400">
       <InlineStack align="space-between">
         {/* Cancel button */}
         <Button variant="plain" onClick={onCancel}>
