@@ -83,6 +83,123 @@ class SourceListResponse(BaseModel):
 
 
 # =============================================================================
+# Catalog Models
+# =============================================================================
+
+PLATFORM_DESCRIPTIONS: dict[str, str] = {
+    "shopify": "Connect your Shopify store to import orders, products, and customer data",
+    "meta_ads": "Connect your Facebook and Instagram ad accounts for campaign analytics",
+    "google_ads": "Connect your Google Ads account for search and display campaign data",
+    "tiktok_ads": "Connect your TikTok Ads account for short-form video campaign data",
+    "snapchat_ads": "Connect your Snapchat Ads account for Snap campaign analytics",
+    "klaviyo": "Connect your Klaviyo account for email marketing analytics",
+    "shopify_email": "Connect Shopify Email for email campaign performance data",
+    "attentive": "Connect your Attentive account for SMS marketing analytics",
+    "postscript": "Connect your Postscript account for SMS campaign data",
+    "smsbump": "Connect your SMSBump account for SMS marketing metrics",
+}
+
+PLATFORM_CATEGORIES: dict[str, str] = {
+    "shopify": "ecommerce",
+    "meta_ads": "ads",
+    "google_ads": "ads",
+    "tiktok_ads": "ads",
+    "snapchat_ads": "ads",
+    "klaviyo": "email",
+    "shopify_email": "email",
+    "attentive": "sms",
+    "postscript": "sms",
+    "smsbump": "sms",
+}
+
+
+class SourceCatalogEntry(BaseModel):
+    """A data source definition in the catalog."""
+
+    id: str
+    platform: str
+    display_name: str
+    description: str
+    auth_type: str
+    category: str
+    is_enabled: bool
+
+
+class SourceCatalogResponse(BaseModel):
+    """Response for the source catalog."""
+
+    sources: List[SourceCatalogEntry]
+    total: int
+
+
+# =============================================================================
+# OAuth Models
+# =============================================================================
+
+class OAuthInitiateResponse(BaseModel):
+    """Response from initiating OAuth flow."""
+
+    authorization_url: str
+    state: str
+    connection_id: Optional[str] = None
+
+
+class OAuthCallbackRequest(BaseModel):
+    """Request body for OAuth callback."""
+
+    code: str
+    state: str
+
+
+class OAuthCallbackResponse(BaseModel):
+    """Response from OAuth callback."""
+
+    success: bool
+    connection_id: str
+    message: str
+    error: Optional[str] = None
+
+
+# =============================================================================
+# Source Management Models
+# =============================================================================
+
+class TestConnectionResponse(BaseModel):
+    """Response from testing a connection."""
+
+    success: bool
+    message: str
+    details: Optional[dict] = None
+
+
+class UpdateSyncConfigRequest(BaseModel):
+    """Request body for updating sync config."""
+
+    sync_frequency: Optional[str] = None
+    enabled_streams: Optional[List[str]] = None
+
+
+# =============================================================================
+# Global Sync Settings Models
+# =============================================================================
+
+class GlobalSyncSettingsResponse(BaseModel):
+    """Response for global sync settings."""
+
+    default_frequency: str
+    pause_all_syncs: bool
+    max_concurrent_syncs: int
+
+
+class UpdateGlobalSyncSettingsRequest(BaseModel):
+    """Request body for updating global sync settings."""
+
+    default_frequency: Optional[str] = None
+    pause_all_syncs: Optional[bool] = None
+    max_concurrent_syncs: Optional[int] = None
+
+
+# =============================================================================
 # Normalizer
 # =============================================================================
 
