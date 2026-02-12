@@ -50,3 +50,5 @@ export default function Settings() {
     </Page>
   );
 }
+
+export { SETTINGS_TABS, deriveUserRole, canAccessTab };

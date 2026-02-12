@@ -4,9 +4,9 @@
  * Main orchestrator for the 3-step dashboard creation wizard:
  * 1. Select Widgets - Browse and select from widget catalog
  * 2. Customize Layout - Edit name, description, and arrange widgets
- * 3. Preview & Save - Review and save the dashboard
+ * 3. Preview & Save - Review with live or sample data and save the dashboard
  *
- * Phase 3 - Dashboard Builder Wizard UI
+ * Phase 2.6 - Preview Step Live Data Integration
  */
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -18,12 +18,14 @@ import {
   Box,
   TextField,
   Text,
+  Banner,
 } from '@shopify/polaris';
 import type { ChartType, WidgetCatalogItem } from '../../../types/customDashboards';
 import { useDashboardBuilder } from '../../../contexts/DashboardBuilderContext';
 import { useWidgetCatalog } from '../../../hooks/useWidgetCatalog';
 import { BuilderStepNav } from './BuilderStepNav';
 import { BuilderToolbar } from './BuilderToolbar';
+import { WizardTopToolbar } from './WizardTopToolbar';
 import { CategorySidebar } from './CategorySidebar';
 import { WidgetGallery } from './WidgetGallery';
 import { WizardGrid } from './WizardGrid';
@@ -41,8 +43,10 @@ export function WizardFlow() {
     setBuilderStep,
     setSelectedCategory,
     addCatalogWidget,
+    removeWizardWidget,
     setWizardDashboardName,
     setWizardDashboardDescription,
+    setPreviewDateRange,
     saveDashboard,
     exitWizardMode,
     enterWizardMode,
@@ -58,6 +62,11 @@ export function WizardFlow() {
   const [completedSteps, setCompletedSteps] = useState<Set<'select' | 'customize' | 'preview'>>(
     new Set()
   );
+
+  // Live data preview state (NEW)
+  const [previewUseLiveData, setPreviewUseLiveData] = useState(false);
+  const [refetchKey, setRefetchKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Enter wizard mode on mount
   useEffect(() => {
@@ -129,12 +138,32 @@ export function WizardFlow() {
     navigate('/dashboards');
   }, [exitWizardMode, navigate]);
 
+  const handleSaveAsTemplate = useCallback(() => {
+    // TODO: Epic 6 - Backend integration for template saving
+    // For now, show a toast notification
+    console.info('Save as Template feature coming soon!');
+    alert('Save as Template feature coming soon! This will be available in a future release.');
+  }, []);
+
   const handleAddWidget = useCallback(
     (item: WidgetCatalogItem) => {
       addCatalogWidget(item);
     },
     [addCatalogWidget]
   );
+
+  // Handle refresh preview (NEW)
+  const handleRefresh = useCallback(() => {
+    // Prevent rapid clicks (debounce)
+    if (isRefreshing) return;
+
+    setIsRefreshing(true);
+    // Increment refetch key to trigger data refetch in all PreviewReportCards
+    setRefetchKey(prev => (prev + 1) % 1000); // Wrap at 1000 to prevent overflow
+
+    // Re-enable after 2 seconds
+    setTimeout(() => setIsRefreshing(false), 2000);
+  }, [isRefreshing]);
 
   // Render step content
   const renderStepContent = () => {
@@ -143,11 +172,14 @@ export function WizardFlow() {
         return (
           <InlineStack gap="400" align="start">
             {/* Category Sidebar */}
-            <Box minWidth="220px">
+            <Box minWidth="260px">
               <CategorySidebar
                 selectedCategory={wizardState.selectedCategory}
                 onSelectCategory={setSelectedCategory}
                 widgetCounts={widgetCounts}
+                selectedWidgets={wizardState.selectedWidgets}
+                onRemoveWidget={removeWizardWidget}
+                onContinueToLayout={handleNext}
               />
             </Box>
 
@@ -167,6 +199,19 @@ export function WizardFlow() {
       case 'customize':
         return (
           <BlockStack gap="400">
+            {/* Info Banner - User Guidance */}
+            <Banner tone="info">
+              <BlockStack gap="100">
+                <Text as="p" variant="bodyMd" fontWeight="semibold">
+                  Customize Your Layout
+                </Text>
+                <Text as="p" variant="bodySm">
+                  Drag widgets to reorder them or resize them by dragging the edges.
+                  The dashboard will auto-arrange based on widget sizes.
+                </Text>
+              </BlockStack>
+            </Banner>
+
             {/* Dashboard Name */}
             <TextField
               label="Dashboard name"
@@ -198,7 +243,15 @@ export function WizardFlow() {
       case 'preview':
         return (
           <BlockStack gap="400">
-            {/* Dashboard Info */}
+            {/* Success Banner */}
+            <Banner tone="success">
+              <Text as="p" variant="bodyMd">
+                Dashboard Preview — This is how your dashboard will look with{' '}
+                {previewUseLiveData ? 'live' : 'sample'} data
+              </Text>
+            </Banner>
+
+            {/* Dashboard Metadata */}
             <BlockStack gap="200">
               <Text as="h2" variant="headingLg">
                 {wizardState.dashboardName || 'Untitled Dashboard'}
@@ -206,18 +259,27 @@ export function WizardFlow() {
               <Text as="p" variant="bodySm" tone="subdued">
                 {wizardState.dashboardDescription || 'No description'}
               </Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                Last {wizardState.previewDateRange || '30'} days • Updates every hour
+              </Text>
             </BlockStack>
 
-            {/* Widget Summary */}
-            <Text as="p" variant="bodyMd">
-              {wizardState.selectedWidgets.length} widget{wizardState.selectedWidgets.length !== 1 ? 's' : ''} selected
-            </Text>
+            {/* Preview Controls (date range, live data toggle, refresh) */}
+            <PreviewControls
+              dateRange={wizardState.previewDateRange || '30'}
+              onDateRangeChange={setPreviewDateRange}
+              useLiveData={previewUseLiveData}
+              onUseLiveDataChange={setPreviewUseLiveData}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+            />
 
-            {/* Preview Controls (date range, filters, save as template) */}
-            <PreviewControls />
-
-            {/* Visual Grid Preview with Sample Data */}
-            <PreviewGrid />
+            {/* Visual Grid Preview with Live or Sample Data */}
+            <PreviewGrid
+              useLiveData={previewUseLiveData}
+              dateRange={wizardState.previewDateRange || '30'}
+              refetchKey={refetchKey}
+            />
           </BlockStack>
         );
 
@@ -232,6 +294,18 @@ export function WizardFlow() {
       backAction={{ content: 'Back to Dashboards', onAction: handleCancel }}
     >
       <BlockStack gap="600">
+        {/* Top Toolbar - Dashboard name and action buttons */}
+        <WizardTopToolbar
+          dashboardName={wizardState.dashboardName}
+          onDashboardNameChange={setWizardDashboardName}
+          widgetCount={wizardState.selectedWidgets.length}
+          currentStep={wizardState.currentStep}
+          onSaveAsTemplate={handleSaveAsTemplate}
+          onSaveDashboard={handleSave}
+          canSave={canSaveDashboard}
+          isSaving={isSaving}
+        />
+
         {/* Step Navigator */}
         <BuilderStepNav
           currentStep={wizardState.currentStep}

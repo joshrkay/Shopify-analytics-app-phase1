@@ -1,0 +1,34 @@
+/**
+ * Widget Catalog Card Styles
+ *
+ * Hover effects and selected state styling for widget cards.
+ *
+ * Phase 2.3 - Widget Card Enhancements
+ */
+
+.catalogCard {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.catalogCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: scale(1.02);
+}
+
+.catalogCardSelected {
+  border: 2px solid var(--p-color-border-success);
+}
+
+.catalogCardSelected:hover {
+  /* Less prominent hover effect when already selected */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transform: scale(1.01);
+}
+
+.iconWrapper {
+  display: inline-flex;
+  padding: var(--p-space-200);
+  background: var(--p-color-bg-fill-info-secondary);
+  border-radius: var(--p-border-radius-200);
+}

@@ -4,10 +4,13 @@
  * Visual step indicator showing progress through the wizard:
  * 1. Select Widgets → 2. Customize Layout → 3. Preview & Save
  *
- * Phase 3 - Dashboard Builder Wizard UI
+ * Phase 2.1 - Enhanced Step Navigation
+ * Adds visual prominence with Cards, checkmarks for completed steps,
+ * and improved accessibility.
  */
 
-import { InlineStack, Badge, Text } from '@shopify/polaris';
+import { InlineStack, Badge, Text, Card, Box, Icon } from '@shopify/polaris';
+import { CheckCircleIcon } from '@shopify/polaris-icons';
 import type { BuilderStep } from '../../../types/customDashboards';
 
 interface BuilderStepNavProps {
@@ -58,42 +61,66 @@ export function BuilderStepNav({
   };
 
   return (
-    <InlineStack gap="400" align="center">
+    <InlineStack gap="300" align="center">
       {STEPS.map((stepInfo, index) => {
         const isClickable = isStepClickable(stepInfo.step);
         const badgeTone = getBadgeTone(stepInfo.step);
         const isActive = stepInfo.step === currentStep;
+        const isCompleted = completedSteps.has(stepInfo.step);
 
         const content = (
-          <InlineStack gap="200" blockAlign="center">
-            <Badge tone={badgeTone}>{String(stepInfo.number)}</Badge>
-            <Text
-              as="span"
-              variant="bodyMd"
-              fontWeight={isActive ? 'semibold' : 'regular'}
-            >
-              {stepInfo.label}
-            </Text>
-          </InlineStack>
+          <Card
+            background={isActive ? 'bg-fill-info' : undefined}
+            padding="200"
+          >
+            <InlineStack gap="200" blockAlign="center">
+              {/* Checkmark icon for completed steps */}
+              {isCompleted && (
+                <Icon source={CheckCircleIcon} tone="success" />
+              )}
+              <Badge tone={badgeTone}>{String(stepInfo.number)}</Badge>
+              <Text
+                as="span"
+                variant="bodyMd"
+                fontWeight={isActive ? 'semibold' : 'regular'}
+              >
+                {stepInfo.label}
+              </Text>
+            </InlineStack>
+          </Card>
         );
 
         return (
           <InlineStack key={stepInfo.step} gap="200" align="center">
             {isClickable ? (
-              <div onClick={() => onChangeStep(stepInfo.step)} style={{ cursor: 'pointer' }}>
+              <div
+                onClick={() => onChangeStep(stepInfo.step)}
+                style={{ cursor: 'pointer' }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onChangeStep(stepInfo.step);
+                  }
+                }}
+                aria-current={isActive ? 'step' : undefined}
+              >
                 {content}
               </div>
             ) : (
-              <div style={{ opacity: 0.5 }}>
+              <div style={{ opacity: 0.5 }} aria-disabled="true">
                 {content}
               </div>
             )}
 
-            {/* Connector between steps */}
+            {/* Connector between steps - visual divider */}
             {index < STEPS.length - 1 && (
-              <Text as="span" tone="subdued">
-                →
-              </Text>
+              <Box
+                width="40px"
+                borderBlockStartWidth="025"
+                borderColor="border-subdued"
+              />
             )}
           </InlineStack>
         );
