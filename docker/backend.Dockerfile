@@ -21,21 +21,6 @@ COPY frontend/ ./
 # build-args or preserve .env files in the build context.
 RUN VITE_CLERK_PUBLISHABLE_KEY="pk_test_d2VsY29tZS1sYW1iLTM3LmNsZXJrLmFjY291bnRzLmRldiQ" npx vite build
 
-# Build: if build-arg is provided use it, otherwise source .env.production
-RUN echo "==> .env.production contents:" && cat .env.production 2>/dev/null || echo "(file not found)" \
-    && echo "==> Build-arg value length: $(echo -n "$VITE_CLERK_PUBLISHABLE_KEY" | wc -c)" \
-    && if [ -n "$VITE_CLERK_PUBLISHABLE_KEY" ]; then \
-         echo "==> Using VITE_CLERK_PUBLISHABLE_KEY from build arg"; \
-       elif [ -f .env.production ]; then \
-         echo "==> Sourcing .env.production"; \
-         set -a && . ./.env.production && set +a; \
-       else \
-         echo "==> WARNING: No key source found!"; \
-       fi \
-    && echo "==> Final VITE_CLERK_PUBLISHABLE_KEY length: $(echo -n "$VITE_CLERK_PUBLISHABLE_KEY" | wc -c)" \
-    && npx vite build
-
-
 ###############################################################################
 # Stage 2: Python backend + built frontend static files
 ###############################################################################
