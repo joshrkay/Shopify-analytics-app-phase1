@@ -32,16 +32,14 @@ export function DataSourcesSettingsTab({ onDisconnect, onTest }: DataSourcesSett
   );
 
   const handleDisconnect = async (source: Source) => {
-    if (onDisconnect) {
-      await onDisconnect(source.id);
-    }
+    if (!onDisconnect) return;
+    await onDisconnect(source.id);
     setConfirmSourceId(null);
   };
 
   const handleTest = async (source: Source) => {
-    if (onTest) {
-      await onTest(source.id);
-    }
+    if (!onTest) return;
+    await onTest(source.id);
   };
 
   if (isLoading) {

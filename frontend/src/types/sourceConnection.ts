@@ -7,7 +7,7 @@
  * Phase 3 — Subphase 3.1: Extended Type Definitions
  */
 
-import type { SourcePlatform, SourceAuthType, SourceStatus } from './sources';
+import type { SourcePlatform, SourceAuthType } from './sources';
 
 // =============================================================================
 // Catalog Types (Available Platforms)
@@ -125,71 +125,3 @@ export interface CatalogResponse {
   sources: DataSourceDefinition[];
   total: number;
 }
-
-// =============================================================================
-// Extended Connection Types (Subphase 3.2)
-// =============================================================================
-
-/**
- * Extended data source connection with health and sync progress fields.
- * Merges Source base data with SourceHealthResponse fields from /api/data-health.
- */
-export interface DataSourceConnection {
-  id: string;
-  platform: SourcePlatform;
-  displayName: string;
-  authType: SourceAuthType;
-  status: SourceStatus;
-  isEnabled: boolean;
-  lastSyncAt: string | null;
-  lastSyncStatus: string | null;
-  freshnessStatus: string | null;
-  minutesSinceSync: number | null;
-  isStale: boolean;
-  isHealthy: boolean;
-  warningMessage: string | null;
-  syncFrequencyMinutes: number | null;
-  expectedNextSyncAt: string | null;
-}
-
-/**
- * Sync progress information from /api/sync/state/{connectionId}.
- */
-export interface SyncProgress {
-  connectionId: string;
-  status: string;
-  lastSyncAt: string | null;
-  lastSyncStatus: string | null;
-  isEnabled: boolean;
-  canSync: boolean;
-}
-
-/**
- * Global sync settings for the tenant.
- */
-export interface GlobalSyncSettings {
-  defaultFrequency: SyncFrequency;
-  pauseAllSyncs: boolean;
-  maxConcurrentSyncs: number;
-}
-
-/**
- * Connected account information from ad platform connections.
- */
-export interface ConnectedAccount {
-  id: string;
-  platform: string;
-  accountId: string;
-  accountName: string;
-  connectionId: string;
-  airbyteConnectionId: string;
-  status: string;
-  isEnabled: boolean;
-  lastSyncAt: string | null;
-  lastSyncStatus: string | null;
-}
-
-/**
- * Result from completing the OAuth callback flow.
- */
-export type OAuthCallbackResult = OAuthCompleteResponse;
