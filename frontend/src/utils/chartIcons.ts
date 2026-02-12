@@ -10,7 +10,7 @@
 import {
   ChartVerticalIcon,
   ChartHorizontalIcon,
-  ChartMinorIcon,
+  ChartLineIcon,
   CircleInformationIcon,
   CircleTickIcon,
   ListIcon,
@@ -24,7 +24,7 @@ export function getChartIcon(chartType: ChartType) {
   const iconMap = {
     line: ChartVerticalIcon,
     bar: ChartHorizontalIcon,
-    area: ChartMinorIcon,
+    area: ChartLineIcon,
     pie: CircleInformationIcon,
     kpi: CircleTickIcon,
     table: ListIcon,
