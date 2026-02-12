@@ -433,3 +433,114 @@ export function getChartTypeLabel(type: ChartType): string {
   };
   return labels[type] || type;
 }
+
+// =============================================================================
+// Widget Catalog Types (Phase 2 Builder - 3-Step Wizard)
+// =============================================================================
+
+/**
+ * Widget categories for gallery filtering.
+ * Corresponds to the 6 categories in the wireframe builder.
+ */
+export type WidgetCategory =
+  | 'all'       // Show all widgets
+  | 'roas'      // ROAS & ROI widgets
+  | 'sales'     // Sales metrics
+  | 'products'  // Product analytics
+  | 'customers' // Customer insights
+  | 'campaigns'; // Campaign performance
+
+/**
+ * Category metadata for sidebar rendering in the widget gallery.
+ */
+export interface WidgetCategoryMeta {
+  id: WidgetCategory;
+  name: string;              // Display name: "ROAS & ROI", "Sales", etc.
+  icon: string;              // Lucide icon name: "TrendingUp", "DollarSign", etc.
+  description?: string;      // Tooltip/help text
+}
+
+/**
+ * Widget size presets for gallery items.
+ * Maps to grid column spans: small=3, medium=6, large=9, full=12
+ */
+export type WidgetSize = 'small' | 'medium' | 'large' | 'full';
+
+/**
+ * Widget catalog item for the gallery/selection step.
+ * Represents a widget type that users can add to their dashboard.
+ */
+export interface WidgetCatalogItem {
+  id: string;                          // Unique widget catalog ID (e.g., "roas-overview")
+  type: 'metric' | 'chart' | 'table';  // Widget type
+  title: string;                       // Display name in gallery
+  description: string;                 // Short description for gallery card
+  icon: string;                        // Lucide icon name for gallery card
+  category: WidgetCategory;            // Which category this belongs to
+  defaultSize: WidgetSize;             // Default size when added to dashboard
+  chartType?: ChartType;               // For chart widgets: line, bar, area, pie, kpi, table
+  previewImageUrl?: string;            // Optional preview thumbnail URL
+  dataSourceRequired?: boolean;        // Does widget need data binding?
+  requiredDatasets?: string[];         // Which datasets this widget can use
+  tags?: string[];                     // Searchable tags (future)
+  defaultConfig?: Partial<ChartConfig>; // Default chart configuration
+}
+
+/**
+ * Builder wizard step enumeration for the 3-step flow.
+ */
+export type BuilderStep =
+  | 'select'    // Step 1: Select widgets from catalog
+  | 'customize' // Step 2: Arrange layout & configure
+  | 'preview';  // Step 3: Preview with sample data & save
+
+/**
+ * Builder wizard session state.
+ * Tracks the current state of the wizard flow.
+ */
+export interface BuilderWizardState {
+  currentStep: BuilderStep;
+  selectedCatalogItems: WidgetCatalogItem[];  // Widgets added from catalog
+  dashboardName: string;
+  selectedCategory: WidgetCategory;           // Current filter in Step 1
+  isDirty: boolean;                           // Unsaved changes flag
+}
+
+/**
+ * Preview data for widgets in the Preview step.
+ */
+export interface WidgetPreviewData {
+  widgetId: string;
+  chartType?: ChartType;                      // For chart widgets
+  sampleData: Record<string, unknown>;        // Sample data for preview
+  loading: boolean;
+  error?: string;
+}
+
+/**
+ * Helper to get display label for widget category.
+ */
+export function getWidgetCategoryLabel(category: WidgetCategory): string {
+  const labels: Record<WidgetCategory, string> = {
+    all: 'All Widgets',
+    roas: 'ROAS & ROI',
+    sales: 'Sales',
+    products: 'Products',
+    customers: 'Customers',
+    campaigns: 'Campaigns',
+  };
+  return labels[category] || category;
+}
+
+/**
+ * Helper to map widget size to grid column span.
+ */
+export function getWidgetSizeColumns(size: WidgetSize): number {
+  const columns: Record<WidgetSize, number> = {
+    small: 3,
+    medium: 6,
+    large: 9,
+    full: 12,
+  };
+  return columns[size];
+}
