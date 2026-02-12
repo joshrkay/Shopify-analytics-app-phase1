@@ -507,6 +507,21 @@ export function mapChartTypeToWidgetCategory(type: ChartType): WidgetCategory {
   return CHART_TYPE_TO_WIDGET_CATEGORY[type] ?? 'uncategorized';
 }
 
+
+export function mapChartTypeToWidgetCategoryUnsafe(type: string | null | undefined): WidgetCategory {
+  switch (type) {
+    case 'kpi':
+    case 'bar':
+    case 'line':
+    case 'area':
+    case 'pie':
+    case 'table':
+      return mapChartTypeToWidgetCategory(type);
+    default:
+      return 'uncategorized';
+  }
+}
+
 // =============================================================================
 // Dashboard Builder Wizard Types
 // =============================================================================

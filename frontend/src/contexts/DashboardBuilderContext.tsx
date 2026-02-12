@@ -35,7 +35,7 @@ import type {
   BuilderStep,
   WidgetCatalogItem,
 } from '../types/customDashboards';
-import { MIN_GRID_DIMENSIONS } from '../types/customDashboards';
+import { MIN_GRID_DIMENSIONS, mapChartTypeToWidgetCategoryUnsafe } from '../types/customDashboards';
 import {
   getDashboard,
   updateDashboard,
@@ -138,6 +138,22 @@ const AUTO_SAVE_INTERVAL_MS = 30_000;
 const AUTO_SAVE_MAX_FAILURES = 3;
 const AUTO_SAVE_RETRY_DELAYS = [5_000, 10_000, 20_000];
 
+
+function hydrateCatalogItemsFromDashboard(dashboard: Dashboard): WidgetCatalogItem[] {
+  return dashboard.reports.map((report) => ({
+    id: report.id,
+    templateId: dashboard.template_id ?? 'custom',
+    name: report.name,
+    title: report.name,
+    description: report.description ?? '',
+    category: report.chart_type,
+    businessCategory: mapChartTypeToWidgetCategoryUnsafe(report.chart_type as unknown as string),
+    chart_type: report.chart_type,
+    default_config: report.config_json,
+    required_dataset: report.dataset_name,
+  }));
+}
+
 const initialState: DashboardBuilderState = {
   dashboard: null,
   loadError: null,
@@ -186,6 +202,7 @@ export function DashboardBuilderProvider({
   const MAX_HISTORY = 20;
   const undoStackRef = useRef<Report[][]>([]);
   const redoStackRef = useRef<Report[][]>([]);
+  const wizardWidgetSeqRef = useRef(0);
 
   // ---------------------------------------------------------------------------
   // Fetch dashboard on mount (or when dashboardId changes)
@@ -216,7 +233,13 @@ export function DashboardBuilderProvider({
           autoSaveFailures: 0,
           selectedReportId: null,
           isReportConfigOpen: false,
-          wizardState: initialState.wizardState,
+          wizardState: {
+          ...initialState.wizardState,
+          dashboardName: dashboard.name,
+          dashboardDescription: dashboard.description ?? '',
+          selectedCatalogItems: hydrateCatalogItemsFromDashboard(dashboard),
+          selectedBusinessCategory: 'all',
+        },
         });
       } catch (err) {
         if (cancelled) return;
@@ -292,6 +315,13 @@ export function DashboardBuilderProvider({
     setState((prev) => ({
       ...prev,
       dashboard,
+      wizardState: {
+        ...prev.wizardState,
+        dashboardName: dashboard.name,
+        dashboardDescription: dashboard.description ?? '',
+        selectedCatalogItems: hydrateCatalogItemsFromDashboard(dashboard),
+        selectedBusinessCategory: 'all',
+      },
       isDirty: false,
       saveError: null,
       saveErrorStatus: null,
@@ -733,6 +763,8 @@ export function DashboardBuilderProvider({
         isWizardMode: true,
         currentStep: 'select',
         selectedCategory: undefined,
+        selectedBusinessCategory: 'all',
+        selectedCatalogItems: [],
         selectedWidgets: [],
         dashboardName: '',
         dashboardDescription: '',
@@ -756,13 +788,26 @@ export function DashboardBuilderProvider({
   }, []);
 
   const setBuilderStep = useCallback((step: BuilderStep) => {
-    setState((prev) => ({
-      ...prev,
-      wizardState: {
-        ...prev.wizardState,
-        currentStep: step,
-      },
-    }));
+    setState((prev) => {
+      const widgetCount = prev.wizardState.selectedWidgets.length;
+      const hasName = prev.wizardState.dashboardName.trim().length > 0;
+
+      if (step === 'customize' && widgetCount === 0) {
+        return prev;
+      }
+
+      if (step === 'preview' && (widgetCount === 0 || !hasName)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        wizardState: {
+          ...prev.wizardState,
+          currentStep: step,
+        },
+      };
+    });
   }, []);
 
   const setSelectedCategory = useCallback((category?: ChartType) => {
@@ -790,7 +835,7 @@ export function DashboardBuilderProvider({
 
       // Create Report object from catalog item
       const newReport: Report = {
-        id: `${item.id}::${Date.now()}`,
+        id: `${item.id}::${Date.now()}::${wizardWidgetSeqRef.current++}`,
         dashboard_id: '', // Will be set when dashboard is created
         name: item.name,
         description: item.description,
@@ -815,6 +860,7 @@ export function DashboardBuilderProvider({
         wizardState: {
           ...prev.wizardState,
           selectedWidgets: [...prev.wizardState.selectedWidgets, newReport],
+          selectedCatalogItems: [...(prev.wizardState.selectedCatalogItems ?? []), item],
         },
         isDirty: true,
       };
@@ -822,16 +868,33 @@ export function DashboardBuilderProvider({
   }, []);
 
   const removeWizardWidget = useCallback((reportId: string) => {
-    setState((prev) => ({
-      ...prev,
-      wizardState: {
-        ...prev.wizardState,
-        selectedWidgets: prev.wizardState.selectedWidgets.filter(
-          (w) => w.id !== reportId,
-        ),
-      },
-      isDirty: true,
-    }));
+    setState((prev) => {
+      const nextWidgets = prev.wizardState.selectedWidgets.filter((w) => w.id !== reportId);
+      const removedWidget = prev.wizardState.selectedWidgets.find((w) => w.id === reportId);
+      const removedBaseId = removedWidget?.id.split('::')[0];
+
+      const nextCatalogItems = [...(prev.wizardState.selectedCatalogItems ?? [])];
+      if (removedBaseId) {
+        const idx = nextCatalogItems.findIndex((item) => item.id === removedBaseId);
+        if (idx >= 0) {
+          nextCatalogItems.splice(idx, 1);
+        }
+      }
+
+      return {
+        ...prev,
+        wizardState: {
+          ...prev.wizardState,
+          selectedWidgets: nextWidgets,
+          selectedCatalogItems: nextCatalogItems,
+          currentStep:
+            nextWidgets.length === 0 && prev.wizardState.currentStep !== 'select'
+              ? 'select'
+              : prev.wizardState.currentStep,
+        },
+        isDirty: true,
+      };
+    });
   }, []);
 
   const moveWizardWidget = useCallback((reportId: string, newPosition: GridPosition) => {
@@ -894,6 +957,8 @@ export function DashboardBuilderProvider({
       ...prev,
       wizardState: {
         ...initialState.wizardState,
+        selectedBusinessCategory: 'all',
+        selectedCatalogItems: [],
       },
       isDirty: false,
     }));
