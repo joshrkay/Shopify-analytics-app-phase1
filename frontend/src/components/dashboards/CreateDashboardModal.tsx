@@ -3,6 +3,7 @@
  *
  * Modal for creating a new custom dashboard.
  * Provides a name field, optional description, and two actions:
+ * - Start guided builder (navigates to 3-step wizard)
  * - Create blank dashboard (calls API, then navigates to editor)
  * - Browse templates (navigates to template gallery)
  *
@@ -103,6 +104,12 @@ export function CreateDashboardModal({
     navigate('/dashboards/templates');
   }, [resetForm, onClose, navigate]);
 
+  const handleStartGuidedBuilder = useCallback(() => {
+    resetForm();
+    onClose();
+    navigate('/dashboards/wizard');
+  }, [resetForm, onClose, navigate]);
+
   const handleNameChange = useCallback((value: string) => {
     setName(value);
     if (nameError) {
@@ -152,6 +159,14 @@ export function CreateDashboardModal({
           />
 
           <InlineStack gap="300" align="end">
+            <Button
+              variant="primary"
+              tone="success"
+              onClick={handleStartGuidedBuilder}
+              disabled={isCreating || atLimit}
+            >
+              Start guided builder
+            </Button>
             <Button
               onClick={handleBrowseTemplates}
               disabled={isCreating}
