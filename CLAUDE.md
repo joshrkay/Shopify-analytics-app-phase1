@@ -155,6 +155,27 @@ Triggered on push/PR to `main` and `develop`. All jobs must pass for PR merge:
 - Structured logging via structlog (JSON key/value, correlation IDs)
 - Parameterized queries only — no SQL string concatenation
 
+### Frontend-Backend Contract Verification
+
+When adding or modifying frontend API service functions (`frontend/src/services/`), you MUST verify that a corresponding backend route exists in `backend/src/api/routes/` before marking the work as complete. Specifically:
+
+1. **Verify route existence** — Confirm the backend has a matching route for the URL path, HTTP method, and expected request/response shape
+2. **Verify field names** — The backend returns snake_case fields; the frontend normalizes to camelCase. Confirm the raw field names match what the backend actually sends
+3. **Document missing routes** — If a frontend API function calls a backend route that does not yet exist, you MUST explicitly call this out in the PR description and commit message. Do NOT silently ship frontend code that calls non-existent endpoints
+4. **No silent 404s** — Frontend service functions that target missing backend routes will fail at runtime. These must be tracked and scheduled for implementation
+
+**Current known missing backend routes** (as of Phase 3 Data Sources work):
+- `GET /api/sources/catalog` — Source catalog/definitions (`getAvailableSources`)
+- `POST /api/sources/{platform}/oauth/initiate` — OAuth flow start (`initiateOAuth`)
+- `POST /api/sources/oauth/callback` — OAuth callback (`completeOAuth`)
+- `DELETE /api/sources/{id}` — Disconnect source (`disconnectSource`)
+- `POST /api/sources/{id}/test` — Connection test (`testConnection`)
+- `PATCH /api/sources/{id}/config` — Sync config update (`updateSyncConfig`)
+- `GET /api/ad-platform-ingestion/connections/{id}/accounts` — Account discovery (`getAvailableAccounts`)
+- `PUT /api/ad-platform-ingestion/connections/{id}/accounts` — Account selection (`updateSelectedAccounts`)
+- `GET /api/sources/sync-settings` — Global sync settings (`getGlobalSyncSettings`)
+- `PUT /api/sources/sync-settings` — Global sync settings update (`updateGlobalSyncSettings`)
+
 ## Engineering Workflow
 
 This project follows a structured development cycle using Claude Code plugins.
