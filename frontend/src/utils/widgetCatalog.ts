@@ -7,7 +7,8 @@
  * Phase 3 - Dashboard Builder Wizard State Management
  */
 
-import type { ReportTemplate, WidgetCatalogItem } from '../types/customDashboards';
+import type { ReportTemplate, WidgetCatalogItem, WidgetSize } from '../types/customDashboards';
+import { mapChartTypeToWidgetCategory } from '../types/customDashboards';
 import { listTemplates } from '../services/templatesApi';
 
 /**
@@ -22,17 +23,31 @@ import { listTemplates } from '../services/templatesApi';
 export function extractWidgetCatalogItems(
   template: ReportTemplate,
 ): WidgetCatalogItem[] {
-  return template.reports_json.map((report: any, index: number) => ({
-    id: `${template.id}-report-${index}`,
-    templateId: template.id,
-    name: report.name || `Widget ${index + 1}`,
-    description: report.description || template.description,
-    category: report.chart_type,
-    chart_type: report.chart_type,
-    thumbnail_url: template.thumbnail_url ?? undefined,
-    default_config: report.config_json,
-    required_dataset: report.dataset_name,
-  }));
+  return template.reports_json.map((report: any, index: number) => {
+    const chartType = report.chart_type;
+    const defaultSize: WidgetSize = chartType === 'kpi'
+      ? 'small'
+      : chartType === 'table'
+        ? 'full'
+        : 'medium';
+
+    const name = report.name || `Widget ${index + 1}`;
+
+    return {
+      id: `${template.id}-report-${index}`,
+      templateId: template.id,
+      name,
+      title: name,
+      description: report.description || template.description,
+      category: chartType,
+      businessCategory: mapChartTypeToWidgetCategory(chartType),
+      chart_type: chartType,
+      thumbnail_url: template.thumbnail_url ?? undefined,
+      default_config: report.config_json,
+      required_dataset: report.dataset_name,
+      defaultSize,
+    };
+  });
 }
 
 /**

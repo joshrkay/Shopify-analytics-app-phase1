@@ -454,6 +454,60 @@ export function getChartTypeLabel(type: ChartType): string {
 }
 
 // =============================================================================
+// Builder Catalog Taxonomy
+// =============================================================================
+
+/**
+ * Business-facing widget category taxonomy used by the builder gallery.
+ *
+ * Note: `uncategorized` is included to support edit-mode hydration fallback for
+ * legacy widgets that cannot be mapped confidently.
+ */
+export type WidgetCategory =
+  | 'all'
+  | 'roas'
+  | 'sales'
+  | 'products'
+  | 'customers'
+  | 'campaigns'
+  | 'uncategorized';
+
+export interface WidgetCategoryMeta {
+  id: WidgetCategory;
+  name: string;
+  icon: string;
+  description?: string;
+}
+
+export const WIDGET_CATEGORY_META: WidgetCategoryMeta[] = [
+  { id: 'all', name: 'All', icon: 'LayoutGrid' },
+  { id: 'roas', name: 'ROAS & ROI', icon: 'TrendingUp' },
+  { id: 'sales', name: 'Sales', icon: 'DollarSign' },
+  { id: 'products', name: 'Products', icon: 'Package' },
+  { id: 'customers', name: 'Customers', icon: 'Users' },
+  { id: 'campaigns', name: 'Campaigns', icon: 'Megaphone' },
+  { id: 'uncategorized', name: 'Uncategorized', icon: 'CircleHelp' },
+];
+
+export const CHART_TYPE_TO_WIDGET_CATEGORY: Record<ChartType, WidgetCategory> = {
+  kpi: 'roas',
+  bar: 'sales',
+  line: 'campaigns',
+  area: 'sales',
+  pie: 'products',
+  table: 'customers',
+};
+
+export function getWidgetCategoryLabel(category: WidgetCategory): string {
+  const found = WIDGET_CATEGORY_META.find((meta) => meta.id === category);
+  return found?.name ?? category;
+}
+
+export function mapChartTypeToWidgetCategory(type: ChartType): WidgetCategory {
+  return CHART_TYPE_TO_WIDGET_CATEGORY[type] ?? 'uncategorized';
+}
+
+// =============================================================================
 // Dashboard Builder Wizard Types
 // =============================================================================
 
@@ -475,6 +529,12 @@ export interface WidgetCatalogItem {
   thumbnail_url?: string;               // Optional preview image from template
   default_config: ChartConfig;          // Pre-configured metrics, dimensions, filters
   required_dataset?: string;            // Dataset name from report config
+
+  // Phase 2 taxonomy compatibility fields (non-breaking additions)
+  title?: string;                       // Display title alias of `name`
+  icon?: string;                        // Optional Lucide icon name
+  defaultSize?: WidgetSize;             // Default card/layout size
+  businessCategory?: WidgetCategory;    // Business category taxonomy
 }
 
 /**
@@ -487,9 +547,12 @@ export interface BuilderWizardState {
   isWizardMode: boolean;                // True when in wizard creation flow
   currentStep: BuilderStep;             // Current wizard step
   selectedCategory?: ChartType;         // Filter for widget gallery
+  selectedBusinessCategory?: WidgetCategory; // Future business-category filter
   selectedWidgets: Report[];            // Temporary widgets (not persisted until save)
+  selectedCatalogItems?: WidgetCatalogItem[]; // Optional catalog item tracking
   dashboardName: string;                // Name for new dashboard
   dashboardDescription: string;         // Description for new dashboard
   previewDateRange?: string;            // Selected date range in preview ('7', '30', '90', 'custom')
   saveAsTemplate: boolean;              // Whether to save as template
+  isDirty?: boolean;                    // Optional wizard-specific dirty flag
 }
