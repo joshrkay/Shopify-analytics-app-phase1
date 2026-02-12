@@ -14,6 +14,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useAgency } from '../contexts/AgencyContext';
 import type { SettingsTab } from '../types/settingsTypes';
 import { SettingsTabButton } from '../components/settings/SettingsTabButton';
+import { DataSourcesSettingsTab } from '../components/settings/DataSourcesSettingsTab';
+import { SyncSettingsTab } from '../components/settings/SyncSettingsTab';
 import { TeamSettings } from '../components/settings/TeamSettings';
 
 const ROLE_RANK = {
@@ -59,6 +61,22 @@ function canAccessTab(userRole: RequiredRole, requiredRole: RequiredRole): boole
 }
 
 function renderTabContent(tab: SettingsTab) {
+  if (tab === 'sources') {
+    return (
+      <section data-testid="settings-panel-sources">
+        <DataSourcesSettingsTab />
+      </section>
+    );
+  }
+
+  if (tab === 'sync') {
+    return (
+      <section data-testid="settings-panel-sync">
+        <SyncSettingsTab />
+      </section>
+    );
+  }
+
   if (tab === 'team') {
     return (
       <section data-testid="settings-panel-team">
