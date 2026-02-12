@@ -9,7 +9,7 @@
  */
 
 import { Card, BlockStack, Text, Button, InlineStack, Divider, Icon } from '@shopify/polaris';
-import { XIcon, LayoutSectionIcon } from '@shopify/polaris-icons';
+import { XIcon, LayoutIcon } from '@shopify/polaris-icons';
 import type { ChartType, Report } from '../../../types/customDashboards';
 import { getChartTypeLabel } from '../../../types/customDashboards';
 import { getChartIcon } from '../../../utils/chartIcons';
@@ -53,7 +53,7 @@ export function CategorySidebar({
             textAlign="left"
           >
             <InlineStack gap="200" blockAlign="center">
-              <Icon source={LayoutSectionIcon} />
+              <Icon source={LayoutIcon} />
               <Text as="span">All ({String(widgetCounts.all || 0)})</Text>
             </InlineStack>
           </Button>
