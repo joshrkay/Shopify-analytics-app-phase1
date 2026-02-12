@@ -128,6 +128,7 @@ Triggered on push/PR to `main` and `develop`. All jobs must pass for PR merge:
 - Shopify Polaris `<Modal>` with `<Modal.Section>` for dialogs
 - React Context for builder session, agency, and data health state (no Redux)
 - react-grid-layout for dashboard grids, Recharts for charts
+- **Context Provider Rule**: Every React context hook (e.g., `useAgency`, `useDataHealth`) MUST have its corresponding Provider mounted in the component tree in `App.tsx` before any component that calls the hook. When adding a new context or a new consumer of an existing context, verify the Provider is present in `AppWithOrg()` (or higher). Tests that mock contexts will not catch a missing Provider — always check the real component tree in `App.tsx`.
 
 ### Data Pipeline
 - dbt model layers: raw -> staging -> canonical -> attribution -> semantic -> metrics -> marts

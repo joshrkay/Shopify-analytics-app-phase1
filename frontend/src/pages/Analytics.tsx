@@ -16,6 +16,7 @@ import {
   Text,
   Button,
   Banner,
+  EmptyState,
   SkeletonPage,
   SkeletonBodyText,
 } from '@shopify/polaris';
@@ -29,6 +30,7 @@ import { IncidentBanner } from '../components/health/IncidentBanner';
 import { DataFreshnessBadge } from '../components/health/DataFreshnessBadge';
 import { DashboardFreshnessIndicator } from '../components/health/DashboardFreshnessIndicator';
 import { FeatureUpdateBanner } from '../components/changelog/FeatureUpdateBanner';
+import { TimeframeSelector, type TimeframeOption } from '../components/common/TimeframeSelector';
 import { useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import {
@@ -36,6 +38,7 @@ import {
   ComponentErrorFallback,
 } from '../components/ErrorFallback';
 import { listDashboards } from '../services/customDashboardsApi';
+import { listSources } from '../services/sourcesApi';
 import { isApiError } from '../services/apiUtils';
 import { AnalyticsHealthBanner } from '../components/AnalyticsHealthBanner';
 import type { Dashboard } from '../types/customDashboards';
@@ -47,12 +50,14 @@ const Analytics: React.FC = () => {
   const [config, setConfig] = useState<EmbedConfig | null>(null);
   const [readiness, setReadiness] = useState<EmbedReadinessResponse | null>(null);
   const [selectedDashboard, setSelectedDashboard] = useState<string>('');
+  const [timeframe, setTimeframe] = useState<TimeframeOption>('30d');
   const [loading, setLoading] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<string>('unknown');
   const [customDashboards, setCustomDashboards] = useState<Dashboard[]>([]);
   const [hasMoreCustom, setHasMoreCustom] = useState(false);
+  const [hasSources, setHasSources] = useState<boolean | null>(null);
 
   const loadConfig = useCallback(async () => {
     setError(null);
@@ -126,6 +131,24 @@ const Analytics: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // Check if any data sources are connected
+  useEffect(() => {
+    let cancelled = false;
+    listSources()
+      .then((sources) => {
+        if (!cancelled) {
+          setHasSources(sources.length > 0);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          // Assume sources exist on error to avoid blocking the page
+          setHasSources(true);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   // Handle dashboard selection
   const handleDashboardChange = (value: string) => {
     // Navigate to custom dashboard view
@@ -163,6 +186,32 @@ const Analytics: React.FC = () => {
           </Layout.Section>
         </Layout>
       </SkeletonPage>
+    );
+  }
+
+  // No sources connected — show empty state
+  if (hasSources === false) {
+    return (
+      <Page title="Analytics">
+        <Layout>
+          <Layout.Section>
+            <Card>
+              <EmptyState
+                heading="Connect your data sources"
+                image=""
+              >
+                <p>
+                  Connect at least one data source to unlock analytics dashboards,
+                  insights, and performance metrics.
+                </p>
+                <Button variant="primary" onClick={() => navigate('/data-sources')}>
+                  Connect data sources
+                </Button>
+              </EmptyState>
+            </Card>
+          </Layout.Section>
+        </Layout>
+      </Page>
     );
   }
 
@@ -246,9 +295,12 @@ const Analytics: React.FC = () => {
           titleMetadata={<DataFreshnessBadge />}
         >
           <Layout>
-            {/* Data freshness indicator */}
+            {/* Timeframe selector + data freshness */}
             <Layout.Section>
-              <DashboardFreshnessIndicator variant="compact" />
+              <InlineStack align="space-between" blockAlign="center">
+                <DashboardFreshnessIndicator variant="compact" />
+                <TimeframeSelector value={timeframe} onChange={setTimeframe} />
+              </InlineStack>
             </Layout.Section>
 
             {!hasSystemDashboards && (
