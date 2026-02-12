@@ -3,30 +3,21 @@
  *
  * Displays a widget preview in the customize step grid with:
  * - Drag handle for repositioning
- * - Widget name and chart type
- * - Empty state with icon (no real data)
- * - Remove button
+ * - Widget name, chart type, and size badge
+ * - Hover-revealed actions: Settings, Maximize, Remove
+ * - Touch device support
+ * - Empty state with icon (no real data in customize step)
  *
- * Phase 3 - Dashboard Builder Wizard Enhancements
+ * Phase 2.4 - Enhanced with hover actions and size cycling
  */
 
-import { Card, BlockStack, InlineStack, Text, Button, Icon } from '@shopify/polaris';
-import {
-  ChartVerticalFilledIcon,
-  ChartHorizontalIcon,
-} from '@shopify/polaris-icons';
+import { useState } from 'react';
+import { Card, BlockStack, InlineStack, Text, Button, Icon, Badge } from '@shopify/polaris';
+import { SettingsIcon, MaximizeIcon, DeleteIcon } from '@shopify/polaris-icons';
 import type { Report } from '../../../types/customDashboards';
-import { getChartTypeLabel } from '../../../types/customDashboards';
-
-// Icon mapping per chart type
-const CHART_ICONS = {
-  line: ChartVerticalFilledIcon,
-  bar: ChartHorizontalIcon,
-  area: ChartVerticalFilledIcon,
-  pie: ChartHorizontalIcon,
-  kpi: ChartVerticalFilledIcon,
-  table: ChartVerticalFilledIcon,
-};
+import { getChartTypeLabel, COLUMNS_TO_SIZE } from '../../../types/customDashboards';
+import { getChartIcon } from '../../../utils/chartIcons';
+import { useDashboardBuilder } from '../../../contexts/DashboardBuilderContext';
 
 interface WizardReportPreviewCardProps {
   widget: Report;
@@ -34,13 +25,46 @@ interface WizardReportPreviewCardProps {
 }
 
 export function WizardReportPreviewCard({ widget, onRemove }: WizardReportPreviewCardProps) {
-  const ChartIcon = CHART_ICONS[widget.chart_type] || ChartVerticalFilledIcon;
+  const [isHovered, setIsHovered] = useState(false);
+  const { openWizardWidgetConfig, moveWizardWidget } = useDashboardBuilder();
+
+  const ChartIcon = getChartIcon(widget.chart_type);
+
+  // Get current size label
+  const currentWidth = widget.position_json?.w || 6;
+  const sizeLabel = COLUMNS_TO_SIZE[currentWidth as keyof typeof COLUMNS_TO_SIZE] || 'medium';
+
+  // Handle maximize (cycle through sizes)
+  const handleMaximize = () => {
+    const widthMap = { 3: 6, 6: 9, 9: 12, 12: 3 }; // small → medium → large → full → small
+    const newWidth = widthMap[currentWidth as keyof typeof widthMap] || 6;
+
+    moveWizardWidget(widget.id, {
+      ...widget.position_json,
+      w: newWidth,
+    });
+  };
+
+  // Handle settings
+  const handleSettings = () => {
+    openWizardWidgetConfig(widget.id);
+  };
+
+  // Touch device support
+  const handleTouch = () => {
+    setIsHovered(!isHovered);
+  };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onTouchStart={handleTouch}
+    >
       <Card padding="300">
         <BlockStack gap="300">
-          {/* Header with drag handle and remove button */}
+          {/* Header with drag handle, name, and action buttons */}
           <InlineStack align="space-between" blockAlign="center">
             <InlineStack gap="200" blockAlign="center">
               <div
@@ -59,15 +83,37 @@ export function WizardReportPreviewCard({ widget, onRemove }: WizardReportPrevie
               </BlockStack>
             </InlineStack>
 
-            <Button
-              variant="plain"
-              tone="critical"
-              size="slim"
-              onClick={() => onRemove(widget.id)}
-            >
-              Remove
-            </Button>
+            {/* Hover-revealed action buttons */}
+            {isHovered && (
+              <InlineStack gap="100">
+                <Button
+                  icon={SettingsIcon}
+                  variant="plain"
+                  size="slim"
+                  onClick={handleSettings}
+                  accessibilityLabel="Widget settings"
+                />
+                <Button
+                  icon={MaximizeIcon}
+                  variant="plain"
+                  size="slim"
+                  onClick={handleMaximize}
+                  accessibilityLabel="Cycle widget size"
+                />
+                <Button
+                  icon={DeleteIcon}
+                  variant="plain"
+                  tone="critical"
+                  size="slim"
+                  onClick={() => onRemove(widget.id)}
+                  accessibilityLabel="Remove widget"
+                />
+              </InlineStack>
+            )}
           </InlineStack>
+
+          {/* Size badge (always visible) */}
+          <Badge tone="info">{sizeLabel}</Badge>
 
           {/* Empty state with chart icon (no real data in customize step) */}
           <div
