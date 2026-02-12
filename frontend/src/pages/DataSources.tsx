@@ -41,7 +41,7 @@ import { EmptySourcesState } from '../components/sources/EmptySourcesState';
 import { useDataHealth } from '../contexts/DataHealthContext';
 import { useSourceMutations } from '../hooks/useSourceConnection';
 import { useDataSources, useDataSourceCatalog } from '../hooks/useDataSources';
-import type { DataSourceDefinition, UpdateSyncConfigRequest } from '../types/sourceConnection';
+import type { UpdateSyncConfigRequest } from '../types/sourceConnection';
 
 export default function DataSources() {
   const {
@@ -55,13 +55,12 @@ export default function DataSources() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
-  const [connectPlatform, setConnectPlatform] = useState<DataSourceDefinition | null>(null);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const { refresh: refreshHealth } = useDataHealth();
-  const { disconnecting, testingSourceId, configuring, disconnect, testConnection, updateSyncConfig } =
+  const { disconnecting, testing, configuring, disconnect, testConnection, updateSyncConfig } =
     useSourceMutations();
 
   const handleRefresh = useCallback(async () => {
@@ -73,21 +72,11 @@ export default function DataSources() {
     }
   }, [refetch]);
 
-  const openConnectModal = useCallback((platform?: DataSourceDefinition) => {
-    setConnectPlatform(platform ?? null);
-    setShowConnectModal(true);
-  }, []);
-
-  const closeConnectModal = useCallback(() => {
-    setShowConnectModal(false);
-    setConnectPlatform(null);
-  }, []);
-
   const handleConnectionSuccess = useCallback(async () => {
-    closeConnectModal();
+    setShowConnectModal(false);
     await refetch();
     await refreshHealth();
-  }, [closeConnectModal, refetch, refreshHealth]);
+  }, [refetch, refreshHealth]);
 
   const handleTestConnection = useCallback(
     async (source: Source) => {
@@ -147,8 +136,8 @@ export default function DataSources() {
   );
 
   const handleConnectFromCatalog = useCallback(() => {
-    openConnectModal();
-  }, [openConnectModal]);
+    setShowConnectModal(true);
+  }, []);
 
   // Derive set of connected platform IDs for IntegrationCard badges
   const connectedPlatforms = new Set(sources.map((s) => s.platform));
@@ -197,24 +186,23 @@ export default function DataSources() {
         title="Data Sources"
         primaryAction={{
           content: 'Connect Source',
-          onAction: () => openConnectModal(),
+          onAction: () => setShowConnectModal(true),
         }}
       >
         <Layout>
           <Layout.Section>
             <EmptySourcesState
               catalog={catalog}
-              onConnect={(platform) => openConnectModal(platform)}
-              onBrowseAll={() => openConnectModal()}
+              onConnect={() => setShowConnectModal(true)}
+              onBrowseAll={() => setShowConnectModal(true)}
             />
           </Layout.Section>
         </Layout>
 
         <ConnectSourceModal
           open={showConnectModal}
-          onClose={closeConnectModal}
+          onClose={() => setShowConnectModal(false)}
           onSuccess={handleConnectionSuccess}
-          initialPlatform={connectPlatform}
         />
       </Page>
     );
@@ -226,7 +214,7 @@ export default function DataSources() {
       subtitle="Manage your connected data sources"
       primaryAction={{
         content: 'Add Source',
-        onAction: () => openConnectModal(),
+        onAction: () => setShowConnectModal(true),
       }}
       secondaryActions={[
         {
@@ -255,7 +243,7 @@ export default function DataSources() {
                       onManage={handleConfigureSync}
                       onDisconnect={handleDisconnect}
                       onTestConnection={handleTestConnection}
-                      testing={testingSourceId === source.id}
+                      testing={testing}
                     />
                   ))}
                 </BlockStack>
@@ -289,7 +277,7 @@ export default function DataSources() {
                       key={platform.id}
                       platform={platform}
                       isConnected={false}
-                      onConnect={() => openConnectModal(platform)}
+                      onConnect={() => setShowConnectModal(true)}
                     />
                   ))}
                 </InlineGrid>
@@ -301,9 +289,8 @@ export default function DataSources() {
 
       <ConnectSourceModal
         open={showConnectModal}
-        onClose={closeConnectModal}
+        onClose={() => setShowConnectModal(false)}
         onSuccess={handleConnectionSuccess}
-        initialPlatform={connectPlatform}
       />
 
       <DisconnectConfirmationModal
