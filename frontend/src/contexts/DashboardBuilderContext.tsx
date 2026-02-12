@@ -49,6 +49,7 @@ import {
   reorderReports,
 } from '../services/customReportsApi';
 import { getErrorMessage, getErrorStatus } from '../services/apiUtils';
+import DOMPurify from 'dompurify';
 
 // =============================================================================
 // Types
@@ -108,11 +109,13 @@ interface DashboardBuilderActions {
   setSelectedCategory: (category?: ChartType) => void;
   addCatalogWidget: (item: WidgetCatalogItem) => void;
   removeWizardWidget: (reportId: string) => void;
+  moveWizardWidget: (reportId: string, newPosition: GridPosition) => void;
   setWizardDashboardName: (name: string) => void;
   setWizardDashboardDescription: (description: string) => void;
   resetWizard: () => void;
   canProceedToCustomize: boolean;
   canProceedToPreview: boolean;
+  canSaveDashboard: boolean;
 }
 
 type DashboardBuilderContextValue = DashboardBuilderState & DashboardBuilderActions;
@@ -815,6 +818,19 @@ export function DashboardBuilderProvider({
     }));
   }, []);
 
+  const moveWizardWidget = useCallback((reportId: string, newPosition: GridPosition) => {
+    setState((prev) => ({
+      ...prev,
+      wizardState: {
+        ...prev.wizardState,
+        selectedWidgets: prev.wizardState.selectedWidgets.map((w) =>
+          w.id === reportId ? { ...w, position_json: newPosition } : w
+        ),
+      },
+      isDirty: true,
+    }));
+  }, []);
+
   const setWizardDashboardName = useCallback((name: string) => {
     setState((prev) => ({
       ...prev,
@@ -959,6 +975,12 @@ export function DashboardBuilderProvider({
     return state.wizardState.selectedWidgets.length > 0;
   }, [state.wizardState.selectedWidgets.length]);
 
+  const canSaveDashboard = useMemo(() => {
+    if (!state.wizardState.isWizardMode) return true; // Edit mode always allows save
+    return state.wizardState.dashboardName.trim().length > 0 &&
+           state.wizardState.selectedWidgets.length > 0;
+  }, [state.wizardState.isWizardMode, state.wizardState.dashboardName, state.wizardState.selectedWidgets.length]);
+
   // ---------------------------------------------------------------------------
   // Context Value
   // ---------------------------------------------------------------------------
@@ -990,11 +1012,13 @@ export function DashboardBuilderProvider({
     setSelectedCategory,
     addCatalogWidget,
     removeWizardWidget,
+    moveWizardWidget,
     setWizardDashboardName,
     setWizardDashboardDescription,
     resetWizard,
     canProceedToCustomize,
     canProceedToPreview,
+    canSaveDashboard,
   };
 
   return (
