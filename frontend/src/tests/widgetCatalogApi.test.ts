@@ -72,5 +72,6 @@ describe('widgetCatalogApi', () => {
     expect(preview.chartType).toBe('kpi');
     expect(preview.value).toBeTypeOf('number');
     expect(preview.isFallback).toBe(true);
+    expect(preview.fallbackReason).toBe('missing_dataset');
   });
 });

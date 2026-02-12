@@ -146,4 +146,66 @@ describe('widget catalog backend wiring integration', () => {
     expect(preview.series?.length).toBe(2);
     expect(preview.series?.[0]).toEqual({ label: '2025-01-01', value: 100 });
   });
+
+  it('propagates auth errors from preview endpoint instead of silently falling back', async () => {
+    global.fetch = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.endsWith('/api/v1/templates')) {
+        return {
+          ok: true,
+          json: async () => ({
+            templates: [
+              {
+                id: 'tpl-1',
+                name: 'Template',
+                description: 'desc',
+                category: 'sales',
+                thumbnail_url: null,
+                layout_json: {},
+                reports_json: [
+                  {
+                    name: 'Sales by day',
+                    description: 'desc',
+                    chart_type: 'bar',
+                    dataset_name: 'sales_daily',
+                    config_json: {
+                      metrics: [{ column: 'revenue', aggregation: 'SUM', label: 'Revenue' }],
+                      dimensions: ['date'],
+                      time_range: '30',
+                      time_grain: 'P1D',
+                      filters: [],
+                      display: { show_legend: true },
+                    },
+                  },
+                ],
+                required_datasets: ['sales_daily'],
+                min_billing_tier: 'starter',
+                sort_order: 1,
+                is_active: true,
+              },
+            ],
+            total: 1,
+          }),
+        } as Response;
+      }
+
+      if (url.endsWith('/api/datasets/preview')) {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ detail: 'Forbidden' }),
+        } as Response;
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    }) as any;
+
+    const catalog = await getWidgetCatalog();
+
+    await expect(getWidgetPreview(catalog[0].id)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
 });

@@ -20,11 +20,13 @@ import {
 } from '../types/customDashboards';
 import { fetchWidgetCatalog } from '../utils/widgetCatalog';
 import { chartPreview } from './datasetsApi';
+import { isApiError } from './apiUtils';
 
 export interface WidgetPreviewData {
   widgetId: string;
   chartType: ChartType;
   isFallback: boolean;
+  fallbackReason?: 'missing_widget' | 'missing_dataset' | 'missing_metrics' | 'api_error';
   value?: number;
   trend?: number;
   series?: Array<{ label: string; value: number }>;
@@ -66,11 +68,17 @@ function toPreviewRequest(widget: WidgetCatalogItem, datasetName: string): Chart
   };
 }
 
-function toFallbackPreviewData(widgetId: string, chartType: ChartType, hasDataset: boolean): WidgetPreviewData {
+function toFallbackPreviewData(
+  widgetId: string,
+  chartType: ChartType,
+  hasDataset: boolean,
+  fallbackReason: WidgetPreviewData['fallbackReason'],
+): WidgetPreviewData {
   const base: WidgetPreviewData = {
     widgetId,
     chartType,
     isFallback: true,
+    fallbackReason,
   };
 
   if (chartType === 'kpi') {
@@ -136,21 +144,25 @@ export async function getWidgetCategories(): Promise<WidgetCategoryMeta[]> {
 
 export async function getWidgetPreview(
   widgetId: string,
-  datasetId?: string,
+  datasetName?: string,
 ): Promise<WidgetPreviewData> {
   const items = await getWidgetCatalog();
   const widget = items.find((item) => item.id === widgetId);
   const chartType = widget?.chart_type ?? 'kpi';
-  const datasetName = datasetId ?? widget?.required_dataset;
+  const resolvedDatasetName = datasetName ?? widget?.required_dataset;
 
-  if (!widget || !datasetName) {
-    return toFallbackPreviewData(widgetId, chartType, Boolean(datasetName));
+  if (!widget) {
+    return toFallbackPreviewData(widgetId, chartType, false, 'missing_widget');
+  }
+
+  if (!resolvedDatasetName) {
+    return toFallbackPreviewData(widgetId, chartType, false, 'missing_dataset');
   }
 
   try {
-    const request = toPreviewRequest(widget, datasetName);
+    const request = toPreviewRequest(widget, resolvedDatasetName);
     if (request.metrics.length === 0) {
-      return toFallbackPreviewData(widgetId, chartType, true);
+      return toFallbackPreviewData(widgetId, chartType, true, 'missing_metrics');
     }
 
     const response = await chartPreview(request);
@@ -192,8 +204,11 @@ export async function getWidgetPreview(
         value: Number(row[valueKey] ?? 0),
       })),
     };
-  } catch {
-    return toFallbackPreviewData(widgetId, chartType, true);
+  } catch (err) {
+    if (isApiError(err) && (err.status === 401 || err.status === 403)) {
+      throw err;
+    }
+    return toFallbackPreviewData(widgetId, chartType, true, 'api_error');
   }
 }
 

@@ -273,3 +273,156 @@ Subphase 2.1 is considered complete when:
 3. Category and wizard-step typing at UI boundaries match the wireframe plan.
 4. 2.1-specific tests pass, and existing dashboard type/API regression tests remain green.
 
+
+## Subphase 2.2 gap-closure plan (frontend ↔ backend integration)
+
+This section expands **Subphase 2.2** into an implementation plan focused on making the widget catalog and preview flow reliably tied to backend APIs with contract-level validation.
+
+### Objective
+
+Ensure `widgetCatalogApi` + `useWidgetCatalog` are backed by real backend contracts end-to-end (catalog, categories, preview), with clear fallback behavior only when explicitly intended.
+
+---
+
+### Confirmed integration issues to address
+
+1. **Preview endpoint drift across services**
+   - One frontend path used `/api/v1/datasets/preview` while backend datasets routes are mounted at `/api/datasets/*`.
+   - This creates route inconsistency risk and environment-dependent 404s.
+
+2. **Dataset identifier ambiguity**
+   - Some flows pass a variable named `datasetId` but backend preview expects `dataset_name`.
+   - This can silently trigger fallback previews instead of real data.
+
+3. **Contract coverage still too thin for non-mocked confidence**
+   - Existing tests cover key paths, but not yet a comprehensive matrix for API error classes, schema drift, and malformed payloads.
+
+---
+
+### Potential contract risks (need explicit decisions)
+
+1. **Category source-of-truth mismatch**
+   - Frontend categories are business-taxonomy driven, backend catalog source currently derives from templates/chart types.
+   - Need a canonical mapping contract that is versioned and tested.
+
+2. **Preview response transformation assumptions**
+   - Current FE transformation assumes first column is label/dimension and another column is numeric value.
+   - Must define behavior when backend returns multiple numeric columns, sparse columns, or empty columns list.
+
+3. **Fallback behavior can mask real API failures**
+   - Fallback previews are useful UX, but if overused they can hide integration regressions.
+   - Need observability and test assertions distinguishing “intentional fallback” vs “unexpected backend failure”.
+
+---
+
+### What must be true for users (minimum viable contract)
+
+For users to trust preview data in the builder:
+
+1. Selecting a widget from catalog must fetch a catalog item that maps to a real dataset and preview config.
+2. Preview requests must hit backend preview endpoint with valid typed payload.
+3. Successful preview responses must render real data in widget cards.
+4. If backend fails, UI must clearly indicate fallback/sample mode (not silently pretend it is live).
+5. Save-time payload must remain compatible with dashboard/report schemas used by create/update endpoints.
+
+---
+
+### Implementation plan (sequenced)
+
+#### Step 1 — Lock endpoint and parameter contracts
+
+- Create a shared constants module for builder data endpoints (templates/catalog/preview) and use it in:
+  - `services/widgetCatalogApi.ts`
+  - `services/reportDataApi.ts`
+  - `services/datasetsApi.ts`
+- Normalize naming at API boundary:
+  - `datasetName` for backend calls
+  - convert from UI/internal IDs before request construction
+
+Acceptance criteria:
+- No `/api/v1/datasets/preview` calls remain.
+- All preview request builders require/provide `dataset_name` from a resolved dataset name.
+
+#### Step 2 — Make catalog contract explicit
+
+- Define canonical DTOs for catalog/categorization returned to UI layer.
+- Add deterministic mappers from template-backed source to canonical catalog items.
+- Document required fields per item: `id`, `title/name`, `chart_type`, `businessCategory`, `default_config`, `required_dataset`.
+
+Acceptance criteria:
+- `getWidgetCatalog()` returns stable canonical shape.
+- Missing/invalid fields are rejected (or logged + filtered) deterministically.
+
+#### Step 3 — Harden preview request/response mapping
+
+- Extract request/response transformers into dedicated pure functions:
+  - `buildWidgetPreviewRequest(item, datasetName)`
+  - `mapChartPreviewResponseToWidgetPreview(response, chartType)`
+- Add explicit handling for:
+  - empty data rows
+  - missing/empty columns
+  - multi-metric responses
+  - non-numeric value columns
+
+Acceptance criteria:
+- Transform behavior is deterministic for all edge cases.
+- Fallback mode includes explicit metadata (`isFallback`, reason enum).
+
+#### Step 4 — Increase non-mocked integration confidence
+
+- Keep unit tests for fast feedback, but add contract-style tests that verify fetch URL/method/body + transformation behavior using realistic response fixtures.
+- Add failure-path tests for:
+  - 400 (validation)
+  - 401/403 (auth/entitlement)
+  - 404 (dataset/template missing)
+  - 5xx (backend failure)
+- Assert that these paths either surface actionable errors or mark preview as fallback with reason.
+
+Acceptance criteria:
+- Test suite proves endpoint usage, payload shape, and failure semantics.
+- No silent fallback on auth/permission errors without signal.
+
+#### Step 5 — Hook/UI behavior alignment
+
+- Ensure `useWidgetPreview` returns enough state for UX clarity:
+  - `isLoading`, `error`, `isFallback`, `fallbackReason`
+- In preview UI components, show clear badge/text for sample mode vs live data.
+
+Acceptance criteria:
+- Users can distinguish live preview from placeholder preview.
+- Product metrics can track fallback rate.
+
+---
+
+### Testing matrix (recommended)
+
+1. **Service contract tests**
+   - `widgetCatalogApi`: catalog load, category filtering, preview request mapping, response mapping.
+2. **Integration tests (frontend service boundary)**
+   - templates endpoint + datasets preview endpoint wiring.
+   - route consistency checks for all preview entry points.
+3. **Regression tests**
+   - existing `useWidgetCatalog`, builder context wizard tests, dashboard API tests.
+4. **Optional backend contract tests**
+   - JSON-schema/OpenAPI assertion for `/api/datasets/preview` request/response fields used by frontend.
+
+---
+
+### Prioritized backlog (2.2-specific)
+
+1. **P0**: Endpoint/path consistency audit and enforcement (all preview paths).
+2. **P0**: Dataset ID/name normalization at API boundary.
+3. **P1**: Extract + unit-test preview transformers.
+4. **P1**: Expand failure-path integration tests with realistic error fixtures.
+5. **P2**: Add fallback reason telemetry and UI labeling improvements.
+
+---
+
+### Definition of done for Subphase 2.2
+
+Subphase 2.2 is complete when:
+
+1. Catalog and preview frontend services consistently call the correct backend endpoints.
+2. Request/response mappings are explicit, typed, and edge-case-tested.
+3. Fallback behavior is intentional, visible to users, and observable to developers.
+4. Test coverage includes successful, degraded, and failure paths without relying only on simplistic mocks.
