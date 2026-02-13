@@ -23,6 +23,7 @@ import {
   createHeadersAsync,
   handleResponse,
 } from './apiUtils';
+import { API_ROUTES } from './apiRoutes';
 
 /**
  * List available datasets with column metadata.
@@ -31,7 +32,7 @@ import {
  */
 export async function listDatasets(): Promise<DatasetListResponse> {
   const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/datasets`, {
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.datasets}`, {
     method: 'GET',
     headers,
   });
@@ -48,7 +49,7 @@ export async function getDatasetColumns(
 ): Promise<ColumnMetadata[]> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/datasets/${datasetId}/columns`,
+    `${API_BASE_URL}${API_ROUTES.datasets}/${datasetId}/columns`,
     {
       method: 'GET',
       headers,
@@ -66,7 +67,7 @@ export async function validateConfig(
   body: ValidateConfigRequest,
 ): Promise<ValidateConfigResponse> {
   const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/datasets/validate-config`, {
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.datasets}/validate-config`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -84,7 +85,7 @@ export async function chartPreview(
   body: ChartPreviewRequest,
 ): Promise<ChartPreviewResponse> {
   const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/datasets/preview`, {
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.datasetsPreview}`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
