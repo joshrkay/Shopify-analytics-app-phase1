@@ -18,7 +18,7 @@ import type {
   ChangelogFilters,
   FeatureArea,
 } from '../types/changelog';
-import { API_BASE_URL, createHeaders, handleResponse, buildQueryString } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse, buildQueryString } from './apiUtils';
 
 /**
  * List published changelog entries with optional filtering.
@@ -32,7 +32,7 @@ export async function listChangelog(
   const queryString = buildQueryString(filters);
   const response = await fetch(`${API_BASE_URL}/api/changelog${queryString}`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ChangelogListResponse>(response);
 }
@@ -46,7 +46,7 @@ export async function listChangelog(
 export async function getChangelogEntry(entryId: string): Promise<ChangelogEntry> {
   const response = await fetch(`${API_BASE_URL}/api/changelog/${entryId}`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ChangelogEntry>(response);
 }
@@ -71,7 +71,7 @@ export async function getUnreadCount(
 
   const response = await fetch(url, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ChangelogUnreadCountResponse>(response);
 }
@@ -96,7 +96,7 @@ export async function getEntriesForFeature(
     `${API_BASE_URL}/api/changelog/feature/${featureArea}?${params.toString()}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<ChangelogListResponse>(response);
@@ -111,7 +111,7 @@ export async function getEntriesForFeature(
 export async function markAsRead(entryId: string): Promise<ChangelogMarkReadResponse> {
   const response = await fetch(`${API_BASE_URL}/api/changelog/${entryId}/read`, {
     method: 'POST',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ChangelogMarkReadResponse>(response);
 }
@@ -124,7 +124,7 @@ export async function markAsRead(entryId: string): Promise<ChangelogMarkReadResp
 export async function markAllAsRead(): Promise<ChangelogMarkReadResponse> {
   const response = await fetch(`${API_BASE_URL}/api/changelog/read-all`, {
     method: 'POST',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ChangelogMarkReadResponse>(response);
 }

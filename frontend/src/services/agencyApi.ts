@@ -13,7 +13,7 @@ import type {
   SwitchStoreResponse,
   UserContext,
 } from '../types/agency';
-import { API_BASE_URL, createHeaders, handleResponse, setAuthToken } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse, setAuthToken } from './apiUtils';
 
 /**
  * Fetch assigned stores for the current agency user.
@@ -21,7 +21,7 @@ import { API_BASE_URL, createHeaders, handleResponse, setAuthToken } from './api
 export async function fetchAssignedStores(): Promise<AssignedStoresResponse> {
   const response = await fetch(`${API_BASE_URL}/agency/stores`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<AssignedStoresResponse>(response);
 }
@@ -38,7 +38,7 @@ export async function switchActiveStore(
 
   const response = await fetch(`${API_BASE_URL}/agency/stores/switch`, {
     method: 'POST',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
     body: JSON.stringify(request),
   });
 
@@ -58,7 +58,7 @@ export async function switchActiveStore(
 export async function fetchUserContext(): Promise<UserContext> {
   const response = await fetch(`${API_BASE_URL}/agency/me`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<UserContext>(response);
 }
@@ -72,7 +72,7 @@ export async function refreshJwtToken(
 ): Promise<{ jwt_token: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/refresh-jwt`, {
     method: 'POST',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
     body: JSON.stringify({
       tenant_id: tenantId,
       allowed_tenants: allowedTenants,
@@ -99,7 +99,7 @@ export async function checkStoreAccess(
     `${API_BASE_URL}/agency/stores/${tenantId}/access`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<{ has_access: boolean; reason?: string }>(response);

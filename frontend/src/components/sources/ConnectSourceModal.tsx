@@ -53,7 +53,7 @@ interface ConnectSourceModalProps {
  * />
  * ```
  */
-export function ConnectSourceModal({ open, onClose, onSuccess, initialPlatform }: ConnectSourceModalProps) {
+export function ConnectSourceModal({ open, onClose, initialPlatform }: ConnectSourceModalProps) {
   const { catalog, loading: loadingCatalog } = useSourceCatalog();
   const {
     state,
@@ -274,7 +274,7 @@ export function ConnectSourceModal({ open, onClose, onSuccess, initialPlatform }
       open={open}
       onClose={handleClose}
       title="Connect Data Source"
-      large
+      size="large"
       primaryAction={undefined}
     >
       <Modal.Section>

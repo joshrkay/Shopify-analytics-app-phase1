@@ -14,14 +14,15 @@ import type {
   ShopifyValidationRequest,
   ShopifyValidationResponse,
 } from '../types/plans';
-import { API_BASE_URL, createHeaders } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync } from './apiUtils';
 import type { ApiError } from './apiUtils';
 
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = await createHeadersAsync();
   const response = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
     headers: {
-      ...createHeaders(),
+      ...headers,
       ...options.headers,
     },
   });

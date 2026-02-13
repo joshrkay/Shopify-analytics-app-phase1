@@ -38,7 +38,8 @@ import {
 import type { AuditEntry } from '../../types/customDashboards';
 import { useAuditEntries } from '../../hooks/useAuditEntries';
 import { formatRelativeTime } from '../../utils/dateUtils';
-import type { IconSource } from '@shopify/polaris-icons';
+
+type IconSource = typeof PlusCircleIcon;
 
 interface AuditTimelineProps {
   dashboardId: string;

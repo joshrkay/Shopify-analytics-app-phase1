@@ -16,8 +16,7 @@
 
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
-import { AppProvider } from '@shopify/polaris';
-import { SkeletonPage } from '@shopify/polaris';
+import { AppProvider, SkeletonPage, Page, Banner } from '@shopify/polaris';
 import enTranslations from '@shopify/polaris/locales/en.json';
 import '@shopify/polaris/build/esm/styles.css';
 
@@ -56,14 +55,39 @@ import { Dashboard } from './pages/Dashboard';
 interface FeatureGateRouteProps {
   feature: string;
   entitlements: EntitlementsResponse | null;
+  entitlementsLoading: boolean;
+  entitlementsError: string | null;
+  onRetry: () => Promise<void>;
   children: React.ReactNode;
 }
 
-function FeatureGateRoute({ feature, entitlements, children }: FeatureGateRouteProps) {
+function FeatureGateRoute({
+  feature,
+  entitlements,
+  entitlementsLoading,
+  entitlementsError,
+  onRetry,
+  children,
+}: FeatureGateRouteProps) {
   const location = useLocation();
 
   // Still loading entitlements
-  if (entitlements === null) return <SkeletonPage />;
+  if (entitlementsLoading && entitlements === null) return <SkeletonPage />;
+
+  // Failed to load entitlements — show error with retry
+  if (entitlementsError && entitlements === null) {
+    return (
+      <Page title="Unable to load">
+        <Banner
+          tone="critical"
+          title="Failed to check feature access"
+          action={{ content: 'Retry', onAction: onRetry }}
+        >
+          {entitlementsError}
+        </Banner>
+      </Page>
+    );
+  }
 
   if (!isFeatureEntitled(entitlements, feature)) {
     // Edge case: prevent redirect loop if already on /paywall
@@ -110,11 +134,11 @@ function AuthenticatedApp() {
 
 /** Inner shell: only mounts once the Clerk org is active so the token has org_id. */
 function AppWithOrg() {
-  const { isTokenReady } = useClerkToken();  // was: useClerkToken()
-  const { entitlements } = useEntitlements();
+  const { isTokenReady } = useClerkToken();
+  const { entitlements, loading: entitlementsLoading, error: entitlementsError, refetch: refetchEntitlements } = useEntitlements(isTokenReady);
 
   if (!isTokenReady) {
-    return <SkeletonPage />;  // NEW: blocks all API calls until token is cached
+    return <SkeletonPage />;
   }
 
   return (
@@ -125,8 +149,10 @@ function AppWithOrg() {
           <Route element={<Root />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/builder" element={
-              <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
-                <DashboardList />
+              <FeatureGateRoute feature="custom_reports" entitlements={entitlements} entitlementsLoading={entitlementsLoading} entitlementsError={entitlementsError} onRetry={refetchEntitlements}>
+                <DashboardBuilderProvider>
+                  <WizardFlow />
+                </DashboardBuilderProvider>
               </FeatureGateRoute>
             } />
             <Route path="/sources" element={<DataSources />} />
@@ -146,7 +172,7 @@ function AppWithOrg() {
             <Route
               path="/dashboards"
               element={
-                <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
+                <FeatureGateRoute feature="custom_reports" entitlements={entitlements} entitlementsLoading={entitlementsLoading} entitlementsError={entitlementsError} onRetry={refetchEntitlements}>
                   <DashboardList />
                 </FeatureGateRoute>
               }
@@ -154,7 +180,7 @@ function AppWithOrg() {
             <Route
               path="/dashboards/wizard"
               element={
-                <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
+                <FeatureGateRoute feature="custom_reports" entitlements={entitlements} entitlementsLoading={entitlementsLoading} entitlementsError={entitlementsError} onRetry={refetchEntitlements}>
                   <DashboardBuilderProvider>
                     <WizardFlow />
                   </DashboardBuilderProvider>
@@ -164,7 +190,7 @@ function AppWithOrg() {
             <Route
               path="/dashboards/:dashboardId/edit"
               element={
-                <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
+                <FeatureGateRoute feature="custom_reports" entitlements={entitlements} entitlementsLoading={entitlementsLoading} entitlementsError={entitlementsError} onRetry={refetchEntitlements}>
                   <DashboardBuilder />
                 </FeatureGateRoute>
               }

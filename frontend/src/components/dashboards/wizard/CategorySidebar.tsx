@@ -8,11 +8,12 @@
  * Phase 2.3 - Added category icons for visual richness
  */
 
-import { Card, BlockStack, Text, Button, InlineStack, Divider, Icon } from '@shopify/polaris';
-import { XIcon, LayoutSectionIcon } from '@shopify/polaris-icons';
+import { Card, BlockStack, Text, Button, Divider } from '@shopify/polaris';
+import { LayoutSectionIcon } from '@shopify/polaris-icons';
 import type { ChartType, Report } from '../../../types/customDashboards';
 import { getChartTypeLabel } from '../../../types/customDashboards';
 import { getChartIcon } from '../../../utils/chartIcons';
+import { SelectedWidgetsList } from './SelectedWidgetsList';
 
 interface CategorySidebarProps {
   selectedCategory?: ChartType;
@@ -50,12 +51,9 @@ export function CategorySidebar({
             variant={selectedCategory === undefined ? 'primary' : 'plain'}
             onClick={() => onSelectCategory(undefined)}
             fullWidth
-            textAlign="left"
+            icon={LayoutSectionIcon}
           >
-            <InlineStack gap="200" blockAlign="center">
-              <Icon source={LayoutSectionIcon} />
-              <Text as="span">All ({String(widgetCounts.all || 0)})</Text>
-            </InlineStack>
+            {`All (${widgetCounts.all || 0})`}
           </Button>
 
           {/* Chart type buttons */}
@@ -65,12 +63,9 @@ export function CategorySidebar({
               variant={selectedCategory === type ? 'primary' : 'plain'}
               onClick={() => onSelectCategory(type)}
               fullWidth
-              textAlign="left"
+              icon={getChartIcon(type)}
             >
-              <InlineStack gap="200" blockAlign="center">
-                <Icon source={getChartIcon(type)} />
-                <Text as="span">{getChartTypeLabel(type)} ({String(widgetCounts[type] || 0)})</Text>
-              </InlineStack>
+              {`${getChartTypeLabel(type)} (${widgetCounts[type] || 0})`}
             </Button>
           ))}
         </BlockStack>
@@ -79,47 +74,11 @@ export function CategorySidebar({
         {hasSelectedWidgets && (
           <>
             <Divider />
-            <BlockStack gap="300">
-              <Text as="p" variant="headingSm" fontWeight="semibold">
-                Selected widgets
-              </Text>
-
-              {/* Selected widget items */}
-              <BlockStack gap="200">
-                {selectedWidgets.map((widget) => (
-                  <InlineStack key={widget.id} align="space-between" blockAlign="center">
-                    <Text
-                      as="span"
-                      variant="bodySm"
-                      truncate
-                      tone="subdued"
-                    >
-                      {widget.name}
-                    </Text>
-                    {onRemoveWidget && (
-                      <Button
-                        icon={XIcon}
-                        size="slim"
-                        variant="plain"
-                        onClick={() => onRemoveWidget(widget.id)}
-                        accessibilityLabel={`Remove ${widget.name}`}
-                      />
-                    )}
-                  </InlineStack>
-                ))}
-              </BlockStack>
-
-              {/* Continue to Layout button */}
-              {onContinueToLayout && (
-                <Button
-                  variant="primary"
-                  fullWidth
-                  onClick={onContinueToLayout}
-                >
-                  Continue to Layout →
-                </Button>
-              )}
-            </BlockStack>
+            <SelectedWidgetsList
+              selectedWidgets={selectedWidgets}
+              onRemoveWidget={onRemoveWidget}
+              onContinueToLayout={onContinueToLayout}
+            />
           </>
         )}
       </BlockStack>

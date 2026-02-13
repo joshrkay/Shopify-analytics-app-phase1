@@ -660,3 +660,363 @@ Subphase 2.3 is complete when:
 3. Catalog widget conversion and layout placement are deterministic and tested.
 4. Dirty-state lifecycle is correct from edit through successful save.
 5. Undo/redo and existing builder/configurator flows remain regression-safe.
+
+## Subphase 2.4 gap-closure plan (Step 1 gallery + FE↔BE verification)
+
+This section expands **Subphase 2.4** into an execution plan focused on making Step 1 (`Select Reports`) verifiably connected from UI components through hooks/services to backend endpoints.
+
+### Objective
+
+Deliver a fully tested Step 1 experience where category filtering, widget selection, and toolbar actions are validated across the full frontend stack and tied to real backend API contracts (not mock-only behavior).
+
+---
+
+### Scope of FE ↔ BE connectivity in Subphase 2.4
+
+Step 1 touches backend connectivity through:
+
+1. **Widget catalog load**
+   - `WidgetGallery`/`CategorySidebar` should load categories + items from `useWidgetCatalog`.
+   - `useWidgetCatalog` must resolve through `getWidgetCatalog` → templates endpoint (`/api/v1/templates`).
+
+2. **Step 1 preview/navigation readiness**
+   - Selected widget state should be context-driven and accurately reflected in `SelectedWidgetsList` and “Continue to Layout”.
+
+3. **Toolbar backend actions (if enabled in Step 1)**
+   - Save/Duplicate actions should call dashboard mutation hooks and send payloads matching API contract.
+
+---
+
+### Confirmed 2.4 gaps to close
+
+1. **Component-level test matrix is incomplete**
+   - Requested coverage for `WidgetCatalogCard`, `CategorySidebar`, `SelectedWidgetsList`, `BuilderStepNav`, `BuilderToolbar`, and `WidgetGallery` integration is not yet complete.
+
+2. **Route-level FE ↔ BE verification is fragmented**
+   - Service/hook tests exist, but there is no single Step 1 integration contract asserting component render + endpoint usage + context state transitions in one flow.
+
+3. **Mutation linkage from toolbar requires explicit contract tests**
+   - Save/Duplicate CTA paths need assertions for request payload shape and endpoint invocation semantics.
+
+4. **Error/degraded-mode UX is under-specified**
+   - Need explicit behavior for catalog API failures (empty/error states + retry + no stale misleading UI).
+
+---
+
+### Target architecture for the “correct fix”
+
+Use a **layered verification model** so failures are diagnosable:
+
+1. **Component contracts** (UI behavior correctness)
+2. **Hook/service contracts** (data fetching + endpoint wiring)
+3. **Page-level integration** (Step 1 user flow across context + API)
+4. **Regression gates** (legacy builder views still work)
+
+---
+
+### Implementation plan (sequenced)
+
+#### Step 1 — Complete Step 1 component contracts
+
+Add/complete unit tests for:
+
+- `WidgetCatalogCard`
+  - render fields, selectable/added states, disabled re-add behavior.
+- `CategorySidebar`
+  - renders canonical categories, active styling, selection callback.
+- `SelectedWidgetsList`
+  - empty state vs selected list, remove action, continue CTA visibility.
+- `BuilderStepNav`
+  - active/completed/disabled visuals and guarded step transitions.
+- `BuilderToolbar`
+  - name edit propagation, widget count, save/duplicate/preview callbacks.
+
+Acceptance criteria:
+- All Step 1 UI contracts are independently tested and deterministic.
+
+#### Step 2 — Add Step 1 integration contract test
+
+Create a `WidgetGallery.integration` suite that verifies one cohesive flow:
+
+1. `WidgetGallery` mounts inside `DashboardBuilderContext`.
+2. Catalog loads from backend templates contract (through hook/service layer).
+3. Category filter updates visible widgets.
+4. Selecting a card updates selected list and context state.
+5. Removing from selected list resets card state.
+6. Continue CTA triggers transition to Step 2 only when selection exists.
+
+Acceptance criteria:
+- Test proves UI→hook→service→endpoint wiring and context sync in one path.
+
+#### Step 3 — Verify toolbar mutation contracts from Step 1
+
+Add integration tests for toolbar actions:
+
+- Save in create mode calls create mutation with expected payload.
+- Save in edit mode calls update mutation with expected payload.
+- Duplicate action calls duplicate mutation with expected ID/name strategy.
+- Loading/error states surface correctly in button UX.
+
+Acceptance criteria:
+- Toolbar CTA behavior is contract-tested against mutation hooks.
+
+#### Step 4 — Add degraded-mode and retry behavior tests
+
+Add tests for backend failure classes during catalog load:
+
+- 401/403: user-facing authorization error path.
+- 5xx/network failure: empty/error state with retry affordance.
+- Retry success path restores card grid and selection capability.
+
+Acceptance criteria:
+- Users are never shown stale success UI when catalog load fails.
+
+#### Step 5 — Route-level and regression verification
+
+Add/expand route integration tests for `/dashboards/wizard` Step 1:
+
+- page renders sidebar + gallery + selected panel + toolbar.
+- existing dashboard builder/list views still render (regression).
+
+Acceptance criteria:
+- Step 1 works at route level and does not regress legacy builder pages.
+
+---
+
+### FE ↔ BE verification checklist for Subphase 2.4
+
+Use this checklist before marking 2.4 complete:
+
+1. **Endpoint usage**
+   - Catalog requests resolve to `/api/v1/templates` through service layer.
+   - No Step 1 code path uses hardcoded widget arrays as authoritative source.
+
+2. **Payload contract**
+   - Toolbar save/duplicate requests use expected dashboard mutation payload shape.
+
+3. **State consistency**
+   - UI selected state, context selected state, and CTA enabled state are always synchronized.
+
+4. **Guard behavior**
+   - Step navigation to `customize` is blocked with zero widgets at context/reducer layer.
+
+5. **Failure semantics**
+   - Catalog API errors produce explicit UI state (error + retry), not silent empties.
+
+---
+
+### Recommended test matrix for 2.4 completion
+
+1. **Unit tests (Step 1 components)**
+   - Card/sidebar/selected list/step nav/toolbar contracts.
+
+2. **Integration tests (Step 1 assembly)**
+   - WidgetGallery full flow with context + backend fetch wiring.
+
+3. **Mutation contract tests**
+   - Save/Duplicate behavior from toolbar with create/edit mode branches.
+
+4. **Regression tests**
+   - Existing builder/list/dashboard pages unaffected.
+
+5. **Optional e2e smoke**
+   - `/dashboards/wizard` → select widgets → continue to Step 2.
+
+---
+
+### Low-risk PR slicing for 2.4
+
+1. **PR 1: Step 1 component test completion**
+2. **PR 2: WidgetGallery integration + backend wiring assertions**
+3. **PR 3: Toolbar mutation contracts + error/retry UX tests**
+4. **PR 4: route-level regression + cleanup**
+
+---
+
+### Definition of done for Subphase 2.4
+
+Subphase 2.4 is complete when:
+
+1. Step 1 UI components have comprehensive contract tests.
+2. Widget gallery is verified end-to-end through UI → hook → service → backend endpoint.
+3. Toolbar save/duplicate actions are payload-verified and regression-tested.
+4. Error/retry behavior is explicit and tested for backend failures.
+5. Route-level Step 1 flow works without regressing existing builder experiences.
+
+## Subphase 2.5 gap-closure plan (Step 2 layout customizer + FE↔BE validation)
+
+This section expands **Subphase 2.5** into an implementation plan focused on making Step 2 (`Customize Layout`) functionally complete and verifiably connected to backend-relevant data/configuration flows.
+
+### Objective
+
+Deliver a production-safe Step 2 layout experience where widget arrangement, size controls, and configurator edits are validated end-to-end from UI interactions through context state and save-ready payload contracts.
+
+---
+
+### Scope of FE ↔ BE coupling in Subphase 2.5
+
+Although Step 2 is mostly UI/state driven, it directly affects backend-bound behavior via:
+
+1. **Widget config edits through settings flow**
+   - Opening widget settings must bridge to existing configurator pipelines that shape API-bound report configs.
+
+2. **Layout state persistence**
+   - Position/size edits in Step 2 must produce deterministic state that serializes correctly into save/update payloads.
+
+3. **Mutation compatibility**
+   - Any Step 2 layout/config change must remain compatible with existing dashboard/report mutation contracts.
+
+---
+
+### Confirmed 2.5 gaps to close
+
+1. **Layout component test coverage is incomplete**
+   - Requested unit/integration tests for `LayoutCustomizer`, `LayoutWidgetPlaceholder`, and `LayoutControls` are not fully present.
+
+2. **Settings-bridge verification is under-specified**
+   - Need explicit tests proving Step 2 settings actions open/configure via existing report configurator and persist changes.
+
+3. **Auto-arrange/reset determinism requires stronger assertions**
+   - Layout recalculation behavior should be deterministic for mixed widget sizes and repeated invocations.
+
+4. **Payload-level compatibility checks are missing at Step 2 boundary**
+   - Need contract checks that Step 2 state maps cleanly to backend save/update payload shape before Step 3 actions.
+
+---
+
+### Target architecture for “correct fix”
+
+Use a **state-contract-first approach** in Step 2:
+
+1. UI controls dispatch deterministic context actions.
+2. Context holds canonical widget layout/config state.
+3. Save path consumes same canonical state without Step 2-only transformation hacks.
+4. Regression suite protects legacy configurator/grid behavior.
+
+---
+
+### Implementation plan (sequenced)
+
+#### Step 1 — Complete Step 2 component contracts
+
+Add/complete unit tests for:
+
+- `LayoutWidgetPlaceholder`
+  - title/size rendering,
+  - size-to-grid-span mapping (`small/medium/large/full`),
+  - action callbacks (`configure`, `maximize`, `remove`).
+- `LayoutControls`
+  - reset and auto-arrange callback dispatches,
+  - disabled/empty behavior when no widgets.
+- `LayoutCustomizer`
+  - empty state,
+  - Step 1/Step 3 navigation callbacks,
+  - info banner and grid presence.
+
+Acceptance criteria:
+- Step 2 UI behavior is independently validated and deterministic.
+
+#### Step 2 — Verify settings bridge to configurator flow
+
+Add integration tests proving:
+
+1. Step 2 settings action opens existing configurator/modal.
+2. Config changes (metric/dimension/chart options) are saved back into context widget config.
+3. Updated config is visible in Step 2 and survives navigation to Step 3.
+
+Acceptance criteria:
+- Step 2 edits are not visual-only; they mutate canonical widget config state.
+
+#### Step 3 — Enforce deterministic layout algorithms
+
+Add/validate pure helpers for layout operations:
+
+- `cycleWidgetSize` behavior (`small → medium → large → full → small`).
+- `autoArrangeWidgets` stable output for identical input order/sizes.
+- `resetLayout` predictable baseline positions.
+
+Acceptance criteria:
+- Repeated operations with same input yield identical layout output.
+
+#### Step 4 — Validate save-payload readiness from Step 2 state
+
+Add contract tests ensuring Step 2-produced state maps into save/update payload:
+
+- positions (`x`, `y`, `w`, `h`) valid and bounded,
+- widget config persisted,
+- no missing required report/dashboard fields after Step 2 edits.
+
+Acceptance criteria:
+- Step 2 state can be serialized without lossy conversion before save.
+
+#### Step 5 — Route-level + regression verification
+
+Add/expand integration/regression tests for `/dashboards/wizard` Step 2:
+
+- Step 1 → Step 2 transition with selected widgets,
+- Step 2 actions do not break legacy DashboardGrid/read-only render paths,
+- report configurator lifecycle still works outside wizard.
+
+Acceptance criteria:
+- Step 2 works in wizard without regressing existing report/configurator features.
+
+---
+
+### FE ↔ BE verification checklist for Subphase 2.5
+
+Use this checklist before marking 2.5 complete:
+
+1. **Configuration linkage**
+   - Step 2 settings actions persist config changes that are later used by save/update mutations.
+
+2. **Layout serialization**
+   - All Step 2 layout edits serialize to payload-compatible coordinates/sizes.
+
+3. **State continuity**
+   - Step 2 changes persist across step navigation and are visible in Step 3 preview/save.
+
+4. **Determinism**
+   - Auto-arrange/reset/cycle behaviors are reproducible for fixed inputs.
+
+5. **Failure semantics**
+   - Invalid layout/config operations fail gracefully in UI without corrupting context state.
+
+---
+
+### Recommended test matrix for 2.5 completion
+
+1. **Unit tests**
+   - placeholder sizing/actions, layout controls, layout helper determinism.
+
+2. **Integration tests (Step 2 assembly)**
+   - layout customizer + context + configurator bridge.
+
+3. **Payload contract tests**
+   - Step 2 state to save/update payload mapping.
+
+4. **Regression tests**
+   - existing grid/configurator/dashboard view behavior preserved.
+
+5. **Optional e2e smoke**
+   - select widgets → customize layout actions → preview reflects edits.
+
+---
+
+### Low-risk PR slicing for 2.5
+
+1. **PR 1: Step 2 unit test completion**
+2. **PR 2: configurator bridge integration tests**
+3. **PR 3: layout determinism + payload contract tests**
+4. **PR 4: route-level regression + cleanup**
+
+---
+
+### Definition of done for Subphase 2.5
+
+Subphase 2.5 is complete when:
+
+1. Step 2 component contracts are fully covered.
+2. Settings bridge to configurator is integration-tested and state-persistent.
+3. Layout algorithms (cycle/reset/auto-arrange) are deterministic and tested.
+4. Step 2 output is payload-compatible for save/update backend mutations.
+5. Step 2 flow does not regress legacy grid/configurator/dashboard behavior.

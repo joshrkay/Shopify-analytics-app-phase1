@@ -383,7 +383,7 @@ export function ShareModal({
       setEditingShareId(shareId);
       try {
         const updated = await updateShare(dashboardId, shareId, {
-          permission: newPermission,
+          permission: newPermission as SharePermission,
         });
         setShares((prev) =>
           prev.map((s) => (s.id === shareId ? updated : s)),

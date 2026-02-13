@@ -9,7 +9,7 @@
  * Story 4.2 - Data Quality Root Cause Signals (Prompt 4.2.7)
  */
 
-import { API_BASE_URL, createHeaders, handleResponse } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse } from './apiUtils';
 
 // =============================================================================
 // Types
@@ -91,7 +91,7 @@ export async function getDiagnostics(
     `${API_BASE_URL}/api/admin/diagnostics/${encodeURIComponent(dataset)}${qs}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<DiagnosticsListResponse>(response);
@@ -112,7 +112,7 @@ export async function getDiagnosticSignal(
     `${API_BASE_URL}/api/admin/diagnostics/${encodeURIComponent(dataset)}/${encodeURIComponent(signalId)}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<DiagnosticsSignal>(response);
@@ -148,7 +148,7 @@ export async function runDiagnostics(
     `${API_BASE_URL}/api/admin/diagnostics/${encodeURIComponent(dataset)}/analyze?${params.toString()}`,
     {
       method: 'POST',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<DiagnosticsSignal>(response);
