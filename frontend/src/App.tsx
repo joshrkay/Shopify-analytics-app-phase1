@@ -126,7 +126,9 @@ function AppWithOrg() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/builder" element={
               <FeatureGateRoute feature="custom_reports" entitlements={entitlements}>
-                <DashboardList />
+                <DashboardBuilderProvider>
+                  <WizardFlow />
+                </DashboardBuilderProvider>
               </FeatureGateRoute>
             } />
             <Route path="/sources" element={<DataSources />} />
