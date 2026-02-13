@@ -113,16 +113,45 @@ Triggered on push/PR to `main` and `develop`. All jobs must pass for PR merge:
 - PostgreSQL RLS policies at the database level
 - Backend uses `SELECT FOR UPDATE` to prevent TOCTOU races (e.g., dashboard limits)
 
+### Authentication & Tenant Provisioning (Critical Path)
+
+The request lifecycle for any authenticated API call is:
+
+```
+JWT → TenantContextMiddleware.__call__()
+  → _resolve_tenant_from_db()   [own DB session — lazy-syncs User/Tenant/Role, resolves IDs]
+  → TenantGuard.enforce_authorization()  [separate DB session — verifies records exist]
+  → Route handler
+```
+
+**Rules for modifying auth/provisioning code:**
+
+1. **Single provisioning path** — User, Tenant, and UserTenantRole records are created ONLY in `_resolve_tenant_from_db` via `ClerkSyncService`. Do NOT add duplicate bootstrap/creation logic in TenantGuard or elsewhere. Multiple uncoordinated creation paths cause IntegrityError collisions and 503s.
+
+2. **Clerk org_id ≠ Tenant.id** — JWT `org_id` is a Clerk string (e.g., `"org_2abc..."`). `Tenant.id` is an internal UUID string. These are DIFFERENT values stored in different columns (`clerk_org_id` vs `id`). Any code that receives an identifier from JWT must normalize it to `Tenant.id` before passing to TenantGuard or route handlers. Never assume a JWT claim can be used directly as a database primary key.
+
+3. **Lazy sync must handle duplicates** — The lazy sync in `_resolve_tenant_from_db` can race with Clerk webhooks or concurrent requests. Always catch `IntegrityError`, rollback, and re-query. The record you tried to create probably already exists.
+
+4. **Fallback values must be valid** — When `_resolve_tenant_from_db` falls back (DB error, sync failure), the returned `active_tenant_id` may still be a raw Clerk org_id. The `__call__` method must detect this and resolve it before passing to TenantGuard. Never pass an unvalidated identifier to code that uses it in FK relationships.
+
+5. **Fail-closed with clear errors** — The middleware catches `SQLAlchemyError` and returns 503. If you see 503s, check the backend logs for the actual exception type and message (logged at ERROR level). A 503 means a database operation threw — not that the DB is unreachable.
+
+6. **Two DB sessions per request** — `_resolve_tenant_from_db` opens and closes its own session. `__call__` opens a separate session for TenantGuard. Data committed in the first session IS visible to the second (PostgreSQL READ COMMITTED). But uncommitted/rolled-back data is NOT.
+
 ### API Patterns
 - Async routes with `createHeadersAsync()` for Clerk token refresh
-- `handleResponse<T>()` for typed error handling on the frontend
+- `handleResponse<T>()` for typed error handling on the frontend — checks `Content-Type` before parsing JSON and surfaces clear errors when HTML is returned (backend down, wrong URL, etc.)
 - Optimistic locking via `expected_updated_at` (409 on conflict)
 - `let cancelled = false` + cleanup in useEffect for cancelled fetches
+- **Always use `createHeadersAsync()`** — NOT `createHeaders()`. The async version waits for the Clerk token to be cached before returning headers. The sync version returns stale/empty tokens on first render, causing 401/403 race conditions. Every `fetch()` call in `frontend/src/services/` must `await createHeadersAsync()`.
+- **All frontend API URLs must include `/api` prefix** — e.g., `${API_BASE_URL}/api/billing/entitlements`, not `${API_BASE_URL}/billing/entitlements`. Without it, Vite's SPA fallback serves `index.html` and the frontend gets `"Unexpected token '<'"` errors trying to parse HTML as JSON.
 
-### Feature Gating
+### Feature Gating & Entitlements
 - `<FeatureGate>` component + `useFeatureEntitlement` hook
 - `FeatureGateRoute` for route-level gating with redirect loop prevention
 - Billing-driven entitlements: AI_INSIGHTS, AI_RECOMMENDATIONS, AI_ACTIONS, CUSTOM_REPORTS
+- **Two entitlement systems exist** — `EntitlementPolicy` (queries `Subscription` table) and `BILLING_TIER_FEATURES` (static dict in `billing_entitlements.py`). The `/api/billing/entitlements` endpoint uses `EntitlementPolicy` when a `Subscription` exists, and falls back to `BILLING_TIER_FEATURES` for free-tier tenants with no subscription. When modifying entitlements logic, update BOTH paths.
+- **Frontend entitlements URL** — Must be `${API_BASE_URL}/api/billing/entitlements` (note the `/api` prefix). The Vite dev proxy forwards `/api` to the backend; without it, requests hit the SPA fallback and return HTML instead of JSON.
 
 ### Frontend Patterns
 - Shopify Polaris `<Modal>` with `<Modal.Section>` for dialogs

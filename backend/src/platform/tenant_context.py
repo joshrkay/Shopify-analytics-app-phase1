@@ -421,6 +421,8 @@ class TenantContextMiddleware:
         from src.models.tenant import Tenant, TenantStatus
         from src.services.clerk_sync_service import ClerkSyncService
 
+        from sqlalchemy.exc import IntegrityError as SAIntegrityError
+
         try:
             db = next(get_db_session_sync())
         except Exception:
@@ -437,28 +439,56 @@ class TenantContextMiddleware:
             if not user:
                 # Webhook events can lag behind first authenticated requests.
                 # Provision the same minimum records that membership webhook flow creates.
-                sync = ClerkSyncService(db)
-                sync.get_or_create_user(clerk_user_id=user_id)
-                sync.sync_tenant_from_org(
-                    clerk_org_id=jwt_org_id,
-                    name=f"Tenant {jwt_org_id[-8:]}",
-                    source="lazy_sync",
-                )
-                sync.sync_membership(
-                    clerk_user_id=user_id,
-                    clerk_org_id=jwt_org_id,
-                    role=jwt_org_role or "org:member",
-                    source="lazy_sync",
-                    assigned_by="system",
-                )
-                db.commit()
+                try:
+                    sync = ClerkSyncService(db)
+                    sync.get_or_create_user(clerk_user_id=user_id)
+                    sync.sync_tenant_from_org(
+                        clerk_org_id=jwt_org_id,
+                        name=f"Tenant {jwt_org_id[-8:]}",
+                        source="lazy_sync",
+                    )
+                    sync.sync_membership(
+                        clerk_user_id=user_id,
+                        clerk_org_id=jwt_org_id,
+                        role=jwt_org_role or "org:member",
+                        source="lazy_sync",
+                        assigned_by="system",
+                    )
+                    db.commit()
+                except SAIntegrityError:
+                    # A concurrent request or webhook already created the
+                    # records.  Roll back and re-query — the data is there.
+                    db.rollback()
+                    logger.info(
+                        "Lazy sync hit duplicate record (concurrent create), re-querying",
+                        extra={"clerk_user_id": user_id, "clerk_org_id": jwt_org_id},
+                    )
+                except Exception as sync_err:
+                    # Any other sync failure — rollback so the session is usable
+                    # for the read-only resolution that follows.
+                    db.rollback()
+                    logger.warning(
+                        "Lazy sync failed, falling back to read-only resolution",
+                        extra={
+                            "error": str(sync_err),
+                            "error_type": type(sync_err).__name__,
+                            "clerk_user_id": user_id,
+                        },
+                    )
 
+                # Re-query after sync attempt (success, duplicate, or failure)
                 user = db.query(User).filter(
                     User.clerk_user_id == user_id,
                     User.is_active == True,
                 ).first()
 
                 if not user:
+                    # User truly doesn't exist and couldn't be created.
+                    # Return a sentinel that the caller can detect.
+                    logger.warning(
+                        "User not found after lazy sync attempt",
+                        extra={"clerk_user_id": user_id},
+                    )
                     return jwt_active_tenant_id, []
 
             # Get all active tenant roles for this user
@@ -500,7 +530,7 @@ class TenantContextMiddleware:
             if mapped_active:
                 resolved_active_tenant_id = mapped_active.id
 
-            # If no tenants at all, use tenant mapped from JWT org_id when available.
+            # If no tenants at all, try to find by clerk_org_id.
             if not all_tenant_ids:
                 mapped_org_tenant = db.query(Tenant).filter(
                     Tenant.clerk_org_id == jwt_org_id,
@@ -508,7 +538,9 @@ class TenantContextMiddleware:
                 ).first()
                 if mapped_org_tenant:
                     return mapped_org_tenant.id, []
-                return jwt_org_id, []
+                # No DB tenant found — return the resolved id (may still be
+                # a Clerk org_id; the caller must handle this gracefully).
+                return resolved_active_tenant_id, []
 
             # 1. Try JWT-provided active_tenant_id (if in allowed list)
             if resolved_active_tenant_id in all_tenant_ids:
@@ -549,7 +581,7 @@ class TenantContextMiddleware:
         except Exception as db_err:
             # DB tables may not exist (e.g. in-memory SQLite test env) or
             # other DB-level errors. Fall back to JWT-based tenant resolution.
-            logger.debug(
+            logger.warning(
                 "DB lookup failed in _resolve_tenant_from_db, falling back to JWT",
                 extra={"error": str(db_err), "error_type": type(db_err).__name__},
             )
@@ -769,6 +801,57 @@ class TenantContextMiddleware:
             if allowed_tenants and active_tenant_id not in allowed_tenants:
                 # Default to first allowed tenant
                 active_tenant_id = allowed_tenants[0] if allowed_tenants else str(org_id)
+
+            # -----------------------------------------------------------------
+            # Validate that active_tenant_id is a real Tenant.id, not a Clerk
+            # org_id.  When _resolve_tenant_from_db falls back to JWT (DB
+            # unavailable or lazy sync failed), active_tenant_id may still be
+            # the raw Clerk org_id which does not exist in tenants.id.  Passing
+            # that to TenantGuard would cause FK violations or TENANT_NOT_FOUND
+            # errors that surface as 503s.
+            #
+            # Clerk org_ids typically start with "org_".  If we detect that
+            # pattern AND the value was NOT resolved to a DB tenant id, do a
+            # quick lookup to resolve it.  If that also fails, return a clear
+            # 403 instead of letting TenantGuard crash.
+            # -----------------------------------------------------------------
+            if active_tenant_id == str(org_id) and str(org_id).startswith("org_"):
+                # Still the raw Clerk org_id — attempt one more lookup
+                try:
+                    from src.models.tenant import Tenant, TenantStatus
+                    _db = next(get_db_session_sync())
+                    try:
+                        _t = _db.query(Tenant).filter(
+                            Tenant.clerk_org_id == str(org_id),
+                            Tenant.status == TenantStatus.ACTIVE,
+                        ).first()
+                        if _t:
+                            active_tenant_id = _t.id
+                        else:
+                            logger.warning(
+                                "No tenant record for Clerk org — user may need to complete onboarding",
+                                extra={"clerk_org_id": str(org_id), "user_id": str(user_id)},
+                            )
+                            return JSONResponse(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                content={
+                                    "detail": "Your organization has not been provisioned yet. "
+                                    "Please try again in a moment or contact support.",
+                                    "error_code": "TENANT_NOT_PROVISIONED",
+                                },
+                            )
+                    finally:
+                        _db.close()
+                except Exception:
+                    logger.warning(
+                        "Failed to resolve Clerk org_id to tenant_id",
+                        extra={"clerk_org_id": str(org_id)},
+                        exc_info=True,
+                    )
+                    return JSONResponse(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        content={"detail": "Authorization service temporarily unavailable. Please retry."},
+                    )
 
             # CRITICAL: tenant_id = org_id (from JWT, never from request)
             # For agency users: tenant_id is the currently active tenant

@@ -290,38 +290,29 @@ class TenantGuard:
         ).first()
 
         if not user:
-            # Best-effort lazy bootstrap to avoid first-request auth deadlocks
-            # when Clerk webhook delivery lags behind user traffic.
+            # User not found.  The primary lazy-sync path lives in
+            # _resolve_tenant_from_db (TenantContextMiddleware) which runs
+            # BEFORE this method.  If the user still isn't in the DB here,
+            # the sync either failed or the records were just committed in a
+            # different session.  Return a clear denial — the middleware
+            # already logged the details.
             logger.warning(
-                "User not found in local DB during authorization enforcement; attempting bootstrap",
+                "User not found in local DB during authorization enforcement",
                 extra={"clerk_user_id": clerk_user_id, "tenant_id": active_tenant_id},
             )
-
-            user = User(
-                id=str(uuid.uuid4()),
-                clerk_user_id=clerk_user_id,
-                is_active=True,
+            return AuthorizationResult(
+                is_authorized=False,
+                denial_reason="User not found in local database. Please retry — your account may still be provisioning.",
+                error_code="USER_NOT_FOUND",
+                audit_action=AuditAction.IDENTITY_ACCESS_REVOKED_ENFORCED,
+                audit_metadata={
+                    "clerk_user_id": clerk_user_id,
+                    "tenant_id": active_tenant_id,
+                    "enforcement_reason": "user_not_found",
+                    "request_path": request_path,
+                    "request_method": request_method,
+                },
             )
-            self.db.add(user)
-            self.db.flush()
-
-            bootstrap_role = (jwt_roles[0] if jwt_roles else "viewer").lower()
-            existing_bootstrap_role = self.db.query(UserTenantRole).filter(
-                UserTenantRole.user_id == user.id,
-                UserTenantRole.tenant_id == active_tenant_id,
-                UserTenantRole.role == bootstrap_role,
-            ).first()
-
-            if not existing_bootstrap_role:
-                self.db.add(UserTenantRole(
-                    user_id=user.id,
-                    tenant_id=active_tenant_id,
-                    role=bootstrap_role,
-                    assigned_by=clerk_user_id,
-                    source="lazy_sync",
-                    is_active=True,
-                ))
-                self.db.flush()
 
         # Check if user is active
         if not user.is_active:
