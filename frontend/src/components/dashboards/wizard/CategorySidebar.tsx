@@ -9,10 +9,11 @@
  */
 
 import { Card, BlockStack, Text, Button, InlineStack, Divider, Icon } from '@shopify/polaris';
-import { XIcon, LayoutSectionIcon } from '@shopify/polaris-icons';
+import { LayoutSectionIcon } from '@shopify/polaris-icons';
 import type { ChartType, Report } from '../../../types/customDashboards';
 import { getChartTypeLabel } from '../../../types/customDashboards';
 import { getChartIcon } from '../../../utils/chartIcons';
+import { SelectedWidgetsList } from './SelectedWidgetsList';
 
 interface CategorySidebarProps {
   selectedCategory?: ChartType;
@@ -79,47 +80,11 @@ export function CategorySidebar({
         {hasSelectedWidgets && (
           <>
             <Divider />
-            <BlockStack gap="300">
-              <Text as="p" variant="headingSm" fontWeight="semibold">
-                Selected widgets
-              </Text>
-
-              {/* Selected widget items */}
-              <BlockStack gap="200">
-                {selectedWidgets.map((widget) => (
-                  <InlineStack key={widget.id} align="space-between" blockAlign="center">
-                    <Text
-                      as="span"
-                      variant="bodySm"
-                      truncate
-                      tone="subdued"
-                    >
-                      {widget.name}
-                    </Text>
-                    {onRemoveWidget && (
-                      <Button
-                        icon={XIcon}
-                        size="slim"
-                        variant="plain"
-                        onClick={() => onRemoveWidget(widget.id)}
-                        accessibilityLabel={`Remove ${widget.name}`}
-                      />
-                    )}
-                  </InlineStack>
-                ))}
-              </BlockStack>
-
-              {/* Continue to Layout button */}
-              {onContinueToLayout && (
-                <Button
-                  variant="primary"
-                  fullWidth
-                  onClick={onContinueToLayout}
-                >
-                  Continue to Layout →
-                </Button>
-              )}
-            </BlockStack>
+            <SelectedWidgetsList
+              selectedWidgets={selectedWidgets}
+              onRemoveWidget={onRemoveWidget}
+              onContinueToLayout={onContinueToLayout}
+            />
           </>
         )}
       </BlockStack>

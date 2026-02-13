@@ -6,7 +6,7 @@
  * Phase 3 - Dashboard Builder Wizard UI
  */
 
-import { BlockStack, Spinner, Banner, EmptyState, Box } from '@shopify/polaris';
+import { BlockStack, Spinner, Banner, EmptyState, Box, Button, Text } from '@shopify/polaris';
 import type { WidgetCatalogItem } from '../../../types/customDashboards';
 import { WidgetCatalogCard } from './WidgetCatalogCard';
 
@@ -16,6 +16,7 @@ interface WidgetGalleryProps {
   onAddWidget: (item: WidgetCatalogItem) => void;
   loading?: boolean;
   error?: string | null;
+  onRetry?: () => void;
 }
 
 export function WidgetGallery({
@@ -24,6 +25,7 @@ export function WidgetGallery({
   onAddWidget,
   loading,
   error,
+  onRetry,
 }: WidgetGalleryProps) {
   // Loading state
   if (loading) {
@@ -41,7 +43,14 @@ export function WidgetGallery({
   if (error) {
     return (
       <Banner tone="critical">
-        {error}
+        <BlockStack gap="300">
+          <Text as="p">{error}</Text>
+          {onRetry && (
+            <div>
+              <Button onClick={onRetry}>Retry</Button>
+            </div>
+          )}
+        </BlockStack>
       </Banner>
     );
   }

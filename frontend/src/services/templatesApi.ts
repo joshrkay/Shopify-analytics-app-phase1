@@ -21,6 +21,7 @@ import {
   handleResponse,
   buildQueryString,
 } from './apiUtils';
+import { API_ROUTES } from './apiRoutes';
 
 /**
  * List active templates filtered by billing tier and category.
@@ -31,7 +32,7 @@ export async function listTemplates(
   const queryString = buildQueryString(filters);
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/v1/templates${queryString}`,
+    `${API_BASE_URL}${API_ROUTES.templates}${queryString}`,
     {
       method: 'GET',
       headers,
@@ -48,7 +49,7 @@ export async function getTemplate(
 ): Promise<ReportTemplate> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/v1/templates/${templateId}`,
+    `${API_BASE_URL}${API_ROUTES.templates}/${templateId}`,
     {
       method: 'GET',
       headers,
@@ -70,7 +71,7 @@ export async function instantiateTemplate(
   const queryString = buildQueryString({ name: dashboardName });
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/v1/templates/${templateId}/instantiate${queryString}`,
+    `${API_BASE_URL}${API_ROUTES.templates}/${templateId}/instantiate${queryString}`,
     {
       method: 'POST',
       headers,

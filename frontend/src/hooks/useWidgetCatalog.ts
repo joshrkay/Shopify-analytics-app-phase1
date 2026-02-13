@@ -84,15 +84,15 @@ interface UseWidgetPreviewResult {
 
 export function useWidgetPreview(
   widgetId: string,
-  datasetId?: string,
+  datasetName?: string,
 ): UseWidgetPreviewResult {
   const queryFn = useCallback(
-    () => getWidgetPreview(widgetId, datasetId),
-    [widgetId, datasetId],
+    () => getWidgetPreview(widgetId, datasetName),
+    [widgetId, datasetName],
   );
 
   const query = useQueryLite({
-    queryKey: ['widget-preview', widgetId, datasetId],
+    queryKey: ['widget-preview', widgetId, datasetName],
     queryFn,
   });
 
