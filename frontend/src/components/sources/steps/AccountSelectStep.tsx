@@ -3,6 +3,7 @@
  *
  * Step 3 of the connection wizard.
  * Shows discoverable ad accounts with checkboxes for selection.
+ * Displays account ID, status badge, and last 30-day spend.
  *
  * Phase 3 — Subphase 3.4: Connection Wizard Steps 1-3
  */
@@ -16,6 +17,7 @@ import {
   Spinner,
   Banner,
   Box,
+  Badge,
 } from '@shopify/polaris';
 import type { AccountOption } from '../../../types/sourceConnection';
 
@@ -29,6 +31,11 @@ interface AccountSelectStepProps {
   onDeselectAll: () => void;
   onConfirm: () => void;
   onBack: () => void;
+}
+
+function formatSpend(spend: number | null): string {
+  if (spend === null) return 'No spend data';
+  return `$${spend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function AccountSelectStep({
@@ -97,12 +104,22 @@ export function AccountSelectStep({
                 borderRadius="200"
                 padding="300"
               >
-                <Checkbox
-                  label={account.accountName}
-                  helpText={`Account ID: ${account.accountId}`}
-                  checked={selectedAccountIds.includes(account.id)}
-                  onChange={() => onToggleAccount(account.id)}
-                />
+                <InlineStack align="space-between" blockAlign="center">
+                  <Checkbox
+                    label={account.accountName}
+                    helpText={`ID: ${account.accountId}`}
+                    checked={selectedAccountIds.includes(account.id)}
+                    onChange={() => onToggleAccount(account.id)}
+                  />
+                  <InlineStack gap="200" blockAlign="center">
+                    <Badge tone={account.isEnabled ? 'success' : undefined}>
+                      {account.isEnabled ? 'Active' : 'Inactive'}
+                    </Badge>
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      {formatSpend(account.last30dSpend)}
+                    </Text>
+                  </InlineStack>
+                </InlineStack>
               </Box>
             ))}
           </BlockStack>

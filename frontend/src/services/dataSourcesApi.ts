@@ -73,6 +73,7 @@ interface RawConnectionSummary {
   is_enabled: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
+  last_30d_spend?: number | null;
 }
 
 interface RawGlobalSyncSettings {
@@ -302,6 +303,7 @@ function normalizeAccountOption(raw: RawConnectionSummary): AccountOption {
     accountName: raw.account_name,
     platform: raw.platform,
     isEnabled: raw.is_enabled,
+    last30dSpend: raw.last_30d_spend ?? null,
   };
 }
 

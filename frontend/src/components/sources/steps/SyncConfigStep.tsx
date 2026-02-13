@@ -28,8 +28,8 @@ const RANGE_OPTIONS = [
 
 const FREQUENCY_OPTIONS = [
   { label: 'Every 1 hour (Recommended)', value: 'hourly' },
+  { label: 'Every 6 hours', value: 'six_hourly' },
   { label: 'Daily', value: 'daily' },
-  { label: 'Weekly', value: 'weekly' },
 ];
 
 export function SyncConfigStep({
