@@ -58,8 +58,8 @@ const mockShopifyPlatform: DataSourceDefinition = {
 };
 
 const mockAccounts = [
-  { id: 'acc-1', accountId: 'act_111', accountName: 'Campaign A', platform: 'meta_ads', isEnabled: true },
-  { id: 'acc-2', accountId: 'act_222', accountName: 'Campaign B', platform: 'meta_ads', isEnabled: false },
+  { id: 'acc-1', accountId: 'act_111', accountName: 'Campaign A', platform: 'meta_ads', isEnabled: true, last30dSpend: 500.00 },
+  { id: 'acc-2', accountId: 'act_222', accountName: 'Campaign B', platform: 'meta_ads', isEnabled: false, last30dSpend: null },
 ];
 
 beforeEach(() => {

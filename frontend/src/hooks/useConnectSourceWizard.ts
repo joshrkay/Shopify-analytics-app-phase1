@@ -63,6 +63,7 @@ const SYNC_POLL_INTERVAL = 3_000;
 // Map frequency to backend value
 const FREQUENCY_TO_BACKEND: Record<string, string> = {
   hourly: 'hourly',
+  six_hourly: 'six_hourly',
   daily: 'daily',
   weekly: 'weekly',
 };
@@ -361,7 +362,7 @@ export function useConnectSourceWizard(): UseConnectSourceWizardResult {
     try {
       const freq = FREQUENCY_TO_BACKEND[stateRef.current.syncConfig.frequency] ?? 'daily';
       await updateSyncConfig(stateRef.current.connectionId, {
-        sync_frequency: freq as 'hourly' | 'daily' | 'weekly',
+        sync_frequency: freq as 'hourly' | 'six_hourly' | 'daily' | 'weekly',
       });
       await triggerSync(stateRef.current.connectionId);
       setState((prev) => ({ ...prev, step: 'syncing', loading: false, error: null }));

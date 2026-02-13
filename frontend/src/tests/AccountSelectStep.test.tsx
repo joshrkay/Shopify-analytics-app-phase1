@@ -2,7 +2,7 @@
  * Tests for AccountSelectStep component
  *
  * Verifies account list rendering, checkbox selection, select/deselect all,
- * disabled state, and empty state.
+ * disabled state, empty state, status badges, and spend display.
  *
  * Phase 3 — Subphase 3.4: Connection Wizard Steps 1-3
  */
@@ -32,6 +32,7 @@ const mockAccounts: AccountOption[] = [
     accountName: 'Summer Campaign',
     platform: 'meta_ads',
     isEnabled: true,
+    last30dSpend: 1234.56,
   },
   {
     id: 'acc-2',
@@ -39,6 +40,7 @@ const mockAccounts: AccountOption[] = [
     accountName: 'Winter Sale',
     platform: 'meta_ads',
     isEnabled: false,
+    last30dSpend: null,
   },
 ];
 
@@ -83,6 +85,22 @@ describe('AccountSelectStep', () => {
     expect(onToggleAccount).toHaveBeenCalledWith('acc-2');
   });
 
+  it('shows account ID, status badge, and spend info', () => {
+    renderWithPolaris(<AccountSelectStep {...defaultProps} />);
+
+    // Account IDs
+    expect(screen.getByText(/act_111/)).toBeInTheDocument();
+    expect(screen.getByText(/act_222/)).toBeInTheDocument();
+
+    // Status badges
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText('Inactive')).toBeInTheDocument();
+
+    // Spend display
+    expect(screen.getByText('$1,234.56')).toBeInTheDocument();
+    expect(screen.getByText('No spend data')).toBeInTheDocument();
+  });
+
   it('calls onSelectAll when "Select All" is clicked', async () => {
     const user = userEvent.setup();
     const onSelectAll = vi.fn();
@@ -107,6 +125,14 @@ describe('AccountSelectStep', () => {
     expect(onDeselectAll).toHaveBeenCalled();
   });
 
+  it('"Connect (N)" button shows selected count', () => {
+    renderWithPolaris(
+      <AccountSelectStep {...defaultProps} selectedAccountIds={['acc-1', 'acc-2']} />,
+    );
+
+    expect(screen.getByRole('button', { name: /connect \(2\)/i })).toBeInTheDocument();
+  });
+
   it('disables Continue button when no accounts selected', () => {
     renderWithPolaris(
       <AccountSelectStep {...defaultProps} selectedAccountIds={[]} />,
@@ -119,19 +145,31 @@ describe('AccountSelectStep', () => {
     ).toBe(true);
   });
 
+  it('loading state shows spinner while fetching accounts', () => {
+    const { container } = renderWithPolaris(
+      <AccountSelectStep {...defaultProps} loading={true} />,
+    );
+
+    expect(container.querySelector('[class*="Spinner"]')).toBeTruthy();
+  });
+
+  it('"Back" button calls onBack', async () => {
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+
+    renderWithPolaris(
+      <AccountSelectStep {...defaultProps} onBack={onBack} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /back/i }));
+    expect(onBack).toHaveBeenCalled();
+  });
+
   it('shows empty state when accounts is empty', () => {
     renderWithPolaris(
       <AccountSelectStep {...defaultProps} accounts={[]} />,
     );
 
     expect(screen.getByText(/no accounts found/i)).toBeInTheDocument();
-  });
-
-  it('loading state shows spinner when fetching accounts', () => {
-    const { container } = renderWithPolaris(
-      <AccountSelectStep {...defaultProps} loading={true} />,
-    );
-
-    expect(container.querySelector('[class*="Spinner"]')).toBeTruthy();
   });
 });
