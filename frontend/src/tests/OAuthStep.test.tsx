@@ -112,4 +112,39 @@ describe('OAuthStep', () => {
 
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
+
+  it('shows 4-step OAuth explanation when not loading', () => {
+    renderWithPolaris(
+      <OAuthStep
+        platform={mockPlatform}
+        loading={false}
+        error={null}
+        onStartOAuth={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/click "authorize" below/i)).toBeInTheDocument();
+    expect(screen.getByText(/sign in and grant read-only access/i)).toBeInTheDocument();
+    expect(screen.getByText(/redirected back here automatically/i)).toBeInTheDocument();
+    expect(screen.getByText(/select which accounts to sync/i)).toBeInTheDocument();
+  });
+
+  it('retry button calls onStartOAuth again after error', async () => {
+    const user = userEvent.setup();
+    const onStartOAuth = vi.fn().mockResolvedValue(undefined);
+
+    renderWithPolaris(
+      <OAuthStep
+        platform={mockPlatform}
+        loading={false}
+        error="Authorization failed"
+        onStartOAuth={onStartOAuth}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /try again/i }));
+    expect(onStartOAuth).toHaveBeenCalledTimes(1);
+  });
 });

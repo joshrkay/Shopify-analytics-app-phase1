@@ -59,19 +59,20 @@ export function ConnectSourceWizard({
     onClose();
   }, [wizard, onClose]);
 
-  const handleDone = useCallback(() => {
-    if (state.connectionId && onSuccess) {
-      onSuccess(state.connectionId);
-    }
-    handleClose();
-  }, [state.connectionId, onSuccess, handleClose]);
-
   const handleViewDashboard = useCallback(() => {
     if (state.connectionId && onSuccess) {
       onSuccess(state.connectionId);
     }
     handleClose();
     navigate('/');
+  }, [state.connectionId, onSuccess, handleClose, navigate]);
+
+  const handleConnectAnother = useCallback(() => {
+    if (state.connectionId && onSuccess) {
+      onSuccess(state.connectionId);
+    }
+    handleClose();
+    navigate('/sources');
   }, [state.connectionId, onSuccess, handleClose, navigate]);
 
   const activePlatform = state.platform ?? platform;
@@ -145,13 +146,14 @@ export function ConnectSourceWizard({
               platform={activePlatform}
               progress={state.syncProgress}
               error={state.error}
+              onNavigateDashboard={handleViewDashboard}
             />
           )}
 
           {state.step === 'success' && state.connectionId && (
             <SuccessStep
               platform={activePlatform}
-              onDone={handleDone}
+              onConnectAnother={handleConnectAnother}
               onViewDashboard={handleViewDashboard}
             />
           )}
