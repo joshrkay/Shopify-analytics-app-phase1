@@ -165,7 +165,7 @@ function normalizeGlobalSettings(raw: RawGlobalSyncSettings): GlobalSyncSettings
 export async function getConnection(connectionId: string): Promise<DataSourceConnection> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/data-health/source/${connectionId}`,
+    `${API_BASE_URL}/api/data-health/source/${encodeURIComponent(connectionId)}`,
     { method: 'GET', headers },
   );
   const data = await handleResponse<RawSourceHealthResponse>(response);
@@ -182,7 +182,7 @@ export async function getConnection(connectionId: string): Promise<DataSourceCon
 export async function getAccounts(connectionId: string): Promise<ConnectedAccount> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/ad-platform-ingestion/connections/${connectionId}`,
+    `${API_BASE_URL}/api/ad-platform-ingestion/connections/${encodeURIComponent(connectionId)}`,
     { method: 'GET', headers },
   );
   const data = await handleResponse<RawConnectionSummary>(response);
@@ -198,7 +198,7 @@ export async function updateSelectedAccounts(
 ): Promise<void> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/ad-platform-ingestion/connections/${connectionId}/accounts`,
+    `${API_BASE_URL}/api/ad-platform-ingestion/connections/${encodeURIComponent(connectionId)}/accounts`,
     {
       method: 'PUT',
       headers,
@@ -218,7 +218,7 @@ export async function updateSelectedAccounts(
 export async function getSyncProgress(connectionId: string): Promise<SyncProgress> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/sync/state/${connectionId}`,
+    `${API_BASE_URL}/api/sync/state/${encodeURIComponent(connectionId)}`,
     { method: 'GET', headers },
   );
   const data = await handleResponse<RawSyncStateResponse>(response);
@@ -231,7 +231,7 @@ export async function getSyncProgress(connectionId: string): Promise<SyncProgres
 export async function triggerSync(connectionId: string): Promise<void> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/sync/trigger/${connectionId}`,
+    `${API_BASE_URL}/api/sync/trigger/${encodeURIComponent(connectionId)}`,
     {
       method: 'POST',
       headers,
@@ -311,7 +311,7 @@ function normalizeAccountOption(raw: RawConnectionSummary): AccountOption {
 export async function getAvailableAccounts(connectionId: string): Promise<AccountOption[]> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/ad-platform-ingestion/connections/${connectionId}/accounts`,
+    `${API_BASE_URL}/api/ad-platform-ingestion/connections/${encodeURIComponent(connectionId)}/accounts`,
     { method: 'GET', headers },
   );
   const data = await handleResponse<RawAccountListResponse>(response);
@@ -351,7 +351,7 @@ function derivePercentComplete(status: string, raw?: number): number {
 export async function getSyncProgressDetailed(connectionId: string): Promise<DetailedSyncProgress> {
   const headers = await createHeadersAsync();
   const response = await fetch(
-    `${API_BASE_URL}/api/sync/state/${connectionId}`,
+    `${API_BASE_URL}/api/sync/state/${encodeURIComponent(connectionId)}`,
     { method: 'GET', headers },
   );
   const data = await handleResponse<RawSyncProgressDetailed>(response);

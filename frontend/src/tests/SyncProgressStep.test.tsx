@@ -7,8 +7,9 @@
  */
 
 import React from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AppProvider } from '@shopify/polaris';
 import '@shopify/polaris/build/esm/styles.css';
 
@@ -92,5 +93,54 @@ describe('SyncProgressStep', () => {
     );
 
     expect(container.querySelector('[class*="Spinner"]')).toBeTruthy();
+  });
+
+  it('"Continue to Dashboard" button calls onNavigateDashboard', async () => {
+    const user = userEvent.setup();
+    const onNavigateDashboard = vi.fn();
+
+    renderWithPolaris(
+      <SyncProgressStep
+        platform={mockPlatform}
+        progress={mockProgress}
+        error={null}
+        onNavigateDashboard={onNavigateDashboard}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /continue to dashboard/i }));
+    expect(onNavigateDashboard).toHaveBeenCalled();
+  });
+
+  it('completed stages show ✓ icon', () => {
+    const completedProgress: DetailedSyncProgress = {
+      ...mockProgress,
+      status: 'completed',
+      lastSyncStatus: 'succeeded',
+      percentComplete: 100,
+    };
+
+    renderWithPolaris(
+      <SyncProgressStep platform={mockPlatform} progress={completedProgress} error={null} />,
+    );
+
+    const checkmarks = screen.getAllByText('✓');
+    expect(checkmarks.length).toBe(4);
+  });
+
+  it('in-progress stage shows ◎ icon', () => {
+    renderWithPolaris(
+      <SyncProgressStep platform={mockPlatform} progress={mockProgress} error={null} />,
+    );
+
+    expect(screen.getByText('◎')).toBeInTheDocument();
+  });
+
+  it('info banner shows explore message', () => {
+    renderWithPolaris(
+      <SyncProgressStep platform={mockPlatform} progress={mockProgress} error={null} />,
+    );
+
+    expect(screen.getByText(/feel free to explore/i)).toBeInTheDocument();
   });
 });

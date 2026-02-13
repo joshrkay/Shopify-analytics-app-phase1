@@ -126,4 +126,12 @@ describe('AccountSelectStep', () => {
 
     expect(screen.getByText(/no accounts found/i)).toBeInTheDocument();
   });
+
+  it('loading state shows spinner when fetching accounts', () => {
+    const { container } = renderWithPolaris(
+      <AccountSelectStep {...defaultProps} loading={true} />,
+    );
+
+    expect(container.querySelector('[class*="Spinner"]')).toBeTruthy();
+  });
 });

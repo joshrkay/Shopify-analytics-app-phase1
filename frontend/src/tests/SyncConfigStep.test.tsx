@@ -85,4 +85,27 @@ describe('SyncConfigStep', () => {
 
     expect(screen.getByText(/rate limits and costs/i)).toBeInTheDocument();
   });
+
+  it('"Back" button calls onBack', async () => {
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+
+    renderWithPolaris(<SyncConfigStep {...defaultProps} onBack={onBack} />);
+
+    await user.click(screen.getByRole('button', { name: /back/i }));
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it('frequency default is hourly', () => {
+    renderWithPolaris(<SyncConfigStep {...defaultProps} />);
+
+    const frequencySelect = screen.getByLabelText(/sync frequency/i) as HTMLSelectElement;
+    expect(frequencySelect.value).toBe('hourly');
+  });
+
+  it('shows sync time estimate', () => {
+    renderWithPolaris(<SyncConfigStep {...defaultProps} />);
+
+    expect(screen.getByText(/5-10 minutes/i)).toBeInTheDocument();
+  });
 });
