@@ -84,7 +84,7 @@ class SendGridEmailSender(EmailSender):
             "NOTIFICATION_FROM_EMAIL", "notifications@example.com"
         )
         self.from_name = from_name or os.getenv(
-            "NOTIFICATION_FROM_NAME", "Shopify Analytics"
+            "NOTIFICATION_FROM_NAME", "MarkInsight"
         )
 
         if not self.api_key:
@@ -208,7 +208,7 @@ class SMTPEmailSender(EmailSender):
             "NOTIFICATION_FROM_EMAIL", "notifications@example.com"
         )
         self.from_name = from_name or os.getenv(
-            "NOTIFICATION_FROM_NAME", "Shopify Analytics"
+            "NOTIFICATION_FROM_NAME", "MarkInsight"
         )
 
     async def send(self, message: EmailMessage) -> bool:

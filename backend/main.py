@@ -1,5 +1,5 @@
 """
-FastAPI application entry point for AI Growth Analytics.
+FastAPI application entry point for MarkInsight.
 
 Multi-tenant enforcement is enabled via TenantContextMiddleware.
 All routes require valid JWT with tenant context.
@@ -53,8 +53,8 @@ from src.api.routes import auth_refresh_jwt
 from src.api.routes import audit_logs
 from src.api.routes import audit_export
 from src.api.routes import shopify_embed_entry
+from src.api.routes import agency
 from src.api.routes import datasets
-from src.api.routes import templates
 from src.api.routes import custom_dashboards
 from src.api.routes import dashboard_shares
 from src.api.routes import report_templates
@@ -73,7 +73,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    logger.info("Starting AI Growth Analytics API")
+    logger.info("Starting MarkInsight API")
 
     # Check Clerk authentication environment variables
     # These are optional - app can run without them but auth will be disabled
@@ -137,12 +137,12 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Shutting down AI Growth Analytics API")
+    logger.info("Shutting down MarkInsight API")
 
 
 # Create FastAPI app
 app = FastAPI(
-    title="AI Growth Analytics API",
+    title="MarkInsight API",
     description="Multi-tenant analytics platform with strict tenant isolation",
     version="1.0.0",
     lifespan=lifespan
@@ -292,6 +292,14 @@ app.include_router(audit_export.router)
 app.include_router(custom_dashboards.router)
 app.include_router(dashboard_shares.router)
 app.include_router(report_templates.router)
+
+# Include dataset discovery + chart preview routes (requires authentication)
+# Phase 2A/2B - Dataset Discovery & Chart Preview
+app.include_router(datasets.router)
+
+# Include agency routes (requires authentication and agency role)
+# Story 5.5.1 - Agency Store Management
+app.include_router(agency.router)
 
 
 # ---------------------------------------------------------------------------

@@ -78,7 +78,7 @@ class OpenRouterClient:
             base_url or os.getenv("OPENROUTER_BASE_URL") or DEFAULT_BASE_URL
         ).rstrip("/")
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
-        self.app_name = app_name or os.getenv("OPENROUTER_APP_NAME", "AI Growth Analytics")
+        self.app_name = app_name or os.getenv("OPENROUTER_APP_NAME", "MarkInsight")
         self.site_url = site_url or os.getenv("OPENROUTER_SITE_URL")
 
         if not self.api_key:

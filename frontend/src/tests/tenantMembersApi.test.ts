@@ -15,47 +15,61 @@ import {
 } from '../services/tenantMembersApi';
 import { createHeadersAsync } from '../services/apiUtils';
 
+const TENANT_ID = 'tenant-123';
+
 beforeEach(() => {
   vi.clearAllMocks();
-  global.fetch = vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue([]) });
+  (globalThis as any).fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: vi.fn().mockResolvedValue({ members: [], total_count: 0, tenant_id: TENANT_ID }),
+  });
 });
 
 describe('tenantMembersApi', () => {
-  it('getTeamMembers sends auth header', async () => {
-    await getTeamMembers();
-    expect(global.fetch).toHaveBeenCalledWith('/api/tenant-members', expect.objectContaining({ headers: { Authorization: 'Bearer token' } }));
+  it('getTeamMembers sends auth header with tenant path', async () => {
+    await getTeamMembers(TENANT_ID);
+    expect((globalThis as any).fetch).toHaveBeenCalledWith(
+      `/api/tenants/${TENANT_ID}/members`,
+      expect.objectContaining({ headers: { Authorization: 'Bearer token' } }),
+    );
   });
 
   it('inviteMember validates email format', async () => {
-    await expect(inviteMember({ email: 'bad-email', role: 'admin' })).rejects.toThrow('valid email');
+    await expect(inviteMember(TENANT_ID, { email: 'bad-email', role: 'admin' })).rejects.toThrow('valid email');
   });
 
   it('inviteMember trims email before sending payload', async () => {
-    await inviteMember({ email: '  member@example.com  ', role: 'viewer' });
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/tenant-members/invite',
+    await inviteMember(TENANT_ID, { email: '  member@example.com  ', role: 'viewer' });
+    expect((globalThis as any).fetch).toHaveBeenCalledWith(
+      `/api/tenants/${TENANT_ID}/members`,
       expect.objectContaining({ body: JSON.stringify({ email: 'member@example.com', role: 'viewer' }) }),
     );
   });
 
-  it('updateMemberRole sends correct payload', async () => {
-    await updateMemberRole('m1', 'editor');
-    expect(global.fetch).toHaveBeenCalledWith('/api/tenant-members/m1/role', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ role: 'editor' }) }));
+  it('updateMemberRole sends PATCH with correct payload', async () => {
+    await updateMemberRole(TENANT_ID, 'm1', 'editor');
+    expect((globalThis as any).fetch).toHaveBeenCalledWith(
+      `/api/tenants/${TENANT_ID}/members/m1`,
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ role: 'editor' }) }),
+    );
   });
 
   it('removeMember calls correct endpoint', async () => {
-    await removeMember('m1');
-    expect(global.fetch).toHaveBeenCalledWith('/api/tenant-members/m1', expect.objectContaining({ method: 'DELETE' }));
+    await removeMember(TENANT_ID, 'm1');
+    expect((globalThis as any).fetch).toHaveBeenCalledWith(
+      `/api/tenants/${TENANT_ID}/members/m1`,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
   });
 
-  it('resendInvite calls correct endpoint', async () => {
-    await resendInvite('m1');
-    expect(global.fetch).toHaveBeenCalledWith('/api/tenant-members/m1/resend', expect.objectContaining({ method: 'POST' }));
+  it('resendInvite returns stub response (not yet implemented)', async () => {
+    const result = await resendInvite(TENANT_ID, 'm1');
+    expect(result).toEqual({ success: false });
   });
 
   it('All endpoints use Clerk token', async () => {
-    await getTeamMembers();
-    await updateMemberRole('m2', 'viewer');
+    await getTeamMembers(TENANT_ID);
+    await updateMemberRole(TENANT_ID, 'm2', 'viewer');
     expect(createHeadersAsync).toHaveBeenCalledTimes(2);
   });
 });

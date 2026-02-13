@@ -8,6 +8,7 @@ import {
 } from '../services/tenantMembersApi';
 import type { TeamInvite, TeamInviteRole, TeamMember } from '../types/settingsTypes';
 import { useMutationLite, useQueryClientLite, useQueryLite } from './queryClientLite';
+import { useAgency } from '../contexts/AgencyContext';
 
 const TEAM_MEMBERS_QUERY_KEY = ['settings', 'team-members'] as const;
 const REMOVE_UNDO_WINDOW_MS = 5000;
@@ -66,9 +67,13 @@ function flushPendingRemovals(_reason: string) {
 }
 
 export function useTeamMembers() {
+  const { activeTenantId } = useAgency();
   const query = useQueryLite({
     queryKey: TEAM_MEMBERS_QUERY_KEY,
-    queryFn: getTeamMembers,
+    queryFn: () => {
+      if (!activeTenantId) return Promise.resolve([]);
+      return getTeamMembers(activeTenantId);
+    },
   });
   const [membersSnapshot, setMembersSnapshot] = useState<TeamMember[]>(() => getTeamMembersStoreSnapshot());
 
@@ -98,11 +103,13 @@ export function useTeamMembers() {
 }
 
 export function useInviteMember() {
+  const { activeTenantId } = useAgency();
   const queryClient = useQueryClientLite();
   const optimisticIdRef = useRef(0);
 
   return useMutationLite({
     mutationFn: async (invite: TeamInvite) => {
+      if (!activeTenantId) throw new Error('No active tenant');
       const optimisticId = `optimistic-member-${optimisticIdRef.current++}`;
       const optimisticMember: TeamMember = {
         id: optimisticId,
@@ -117,7 +124,7 @@ export function useInviteMember() {
       replaceTeamMembersStore((members) => [...members, optimisticMember]);
 
       try {
-        const createdMember = await inviteMember(invite);
+        const createdMember = await inviteMember(activeTenantId, invite);
         replaceTeamMembersStore((members) => members.map((member) => (
           member.id === optimisticId ? createdMember : member
         )));
@@ -134,17 +141,19 @@ export function useInviteMember() {
 }
 
 export function useUpdateMemberRole() {
+  const { activeTenantId } = useAgency();
   const queryClient = useQueryClientLite();
 
   return useMutationLite({
     mutationFn: async ({ memberId, role }: { memberId: string; role: TeamInviteRole }) => {
+      if (!activeTenantId) throw new Error('No active tenant');
       const previousMembers = getTeamMembersStoreSnapshot();
       replaceTeamMembersStore((members) => members.map((member) => (
         member.id === memberId ? { ...member, role } : member
       )));
 
       try {
-        return await updateMemberRole(memberId, role);
+        return await updateMemberRole(activeTenantId, memberId, role);
       } catch (error) {
         setTeamMembersStoreSnapshot(previousMembers);
         throw error;
@@ -157,6 +166,7 @@ export function useUpdateMemberRole() {
 }
 
 export function useRemoveMember() {
+  const { activeTenantId } = useAgency();
   const queryClient = useQueryClientLite();
   const [undoMemberId, setUndoMemberId] = useState<string | null>(null);
 
@@ -190,6 +200,7 @@ export function useRemoveMember() {
 
   const mutation = useMutationLite({
     mutationFn: async (memberId: string) => {
+      if (!activeTenantId) throw new Error('No active tenant');
       const existingMembers = getTeamMembersStoreSnapshot();
       const index = existingMembers.findIndex((member) => member.id === memberId);
 
@@ -201,11 +212,12 @@ export function useRemoveMember() {
       replaceTeamMembersStore((members) => members.filter((member) => member.id !== memberId));
       setUndoMemberId(memberId);
 
+      const tenantId = activeTenantId;
       const result = await new Promise<{ success: boolean; undone?: boolean }>((resolve, reject) => {
         const timeoutId = setTimeout(async () => {
           pendingRemovalMap.delete(memberId);
           try {
-            const response = await removeMember(memberId);
+            const response = await removeMember(tenantId, memberId);
             resolve(response);
           } catch (error) {
             replaceTeamMembersStore((members) => {
@@ -246,8 +258,12 @@ export function useRemoveMember() {
 }
 
 export function useResendInvite() {
+  const { activeTenantId } = useAgency();
   return useMutationLite({
-    mutationFn: (memberId: string) => resendInvite(memberId),
+    mutationFn: (memberId: string) => {
+      if (!activeTenantId) return Promise.reject(new Error('No active tenant'));
+      return resendInvite(activeTenantId, memberId);
+    },
   });
 }
 

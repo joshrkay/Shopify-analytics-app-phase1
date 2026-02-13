@@ -72,6 +72,10 @@ services:
         sync: false
       - key: CLERK_WEBHOOK_SECRET
         sync: false
+      # Clerk Frontend API URL — REQUIRED for JWT verification via JWKS.
+      # Without this, the backend returns 503 for ALL protected endpoints.
+      - key: CLERK_FRONTEND_API
+        sync: false
       # Shopify API credentials (set via Render dashboard)
       - key: SHOPIFY_API_KEY
         sync: false
@@ -119,6 +123,8 @@ services:
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      - key: CLERK_FRONTEND_API
         sync: false
       - key: SHOPIFY_API_KEY
         sync: false
@@ -172,6 +178,8 @@ services:
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      - key: CLERK_FRONTEND_API
         sync: false
       - key: SHOPIFY_API_KEY
         sync: false

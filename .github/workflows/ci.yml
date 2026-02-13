@@ -40,8 +40,7 @@ jobs:
       
       - name: Set up test environment variables
         env:
-          FRONTEGG_CLIENT_ID: "test-client-id"
-          FRONTEGG_CLIENT_SECRET: "test-client-secret"
+          CLERK_FRONTEND_API: "test.clerk.accounts.dev"
           DATABASE_URL: "sqlite:///:memory:"
           REDIS_URL: "redis://localhost:6379"
           ENV: "test"
@@ -51,8 +50,7 @@ jobs:
       - name: Run Epic 0 Quality Gate Tests
         working-directory: ./backend
         env:
-          FRONTEGG_CLIENT_ID: "test-client-id"
-          FRONTEGG_CLIENT_SECRET: "test-client-secret"
+          CLERK_FRONTEND_API: "test.clerk.accounts.dev"
           DATABASE_URL: "sqlite:///:memory:"
           REDIS_URL: "redis://localhost:6379"
           ENV: "test"
@@ -71,8 +69,7 @@ jobs:
       - name: Run Tenant Isolation Tests
         working-directory: ./backend
         env:
-          FRONTEGG_CLIENT_ID: "test-client-id"
-          FRONTEGG_CLIENT_SECRET: "test-client-secret"
+          CLERK_FRONTEND_API: "test.clerk.accounts.dev"
           DATABASE_URL: "sqlite:///:memory:"
           REDIS_URL: "redis://localhost:6379"
           ENV: "test"
@@ -135,8 +132,7 @@ jobs:
       - name: Run all platform tests
         working-directory: ./backend
         env:
-          FRONTEGG_CLIENT_ID: "test-client-id"
-          FRONTEGG_CLIENT_SECRET: "test-client-secret"
+          CLERK_FRONTEND_API: "test.clerk.accounts.dev"
           DATABASE_URL: "sqlite:///:memory:"
           REDIS_URL: "redis://localhost:6379"
           ENV: "test"
@@ -202,8 +198,7 @@ jobs:
           DATABASE_URL: "postgresql://test:test@localhost:5432/test_billing_db"
           SHOPIFY_API_SECRET: "test-webhook-secret-for-hmac"
           SHOPIFY_BILLING_TEST_MODE: "true"
-          FRONTEGG_CLIENT_ID: "test-client-id"
-          FRONTEGG_CLIENT_SECRET: "test-client-secret"
+          CLERK_FRONTEND_API: "test.clerk.accounts.dev"
           REDIS_URL: "redis://localhost:6379"
           ENV: "test"
           PYTHONPATH: "${{ github.workspace }}/backend"
@@ -225,8 +220,7 @@ jobs:
         working-directory: ./backend
         env:
           DATABASE_URL: "postgresql://test:test@localhost:5432/test_billing_db"
-          FRONTEGG_CLIENT_ID: "test-client-id"
-          FRONTEGG_CLIENT_SECRET: "test-client-secret"
+          CLERK_FRONTEND_API: "test.clerk.accounts.dev"
           ENV: "test"
           PYTHONPATH: "${{ github.workspace }}/backend"
         run: |
