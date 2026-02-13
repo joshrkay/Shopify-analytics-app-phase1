@@ -36,13 +36,12 @@ export function WizardTopToolbar({
   const isPreviewStep = currentStep === 'preview';
 
   return (
+    <div style={{ position: 'sticky', top: 0, zIndex: 400 }}>
     <Box
       background="bg-surface"
       padding="400"
       borderBlockEndWidth="025"
       borderColor="border"
-      position="sticky"
-      style={{ top: 0, zIndex: 400 }}
     >
       <InlineStack align="space-between" blockAlign="center">
         {/* Left section: Dashboard name + widget count */}
@@ -56,7 +55,7 @@ export function WizardTopToolbar({
             autoComplete="off"
             connectedLeft={
               <div style={{ padding: '0 var(--p-space-300)' }}>
-                <Badge tone="info">{widgetCount} widgets selected</Badge>
+                <Badge tone="info">{`${widgetCount} widgets selected`}</Badge>
               </div>
             }
           />
@@ -86,5 +85,6 @@ export function WizardTopToolbar({
         )}
       </InlineStack>
     </Box>
+    </div>
   );
 }

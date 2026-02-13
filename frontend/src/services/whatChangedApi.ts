@@ -20,7 +20,7 @@ import type {
   ConnectorStatusChangesResponse,
   ChangeEventsFilters,
 } from '../types/whatChanged';
-import { API_BASE_URL, createHeaders, handleResponse, buildQueryString } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse, buildQueryString } from './apiUtils';
 
 /**
  * List data change events with optional filtering.
@@ -34,7 +34,7 @@ export async function listChangeEvents(
   const queryString = buildQueryString(filters);
   const response = await fetch(`${API_BASE_URL}/api/what-changed${queryString}`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ChangeEventsListResponse>(response);
 }
@@ -53,7 +53,7 @@ export async function getSummary(days: number = 7): Promise<WhatChangedSummary> 
     `${API_BASE_URL}/api/what-changed/summary?${params.toString()}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<WhatChangedSummary>(response);
@@ -67,7 +67,7 @@ export async function getSummary(days: number = 7): Promise<WhatChangedSummary> 
 export async function getFreshnessStatus(): Promise<DataFreshness> {
   const response = await fetch(`${API_BASE_URL}/api/what-changed/freshness`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<DataFreshness>(response);
 }
@@ -91,7 +91,7 @@ export async function getRecentSyncs(
     `${API_BASE_URL}/api/what-changed/recent-syncs?${params.toString()}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<RecentSyncsResponse>(response);
@@ -116,7 +116,7 @@ export async function getAIActions(
     `${API_BASE_URL}/api/what-changed/ai-actions?${params.toString()}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<AIActionsResponse>(response);
@@ -138,7 +138,7 @@ export async function getConnectorStatusChanges(
     `${API_BASE_URL}/api/what-changed/connector-status?${params.toString()}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<ConnectorStatusChangesResponse>(response);

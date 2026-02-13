@@ -17,7 +17,7 @@ import type {
   AuditTrailResponse,
   PendingCountResponse,
 } from '../types/actionProposals';
-import { API_BASE_URL, createHeaders, handleResponse, buildQueryString } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse, buildQueryString } from './apiUtils';
 
 /**
  * List action proposals with optional filtering.
@@ -31,7 +31,7 @@ export async function listActionProposals(
   const queryString = buildQueryString(filters);
   const response = await fetch(`${API_BASE_URL}/api/action-proposals${queryString}`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ActionProposalsListResponse>(response);
 }
@@ -45,7 +45,7 @@ export async function listActionProposals(
 export async function getActionProposal(proposalId: string): Promise<ActionProposal> {
   const response = await fetch(`${API_BASE_URL}/api/action-proposals/${proposalId}`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ActionProposal>(response);
 }
@@ -75,7 +75,7 @@ export async function approveProposal(
     `${API_BASE_URL}/api/action-proposals/${proposalId}/approve`,
     {
       method: 'POST',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<ProposalActionResponse>(response);
@@ -99,7 +99,7 @@ export async function rejectProposal(
     `${API_BASE_URL}/api/action-proposals/${proposalId}/reject`,
     {
       method: 'POST',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
       body: reason ? JSON.stringify({ reason }) : undefined,
     }
   );
@@ -121,7 +121,7 @@ export async function getProposalAuditTrail(
     `${API_BASE_URL}/api/action-proposals/${proposalId}/audit`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<AuditTrailResponse>(response);
@@ -137,7 +137,7 @@ export async function getProposalAuditTrail(
 export async function getPendingProposalsCount(): Promise<number> {
   const response = await fetch(`${API_BASE_URL}/api/action-proposals/stats/pending`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   const data = await handleResponse<PendingCountResponse>(response);
   return data.pending_count;

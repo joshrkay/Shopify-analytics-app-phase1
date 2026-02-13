@@ -85,7 +85,7 @@ export function ConnectSourceWizard({
       open={open}
       onClose={handleClose}
       title={title}
-      large
+      size="large"
       primaryAction={undefined}
     >
       <Modal.Section>

@@ -8,7 +8,7 @@
  * Phase 4A - Version History UI
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type {
   Dashboard,
   DashboardVersion,

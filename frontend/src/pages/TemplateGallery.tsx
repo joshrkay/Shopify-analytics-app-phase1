@@ -100,7 +100,7 @@ export function TemplateGallery() {
     <Page
       title="Template Gallery"
       subtitle="Start with a pre-built template to quickly create your dashboard"
-      breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
+      backAction={{ content: 'Dashboards', url: '/dashboards' }}
     >
       <Layout>
         <Layout.Section>

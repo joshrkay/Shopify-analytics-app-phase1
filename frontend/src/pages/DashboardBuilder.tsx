@@ -14,7 +14,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { useParams, useBlocker } from 'react-router-dom';
 import { Page, SkeletonPage, Banner, Layout, Modal, Text } from '@shopify/polaris';
 import { DashboardBuilderProvider, useDashboardBuilder } from '../contexts/DashboardBuilderContext';
 import { DashboardToolbar } from '../components/dashboards/DashboardToolbar';
@@ -37,7 +37,6 @@ function BuilderContent() {
     clearError,
     refreshDashboard,
   } = useDashboardBuilder();
-  const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -54,7 +53,7 @@ function BuilderContent() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  const handleRestore = useCallback((restored: Dashboard) => {
+  const handleRestore = useCallback((_restored: Dashboard) => {
     // Refresh the builder context to pick up restored state
     if (refreshDashboard) {
       refreshDashboard();
@@ -67,7 +66,7 @@ function BuilderContent() {
     return (
       <Page
         title="Dashboard"
-        breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
+        backAction={{ content: 'Dashboards', url: '/dashboards' }}
       >
         <Banner tone="critical" title="Failed to load dashboard">
           {loadError}
@@ -92,7 +91,7 @@ function BuilderContent() {
         { content: 'Settings', onAction: () => setShowSettings(true) },
         { content: 'History', onAction: () => setShowHistory(true) },
       ]}
-      breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
+      backAction={{ content: 'Dashboards', url: '/dashboards' }}
     >
       {saveError && (
         <Banner

@@ -18,7 +18,7 @@ interface SharedBadgeProps {
 export function SharedBadge({ accessLevel, shareCount }: SharedBadgeProps) {
   if (accessLevel === 'owner') {
     if (!shareCount || shareCount === 0) return null;
-    return <Badge tone="info">Shared ({shareCount})</Badge>;
+    return <Badge tone="info">{`Shared (${shareCount})`}</Badge>;
   }
 
   if (accessLevel === 'admin') {

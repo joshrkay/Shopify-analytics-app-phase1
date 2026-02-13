@@ -8,7 +8,7 @@
  * Phase 2.3 - Added category icons for visual richness
  */
 
-import { Card, BlockStack, Text, Button, InlineStack, Divider, Icon } from '@shopify/polaris';
+import { Card, BlockStack, Text, Button, Divider } from '@shopify/polaris';
 import { LayoutSectionIcon } from '@shopify/polaris-icons';
 import type { ChartType, Report } from '../../../types/customDashboards';
 import { getChartTypeLabel } from '../../../types/customDashboards';
@@ -51,12 +51,9 @@ export function CategorySidebar({
             variant={selectedCategory === undefined ? 'primary' : 'plain'}
             onClick={() => onSelectCategory(undefined)}
             fullWidth
-            textAlign="left"
+            icon={LayoutSectionIcon}
           >
-            <InlineStack gap="200" blockAlign="center">
-              <Icon source={LayoutSectionIcon} />
-              <Text as="span">All ({String(widgetCounts.all || 0)})</Text>
-            </InlineStack>
+            {`All (${widgetCounts.all || 0})`}
           </Button>
 
           {/* Chart type buttons */}
@@ -66,12 +63,9 @@ export function CategorySidebar({
               variant={selectedCategory === type ? 'primary' : 'plain'}
               onClick={() => onSelectCategory(type)}
               fullWidth
-              textAlign="left"
+              icon={getChartIcon(type)}
             >
-              <InlineStack gap="200" blockAlign="center">
-                <Icon source={getChartIcon(type)} />
-                <Text as="span">{getChartTypeLabel(type)} ({String(widgetCounts[type] || 0)})</Text>
-              </InlineStack>
+              {`${getChartTypeLabel(type)} (${widgetCounts[type] || 0})`}
             </Button>
           ))}
         </BlockStack>

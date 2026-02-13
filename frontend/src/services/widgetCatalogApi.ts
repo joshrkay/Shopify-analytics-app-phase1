@@ -61,7 +61,11 @@ function toPreviewRequest(widget: WidgetCatalogItem, datasetName: string): Chart
     dataset_name: datasetName,
     metrics,
     dimensions: config.dimensions ?? [],
-    filters: config.filters ?? [],
+    filters: (config.filters ?? []).map((f) => ({
+      column: f.column,
+      operator: f.operator,
+      value: f.value as string | number | boolean | null,
+    })),
     time_range: config.time_range ?? '30',
     time_grain: config.time_grain,
     viz_type: widget.chart_type,

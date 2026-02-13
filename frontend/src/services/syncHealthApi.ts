@@ -141,7 +141,7 @@ export interface MerchantDataHealthResponse {
 // API Configuration
 // =============================================================================
 
-import { API_BASE_URL, createHeaders, handleResponse } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse } from './apiUtils';
 
 // =============================================================================
 // Sync Health API Functions
@@ -155,7 +155,7 @@ import { API_BASE_URL, createHeaders, handleResponse } from './apiUtils';
 export async function getSyncHealthSummary(): Promise<SyncHealthSummary> {
   const response = await fetch(`${API_BASE_URL}/api/sync-health/summary`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<SyncHealthSummary>(response);
 }
@@ -173,7 +173,7 @@ export async function getConnectorHealth(
     `${API_BASE_URL}/api/sync-health/connector/${connectorId}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<ConnectorHealth>(response);
@@ -204,7 +204,7 @@ export async function getIncidents(
 
   const response = await fetch(url, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<DQIncident[]>(response);
 }
@@ -222,7 +222,7 @@ export async function acknowledgeIncident(
     `${API_BASE_URL}/api/sync-health/incidents/${incidentId}/acknowledge`,
     {
       method: 'POST',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<DQIncident>(response);
@@ -236,7 +236,7 @@ export async function acknowledgeIncident(
 export async function getDashboardBlockStatus(): Promise<DashboardBlockStatus> {
   const response = await fetch(`${API_BASE_URL}/api/sync-health/dashboard-block`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<DashboardBlockStatus>(response);
 }
@@ -254,7 +254,7 @@ export async function getDashboardBlockStatus(): Promise<DashboardBlockStatus> {
 export async function getCompactHealth(): Promise<CompactHealth> {
   const response = await fetch(`${API_BASE_URL}/api/sync-health/compact`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<CompactHealth>(response);
 }
@@ -271,7 +271,7 @@ export async function getCompactHealth(): Promise<CompactHealth> {
 export async function getActiveIncidents(): Promise<ActiveIncidentsResponse> {
   const response = await fetch(`${API_BASE_URL}/api/sync-health/incidents/active`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<ActiveIncidentsResponse>(response);
 }
@@ -302,7 +302,7 @@ export async function estimateBackfill(
     `${API_BASE_URL}/api/sync-health/connectors/${connectorId}/backfill/estimate?${params.toString()}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<BackfillEstimate>(response);
@@ -323,7 +323,7 @@ export async function triggerBackfill(
     `${API_BASE_URL}/api/sync-health/connectors/${connectorId}/backfill`,
     {
       method: 'POST',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
       body: JSON.stringify(request),
     }
   );
@@ -343,7 +343,7 @@ export async function getBackfillStatus(
     `${API_BASE_URL}/api/sync-health/connectors/${connectorId}/backfill/status`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<BackfillResponse>(response);
@@ -459,7 +459,7 @@ export function calculateBackfillDateRange(
 export async function getMerchantDataHealth(): Promise<MerchantDataHealthResponse> {
   const response = await fetch(`${API_BASE_URL}/api/data-health/merchant`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<MerchantDataHealthResponse>(response);
 }

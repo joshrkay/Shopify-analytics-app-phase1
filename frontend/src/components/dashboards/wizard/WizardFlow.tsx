@@ -16,7 +16,6 @@ import {
   BlockStack,
   InlineStack,
   Box,
-  TextField,
   Text,
   Banner,
 } from '@shopify/polaris';
@@ -28,8 +27,7 @@ import { BuilderToolbar } from './BuilderToolbar';
 import { WizardTopToolbar } from './WizardTopToolbar';
 import { CategorySidebar } from './CategorySidebar';
 import { WidgetGallery } from './WidgetGallery';
-import { WizardGrid } from './WizardGrid';
-import { LayoutControls } from './LayoutControls';
+import { LayoutCustomizer } from '../../builder/LayoutCustomizer';
 import { PreviewGrid } from './PreviewGrid';
 import { PreviewControls } from './PreviewControls';
 
@@ -45,7 +43,6 @@ export function WizardFlow() {
     addCatalogWidget,
     removeWizardWidget,
     setWizardDashboardName,
-    setWizardDashboardDescription,
     setPreviewDateRange,
     saveDashboard,
     exitWizardMode,
@@ -198,48 +195,7 @@ export function WizardFlow() {
         );
 
       case 'customize':
-        return (
-          <BlockStack gap="400">
-            {/* Info Banner - User Guidance */}
-            <Banner tone="info">
-              <BlockStack gap="100">
-                <Text as="p" variant="bodyMd" fontWeight="semibold">
-                  Customize Your Layout
-                </Text>
-                <Text as="p" variant="bodySm">
-                  Drag widgets to reorder them or resize them by dragging the edges.
-                  The dashboard will auto-arrange based on widget sizes.
-                </Text>
-              </BlockStack>
-            </Banner>
-
-            {/* Dashboard Name */}
-            <TextField
-              label="Dashboard name"
-              value={wizardState.dashboardName}
-              onChange={setWizardDashboardName}
-              placeholder="e.g., Sales Performance Dashboard"
-              autoComplete="off"
-              requiredIndicator
-            />
-
-            {/* Dashboard Description */}
-            <TextField
-              label="Description (optional)"
-              value={wizardState.dashboardDescription}
-              onChange={setWizardDashboardDescription}
-              placeholder="Add a description for your dashboard"
-              autoComplete="off"
-              multiline={3}
-            />
-
-            {/* Layout Controls */}
-            <LayoutControls />
-
-            {/* Visual Grid with Drag & Drop */}
-            <WizardGrid />
-          </BlockStack>
-        );
+        return <LayoutCustomizer />;
 
       case 'preview':
         return (

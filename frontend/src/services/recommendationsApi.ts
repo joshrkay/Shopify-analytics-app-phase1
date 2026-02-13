@@ -15,7 +15,7 @@ import type {
   RecommendationActionResponse,
   RecommendationsFilters,
 } from '../types/recommendations';
-import { API_BASE_URL, createHeaders, handleResponse, buildQueryString } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse, buildQueryString } from './apiUtils';
 
 /**
  * List AI recommendations with optional filtering.
@@ -29,7 +29,7 @@ export async function listRecommendations(
   const queryString = buildQueryString(filters);
   const response = await fetch(`${API_BASE_URL}/api/recommendations${queryString}`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<RecommendationsListResponse>(response);
 }
@@ -47,7 +47,7 @@ export async function getRecommendation(
     `${API_BASE_URL}/api/recommendations/${recommendationId}`,
     {
       method: 'GET',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<Recommendation>(response);
@@ -83,7 +83,7 @@ export async function acceptRecommendation(
     `${API_BASE_URL}/api/recommendations/${recommendationId}/accept`,
     {
       method: 'PATCH',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<RecommendationActionResponse>(response);
@@ -104,7 +104,7 @@ export async function dismissRecommendation(
     `${API_BASE_URL}/api/recommendations/${recommendationId}/dismiss`,
     {
       method: 'PATCH',
-      headers: createHeaders(),
+      headers: await createHeadersAsync(),
     }
   );
   return handleResponse<RecommendationActionResponse>(response);
@@ -121,7 +121,7 @@ export async function dismissRecommendationsBatch(
 ): Promise<{ status: string; updated: number }> {
   const response = await fetch(`${API_BASE_URL}/api/recommendations/batch/dismiss`, {
     method: 'POST',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
     body: JSON.stringify(recommendationIds),
   });
   return handleResponse<{ status: string; updated: number }>(response);

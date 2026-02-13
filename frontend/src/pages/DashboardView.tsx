@@ -147,7 +147,7 @@ export function DashboardView() {
     return (
       <Page
         title="Dashboard"
-        breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
+        backAction={{ content: 'Dashboards', url: '/dashboards' }}
       >
         <Banner
           tone="critical"
@@ -201,7 +201,7 @@ export function DashboardView() {
       subtitle={dashboard.description || undefined}
       titleMetadata={statusBadge}
       secondaryActions={secondaryActions}
-      breadcrumbs={[{ content: 'Dashboards', url: '/dashboards' }]}
+      backAction={{ content: 'Dashboards', url: '/dashboards' }}
     >
       <Layout>
         <Layout.Section>

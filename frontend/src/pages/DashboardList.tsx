@@ -35,8 +35,6 @@ import type {
 } from '../types/customDashboards';
 import {
   listDashboards,
-  deleteDashboard,
-  duplicateDashboard,
   getDashboardCount,
 } from '../services/customDashboardsApi';
 import type { DashboardCountResponse } from '../types/customDashboards';
@@ -282,7 +280,7 @@ export function DashboardList() {
   };
 
   // IndexTable headings
-  const headings = [
+  const headings: [{ title: string }, ...{ title: string }[]] = [
     { title: 'Name' },
     { title: 'Status' },
     { title: 'Reports' },

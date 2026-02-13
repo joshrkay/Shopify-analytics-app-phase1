@@ -16,7 +16,7 @@ import type {
   InsightActionResponse,
   InsightsFilters,
 } from '../types/insights';
-import { API_BASE_URL, createHeaders, handleResponse, buildQueryString } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse, buildQueryString } from './apiUtils';
 
 /**
  * List AI insights with optional filtering.
@@ -30,7 +30,7 @@ export async function listInsights(
   const queryString = buildQueryString(filters);
   const response = await fetch(`${API_BASE_URL}/api/insights${queryString}`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<InsightsListResponse>(response);
 }
@@ -44,7 +44,7 @@ export async function listInsights(
 export async function getInsight(insightId: string): Promise<Insight> {
   const response = await fetch(`${API_BASE_URL}/api/insights/${insightId}`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<Insight>(response);
 }
@@ -60,7 +60,7 @@ export async function markInsightRead(
 ): Promise<InsightActionResponse> {
   const response = await fetch(`${API_BASE_URL}/api/insights/${insightId}/read`, {
     method: 'PATCH',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<InsightActionResponse>(response);
 }
@@ -78,7 +78,7 @@ export async function dismissInsight(
 ): Promise<InsightActionResponse> {
   const response = await fetch(`${API_BASE_URL}/api/insights/${insightId}/dismiss`, {
     method: 'PATCH',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
   return handleResponse<InsightActionResponse>(response);
 }
@@ -94,7 +94,7 @@ export async function markInsightsReadBatch(
 ): Promise<{ status: string; updated: number }> {
   const response = await fetch(`${API_BASE_URL}/api/insights/batch/read`, {
     method: 'POST',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
     body: JSON.stringify(insightIds),
   });
   return handleResponse<{ status: string; updated: number }>(response);
