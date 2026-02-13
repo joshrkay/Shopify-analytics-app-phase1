@@ -21,6 +21,7 @@ from src.services.billing_service import (
 )
 from src.entitlements.policy import EntitlementPolicy, BillingState
 from src.models.subscription import Subscription
+from src.services.billing_entitlements import BILLING_TIER_FEATURES, BillingFeature
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +374,6 @@ async def get_entitlements(
         plan_name = subscription_info.plan_name if subscription_info else None
         
         # Build feature entitlements (check common features)
-        from src.services.billing_entitlements import BillingFeature
         feature_keys = [
             BillingFeature.AGENCY_ACCESS,
             BillingFeature.ADVANCED_DASHBOARDS,
@@ -383,24 +383,41 @@ async def get_entitlements(
             BillingFeature.AI_ACTIONS,
             BillingFeature.CUSTOM_REPORTS,
         ]
-        
+
         features = {}
-        for feature_key in feature_keys:
-            result = policy.check_feature_entitlement(
-                tenant_id=tenant_ctx.tenant_id,
-                feature=feature_key,
-                subscription=subscription,
-            )
-            features[feature_key] = FeatureEntitlementResponse(
-                feature=feature_key,
-                is_entitled=result.is_entitled,
-                billing_state=result.billing_state.value,
-                plan_id=result.plan_id,
-                plan_name=plan_name if result.plan_id == subscription_info.plan_id else None,
-                reason=result.reason,
-                required_plan=result.required_plan,
-                grace_period_ends_on=result.grace_period_ends_on.isoformat() if result.grace_period_ends_on else None,
-            )
+        if subscription is None:
+            # No subscription row yet: fall back to static billing-tier matrix
+            # so free-tier tenants still get expected baseline feature access.
+            tier_features = BILLING_TIER_FEATURES.get(tenant_ctx.billing_tier or 'free', {})
+            for feature_key in feature_keys:
+                is_enabled = bool(tier_features.get(feature_key, False))
+                features[feature_key] = FeatureEntitlementResponse(
+                    feature=feature_key,
+                    is_entitled=is_enabled,
+                    billing_state=billing_state.value,
+                    plan_id=subscription_info.plan_id,
+                    plan_name=plan_name,
+                    reason=None if is_enabled else f"Feature '{feature_key}' not available on {tenant_ctx.billing_tier or 'free'} tier",
+                    required_plan='growth' if not is_enabled and feature_key == BillingFeature.CUSTOM_REPORTS else None,
+                    grace_period_ends_on=None,
+                )
+        else:
+            for feature_key in feature_keys:
+                result = policy.check_feature_entitlement(
+                    tenant_id=tenant_ctx.tenant_id,
+                    feature=feature_key,
+                    subscription=subscription,
+                )
+                features[feature_key] = FeatureEntitlementResponse(
+                    feature=feature_key,
+                    is_entitled=result.is_entitled,
+                    billing_state=result.billing_state.value,
+                    plan_id=result.plan_id,
+                    plan_name=plan_name if result.plan_id == subscription_info.plan_id else None,
+                    reason=result.reason,
+                    required_plan=result.required_plan,
+                    grace_period_ends_on=result.grace_period_ends_on.isoformat() if result.grace_period_ends_on else None,
+                )
         
         return EntitlementsResponse(
             billing_state=billing_state.value,

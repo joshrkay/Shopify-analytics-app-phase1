@@ -4,7 +4,7 @@
  * Handles API calls for feature entitlements and billing state.
  */
 
-import { API_BASE_URL, createHeaders, handleResponse } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, handleResponse } from './apiUtils';
 
 /**
  * Feature entitlement information.
@@ -35,9 +35,9 @@ export interface EntitlementsResponse {
  * Fetch current entitlements for the tenant.
  */
 export async function fetchEntitlements(): Promise<EntitlementsResponse> {
-  const response = await fetch(`${API_BASE_URL}/billing/entitlements`, {
+  const response = await fetch(`${API_BASE_URL}/api/billing/entitlements`, {
     method: 'GET',
-    headers: createHeaders(),
+    headers: await createHeadersAsync(),
   });
 
   return handleResponse<EntitlementsResponse>(response);

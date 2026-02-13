@@ -129,13 +129,40 @@ export function createHeaders(): HeadersInit {
  * Extracts error details from the response body.
  */
 export async function handleResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.detail || `API error: ${response.status}`) as ApiError;
+    let errorDetail = `API error: ${response.status}`;
+
+    if (isJson) {
+      const errorData = await response.json().catch(() => ({}));
+      errorDetail = errorData.detail || errorDetail;
+    } else {
+      const raw = await response.text().catch(() => '');
+      if (raw.includes('<!DOCTYPE') || raw.includes('<html')) {
+        errorDetail = 'Received HTML instead of API JSON. Check API base URL and backend deployment.';
+      }
+    }
+
+    const error = new Error(errorDetail) as ApiError;
     error.status = response.status;
-    error.detail = errorData.detail;
+    error.detail = errorDetail;
     throw error;
   }
+
+  if (!isJson) {
+    const raw = await response.text().catch(() => '');
+    const error = new Error(
+      raw.includes('<!DOCTYPE') || raw.includes('<html')
+        ? 'Received HTML instead of API JSON. Check API base URL and backend deployment.'
+        : 'Unexpected non-JSON response from API.',
+    ) as ApiError;
+    error.status = response.status;
+    error.detail = error.message;
+    throw error;
+  }
+
   return response.json();
 }
 

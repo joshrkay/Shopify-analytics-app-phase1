@@ -388,6 +388,7 @@ class TenantContextMiddleware:
         request: Request,
         user_id: str,
         jwt_org_id: str,
+        jwt_org_role: str,
         jwt_active_tenant_id: str,
         jwt_allowed_tenants: list[str],
     ) -> tuple[str, list[str]]:
@@ -418,6 +419,7 @@ class TenantContextMiddleware:
         from src.models.user import User
         from src.models.user_tenant_roles import UserTenantRole
         from src.models.tenant import Tenant, TenantStatus
+        from src.services.clerk_sync_service import ClerkSyncService
 
         try:
             db = next(get_db_session_sync())
@@ -433,9 +435,31 @@ class TenantContextMiddleware:
             ).first()
 
             if not user:
-                # User not in DB yet - use JWT-based tenant_id
-                # User will be created on first authenticated request
-                return jwt_active_tenant_id, []
+                # Webhook events can lag behind first authenticated requests.
+                # Provision the same minimum records that membership webhook flow creates.
+                sync = ClerkSyncService(db)
+                sync.get_or_create_user(clerk_user_id=user_id)
+                sync.sync_tenant_from_org(
+                    clerk_org_id=jwt_org_id,
+                    name=f"Tenant {jwt_org_id[-8:]}",
+                    source="lazy_sync",
+                )
+                sync.sync_membership(
+                    clerk_user_id=user_id,
+                    clerk_org_id=jwt_org_id,
+                    role=jwt_org_role or "org:member",
+                    source="lazy_sync",
+                    assigned_by="system",
+                )
+                db.commit()
+
+                user = db.query(User).filter(
+                    User.clerk_user_id == user_id,
+                    User.is_active == True,
+                ).first()
+
+                if not user:
+                    return jwt_active_tenant_id, []
 
             # Get all active tenant roles for this user
             roles = db.query(UserTenantRole).filter(
@@ -453,17 +477,42 @@ class TenantContextMiddleware:
                 if tenant:
                     db_tenant_ids.add(tenant.id)
 
-            # Merge with JWT-based allowed_tenants
-            all_tenant_ids = list(set(jwt_allowed_tenants) | db_tenant_ids)
+            # Normalize JWT tenant identifiers. JWT may provide Clerk org IDs,
+            # while DB authorization expects internal Tenant.id values.
+            normalized_jwt_tenants = set()
+            for jwt_tid in jwt_allowed_tenants:
+                mapped_tenant = db.query(Tenant).filter(
+                    Tenant.status == TenantStatus.ACTIVE,
+                    (Tenant.id == jwt_tid) | (Tenant.clerk_org_id == jwt_tid),
+                ).first()
+                if mapped_tenant:
+                    normalized_jwt_tenants.add(mapped_tenant.id)
 
-            # If no tenants at all, use JWT org_id
+            # Merge with DB-based tenant IDs
+            all_tenant_ids = list(normalized_jwt_tenants | db_tenant_ids)
+
+            # Normalize active tenant claim (internal id or Clerk org id).
+            resolved_active_tenant_id = jwt_active_tenant_id
+            mapped_active = db.query(Tenant).filter(
+                Tenant.status == TenantStatus.ACTIVE,
+                (Tenant.id == jwt_active_tenant_id) | (Tenant.clerk_org_id == jwt_active_tenant_id),
+            ).first()
+            if mapped_active:
+                resolved_active_tenant_id = mapped_active.id
+
+            # If no tenants at all, use tenant mapped from JWT org_id when available.
             if not all_tenant_ids:
-                # User has JWT org_id but no DB records yet
+                mapped_org_tenant = db.query(Tenant).filter(
+                    Tenant.clerk_org_id == jwt_org_id,
+                    Tenant.status == TenantStatus.ACTIVE,
+                ).first()
+                if mapped_org_tenant:
+                    return mapped_org_tenant.id, []
                 return jwt_org_id, []
 
             # 1. Try JWT-provided active_tenant_id (if in allowed list)
-            if jwt_active_tenant_id in all_tenant_ids:
-                return jwt_active_tenant_id, list(db_tenant_ids)
+            if resolved_active_tenant_id in all_tenant_ids:
+                return resolved_active_tenant_id, list(db_tenant_ids)
 
             # 2. Try stored active_tenant_id from user metadata
             stored_tenant_id = (user.extra_metadata or {}).get("active_tenant_id")
@@ -677,6 +726,7 @@ class TenantContextMiddleware:
                     request=request,
                     user_id=str(user_id),
                     jwt_org_id=str(org_id),
+                    jwt_org_role=org_role,
                     jwt_active_tenant_id=active_tenant_id,
                     jwt_allowed_tenants=allowed_tenants,
                 )
