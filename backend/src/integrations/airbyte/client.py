@@ -547,6 +547,30 @@ class AirbyteClient:
         data = await self._request("GET", f"/sources/{source_id}")
         return AirbyteSource.from_dict(data)
 
+    async def check_source_connection(self, source_id: str) -> Dict[str, Any]:
+        """
+        Test connectivity for an existing source.
+
+        Calls Airbyte's check_connection endpoint which validates
+        that credentials are valid and the external platform is reachable.
+
+        Args:
+            source_id: Source UUID to test
+
+        Returns:
+            Dict with 'status' ('succeeded'/'failed') and optional 'message'
+
+        Raises:
+            AirbyteNotFoundError: If source not found
+            AirbyteError: On other API errors
+        """
+        data = await self._request(
+            "POST",
+            "/sources/check_connection",
+            json={"sourceId": source_id},
+        )
+        return data
+
     async def list_sources(
         self,
         workspace_id: Optional[str] = None,

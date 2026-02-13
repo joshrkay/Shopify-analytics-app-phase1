@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session
 
 from src.repositories.airbyte_connections import (
     AirbyteConnectionsRepository,
-    ConnectionNotFoundError,
     ConnectionAlreadyExistsError,
 )
 from src.models.airbyte_connection import (
@@ -664,6 +663,40 @@ class AirbyteService:
             extra={
                 "tenant_id": self.tenant_id,
                 "connection_id": connection_id
+            }
+        )
+
+        return self._to_connection_info(connection)
+
+    def update_sync_frequency(self, connection_id: str, frequency_minutes: int) -> ConnectionInfo:
+        """
+        Update the sync frequency for a connection.
+
+        Args:
+            connection_id: Internal connection ID
+            frequency_minutes: Sync interval in minutes (e.g. 60, 1440, 10080)
+
+        Returns:
+            Updated ConnectionInfo
+
+        Raises:
+            ConnectionNotFoundServiceError: If connection not found
+        """
+        connection = self._repository.get_by_id(connection_id)
+        if not connection:
+            raise ConnectionNotFoundServiceError(
+                f"Connection {connection_id} not found"
+            )
+        connection.sync_frequency_minutes = frequency_minutes
+        self.db.commit()
+        self.db.refresh(connection)
+
+        logger.info(
+            "Sync frequency updated",
+            extra={
+                "tenant_id": self.tenant_id,
+                "connection_id": connection_id,
+                "frequency_minutes": frequency_minutes,
             }
         )
 
