@@ -28,6 +28,16 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
   });
 
   if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const error = new Error(
+        `Expected JSON from ${url} but received ${contentType || 'unknown content type'}. ` +
+        'The backend may be down or the URL may be incorrect.'
+      ) as ApiError;
+      error.status = response.status;
+      error.detail = error.message;
+      throw error;
+    }
     const errorData = await response.json().catch(() => ({}));
     const error = new Error(errorData.detail || `HTTP ${response.status}`) as ApiError;
     error.status = response.status;
@@ -59,7 +69,7 @@ export const plansApi = {
     }
 
     const queryString = searchParams.toString();
-    const url = `/admin/plans${queryString ? `?${queryString}` : ''}`;
+    const url = `/api/admin/plans${queryString ? `?${queryString}` : ''}`;
 
     const response = await fetchWithAuth(url);
     return response.json();
@@ -69,7 +79,7 @@ export const plansApi = {
    * Get a specific plan by ID
    */
   async getPlan(planId: string): Promise<Plan> {
-    const response = await fetchWithAuth(`/admin/plans/${planId}`);
+    const response = await fetchWithAuth(`/api/admin/plans/${planId}`);
     return response.json();
   },
 
@@ -77,7 +87,7 @@ export const plansApi = {
    * Create a new plan
    */
   async createPlan(data: CreatePlanRequest): Promise<Plan> {
-    const response = await fetchWithAuth('/admin/plans', {
+    const response = await fetchWithAuth('/api/admin/plans', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -88,7 +98,7 @@ export const plansApi = {
    * Update an existing plan
    */
   async updatePlan(planId: string, data: UpdatePlanRequest): Promise<Plan> {
-    const response = await fetchWithAuth(`/admin/plans/${planId}`, {
+    const response = await fetchWithAuth(`/api/admin/plans/${planId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -102,7 +112,7 @@ export const plansApi = {
     planId: string,
     data: ToggleFeatureRequest
   ): Promise<PlanFeature> {
-    const response = await fetchWithAuth(`/admin/plans/${planId}/features/toggle`, {
+    const response = await fetchWithAuth(`/api/admin/plans/${planId}/features/toggle`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -113,7 +123,7 @@ export const plansApi = {
    * Delete a plan (use with caution - prefer deactivating)
    */
   async deletePlan(planId: string): Promise<void> {
-    await fetchWithAuth(`/admin/plans/${planId}`, {
+    await fetchWithAuth(`/api/admin/plans/${planId}`, {
       method: 'DELETE',
     });
   },
@@ -125,7 +135,7 @@ export const plansApi = {
     planId: string,
     data: ShopifyValidationRequest
   ): Promise<ShopifyValidationResponse> {
-    const response = await fetchWithAuth(`/admin/plans/${planId}/validate-shopify`, {
+    const response = await fetchWithAuth(`/api/admin/plans/${planId}/validate-shopify`, {
       method: 'POST',
       body: JSON.stringify(data),
     });

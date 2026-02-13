@@ -1,11 +1,11 @@
-# Shopify App Configuration for Signals AI
+# Shopify App Configuration for MarkInsight
 # Documentation: https://shopify.dev/docs/apps/tools/cli/configuration
 
 # Shopify CLI identifies this app by client_id (API Key from Partner Dashboard)
 client_id = "659b64a20473522b3602d790278711cc"
 
-name = "Signals AI"
-handle = "signals-ai"
+name = "MarkInsight"
+handle = "markinsight"
 application_url = "https://shopify-analytics-app-pmsl.onrender.com"
 
 # Embedded app configuration

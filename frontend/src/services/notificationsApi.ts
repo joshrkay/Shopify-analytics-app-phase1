@@ -1,49 +1,36 @@
-import { API_BASE_URL, createHeadersAsync, handleResponse } from './apiUtils';
 import type { NotificationPreferences, PerformanceAlert } from '../types/settingsTypes';
 
+// Backend notifications.py serves notification items (unread count, mark read),
+// NOT preferences/alerts/test. These endpoints have no backend implementation.
+// Return sensible defaults to prevent the Settings page from crashing.
+const NOT_IMPLEMENTED_MSG = 'Notification preferences: backend endpoints not yet implemented';
+
 export async function getNotificationPreferences(): Promise<NotificationPreferences> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/notifications/preferences`, { method: 'GET', headers });
-  return handleResponse<NotificationPreferences>(response);
+  console.warn(NOT_IMPLEMENTED_MSG);
+  return {} as NotificationPreferences;
 }
 
 export async function updateNotificationPreferences(
-  prefs: Partial<NotificationPreferences>,
+  _prefs: Partial<NotificationPreferences>,
 ): Promise<NotificationPreferences> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/notifications/preferences`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(prefs),
-  });
-  return handleResponse<NotificationPreferences>(response);
+  console.warn(NOT_IMPLEMENTED_MSG);
+  return getNotificationPreferences();
 }
 
 export async function getPerformanceAlerts(): Promise<PerformanceAlert[]> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/notifications/alerts`, { method: 'GET', headers });
-  return handleResponse<PerformanceAlert[]>(response);
+  console.warn(NOT_IMPLEMENTED_MSG);
+  return [];
 }
 
 export async function updatePerformanceAlert(
-  alertId: string,
-  alert: Partial<PerformanceAlert>,
+  _alertId: string,
+  _alert: Partial<PerformanceAlert>,
 ): Promise<PerformanceAlert> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/notifications/alerts/${alertId}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(alert),
-  });
-  return handleResponse<PerformanceAlert>(response);
+  console.warn(NOT_IMPLEMENTED_MSG);
+  throw new Error('Performance alert updates are not yet available');
 }
 
-export async function testNotification(channel: string): Promise<{ success: boolean }> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/notifications/test`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ channel }),
-  });
-  return handleResponse<{ success: boolean }>(response);
+export async function testNotification(_channel: string): Promise<{ success: boolean }> {
+  console.warn(NOT_IMPLEMENTED_MSG);
+  return { success: false };
 }
