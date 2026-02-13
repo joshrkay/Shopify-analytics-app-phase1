@@ -56,7 +56,7 @@ export function WizardFlow() {
   } = useDashboardBuilder();
 
   // Widget catalog
-  const { items, loading, error } = useWidgetCatalog();
+  const { items, loading, error, refresh } = useWidgetCatalog();
 
   // Track completed steps
   const [completedSteps, setCompletedSteps] = useState<Set<'select' | 'customize' | 'preview'>>(
@@ -190,7 +190,8 @@ export function WizardFlow() {
                 selectedIds={selectedWidgetIds}
                 onAddWidget={handleAddWidget}
                 loading={loading}
-                error={error}
+                error={error?.message ?? null}
+                onRetry={refresh}
               />
             </div>
           </InlineStack>
