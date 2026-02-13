@@ -1,41 +1,14 @@
 # Render Blueprint for MarkInsight App
 # This file enables one-click deployment of the entire application stack
 # Deploy via: https://render.com/docs/blueprint-spec
+#
+# Current deployment: API + DB only (monolithic Docker image serves both
+# the FastAPI backend and the bundled React frontend from the same domain).
+# Uncomment additional services below when scaling requires them.
 
 services:
   # ============================================
-  # FRONTEND (React + Vite Static Site)
-  # ============================================
-  - type: web
-    name: markinsight-frontend
-    runtime: static
-    buildCommand: cd frontend && npm install && npm run build:deploy
-    staticPublishPath: frontend/dist
-    branch: main
-    autoDeploy: true
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
-      - path: /index.html
-        name: Cache-Control
-        value: no-cache
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          type: web
-          name: markinsight-api
-          property: host
-      # Clerk authentication (set via Render dashboard)
-      - key: VITE_CLERK_PUBLISHABLE_KEY
-        sync: false
-
-  # ============================================
-  # WEB API SERVICE (FastAPI)
+  # WEB API SERVICE (FastAPI + bundled React frontend)
   # ============================================
   - type: web
     name: markinsight-api
@@ -59,13 +32,7 @@ services:
       # Database connection (auto-injected from database service)
       - key: DATABASE_URL
         fromDatabase:
-          name: signals-ai-db
-          property: connectionString
-      # Redis connection (auto-injected from Redis service)
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: markinsight-redis
+          name: markinsight-db
           property: connectionString
       # Clerk authentication (set via Render dashboard)
       - key: CLERK_SECRET_KEY
@@ -93,162 +60,185 @@ services:
         sync: false
 
   # ============================================
-  # BACKGROUND WORKER SERVICE
+  # SERVICES BELOW ARE NOT YET DEPLOYED
+  # Uncomment when scaling requires them.
   # ============================================
-  - type: worker
-    name: markinsight-worker
-    runtime: docker
-    # Uses worker Dockerfile
-    dockerfilePath: ./docker/worker.Dockerfile
-    dockerContext: .
-    # Deploy from main branch
-    branch: main
-    # Auto-deploy on push to main
-    autoDeploy: true
-    region: oregon
-    # Same environment variables as API (workers need DB/Redis access)
-    envVars:
-      - key: ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: signals-ai-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: markinsight-redis
-          property: connectionString
-      # Clerk authentication (set via Render dashboard)
-      - key: CLERK_SECRET_KEY
-        sync: false
-      - key: CLERK_WEBHOOK_SECRET
-        sync: false
-      - key: CLERK_FRONTEND_API
-        sync: false
-      - key: SHOPIFY_API_KEY
-        sync: false
-      - key: SHOPIFY_API_SECRET
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: ENCRYPTION_KEY
-        sync: false
-      # Airbyte Cloud configuration (set via Render dashboard)
-      - key: AIRBYTE_WORKSPACE_ID
-        sync: false
-      - key: AIRBYTE_API_TOKEN
-        sync: false
-      # Worker sync configuration
-      - key: WORKER_AIRBYTE_SYNC_TIMEOUT_SECONDS
-        value: "3600"
-      - key: WORKER_SYNC_CHECK_INTERVAL_SECONDS
-        value: "30"
-      - key: WORKER_MAX_CONCURRENT_SYNCS
-        value: "5"
 
-  # ============================================
-  # CRON JOB: RECONCILE SUBSCRIPTIONS
-  # ============================================
-  - type: cron
-    name: markinsight-reconcile-subscriptions
-    runtime: docker
-    # Schedule: runs every hour
-    schedule: "0 * * * *"
-    # Uses worker Dockerfile (same runtime environment)
-    dockerfilePath: ./docker/worker.Dockerfile
-    dockerContext: .
-    # Command to execute (Docker runtime uses dockerCommand)
-    dockerCommand: python -m src.jobs.reconcile_subscriptions
-    region: oregon
-    # Environment variables (same as worker)
-    envVars:
-      - key: ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: signals-ai-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: markinsight-redis
-          property: connectionString
-      # Clerk authentication (set via Render dashboard)
-      - key: CLERK_SECRET_KEY
-        sync: false
-      - key: CLERK_WEBHOOK_SECRET
-        sync: false
-      - key: CLERK_FRONTEND_API
-        sync: false
-      - key: SHOPIFY_API_KEY
-        sync: false
-      - key: SHOPIFY_API_SECRET
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: ENCRYPTION_KEY
-        sync: false
+  # # ------------------------------------------
+  # # FRONTEND (React + Vite Static Site)
+  # # Not needed when frontend is bundled into the API Docker image.
+  # # ------------------------------------------
+  # - type: web
+  #   name: markinsight-frontend
+  #   runtime: static
+  #   buildCommand: cd frontend && npm install && npm run build:deploy
+  #   staticPublishPath: frontend/dist
+  #   branch: main
+  #   autoDeploy: true
+  #   headers:
+  #     - path: /*
+  #       name: Cache-Control
+  #       value: public, max-age=31536000, immutable
+  #     - path: /index.html
+  #       name: Cache-Control
+  #       value: no-cache
+  #   routes:
+  #     - type: rewrite
+  #       source: /*
+  #       destination: /index.html
+  #   envVars:
+  #     - key: VITE_API_URL
+  #       fromService:
+  #         type: web
+  #         name: markinsight-api
+  #         property: host
+  #     - key: VITE_CLERK_PUBLISHABLE_KEY
+  #       sync: false
 
-  # ============================================
-  # SUPERSET (Embedded Analytics)
-  # ============================================
-  - type: web
-    name: markinsight-superset
-    runtime: docker
-    dockerfilePath: ./docker/superset.Dockerfile
-    dockerContext: .
-    branch: main
-    autoDeploy: true
-    healthCheckPath: /health
-    region: oregon
-    plan: standard
-    envVars:
-      - key: SUPERSET_SECRET_KEY
-        sync: false
-      - key: SUPERSET_METADATA_DB_URI
-        fromDatabase:
-          name: markinsight-superset-db
-          property: connectionString
-      - key: SUPERSET_JWT_SECRET_CURRENT
-        sync: false
-      - key: SUPERSET_JWT_SECRET_PREVIOUS
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: markinsight-redis
-          property: connectionString
-      - key: TALISMAN_ENABLED
-        value: "true"
+  # # ------------------------------------------
+  # # BACKGROUND WORKER SERVICE
+  # # ------------------------------------------
+  # - type: worker
+  #   name: markinsight-worker
+  #   runtime: docker
+  #   dockerfilePath: ./docker/worker.Dockerfile
+  #   dockerContext: .
+  #   branch: main
+  #   autoDeploy: true
+  #   region: oregon
+  #   envVars:
+  #     - key: ENV
+  #       value: production
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: markinsight-db
+  #         property: connectionString
+  #     - key: REDIS_URL
+  #       fromService:
+  #         type: redis
+  #         name: markinsight-redis
+  #         property: connectionString
+  #     - key: CLERK_SECRET_KEY
+  #       sync: false
+  #     - key: CLERK_WEBHOOK_SECRET
+  #       sync: false
+  #     - key: CLERK_FRONTEND_API
+  #       sync: false
+  #     - key: SHOPIFY_API_KEY
+  #       sync: false
+  #     - key: SHOPIFY_API_SECRET
+  #       sync: false
+  #     - key: OPENROUTER_API_KEY
+  #       sync: false
+  #     - key: ENCRYPTION_KEY
+  #       sync: false
+  #     - key: AIRBYTE_WORKSPACE_ID
+  #       sync: false
+  #     - key: AIRBYTE_API_TOKEN
+  #       sync: false
+  #     - key: WORKER_AIRBYTE_SYNC_TIMEOUT_SECONDS
+  #       value: "3600"
+  #     - key: WORKER_SYNC_CHECK_INTERVAL_SECONDS
+  #       value: "30"
+  #     - key: WORKER_MAX_CONCURRENT_SYNCS
+  #       value: "5"
 
-  # ============================================
-  # REDIS: IN-MEMORY CACHE & QUEUE
-  # ============================================
-  - type: redis
-    name: markinsight-redis
-    plan: starter
-    region: oregon
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: Allow access from Render services and approved external clients
+  # # ------------------------------------------
+  # # CRON JOB: RECONCILE SUBSCRIPTIONS
+  # # ------------------------------------------
+  # - type: cron
+  #   name: markinsight-reconcile-subscriptions
+  #   runtime: docker
+  #   schedule: "0 * * * *"
+  #   dockerfilePath: ./docker/worker.Dockerfile
+  #   dockerContext: .
+  #   dockerCommand: python -m src.jobs.reconcile_subscriptions
+  #   region: oregon
+  #   envVars:
+  #     - key: ENV
+  #       value: production
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: markinsight-db
+  #         property: connectionString
+  #     - key: REDIS_URL
+  #       fromService:
+  #         type: redis
+  #         name: markinsight-redis
+  #         property: connectionString
+  #     - key: CLERK_SECRET_KEY
+  #       sync: false
+  #     - key: CLERK_WEBHOOK_SECRET
+  #       sync: false
+  #     - key: CLERK_FRONTEND_API
+  #       sync: false
+  #     - key: SHOPIFY_API_KEY
+  #       sync: false
+  #     - key: SHOPIFY_API_SECRET
+  #       sync: false
+  #     - key: OPENROUTER_API_KEY
+  #       sync: false
+  #     - key: ENCRYPTION_KEY
+  #       sync: false
+
+  # # ------------------------------------------
+  # # SUPERSET (Embedded Analytics)
+  # # ------------------------------------------
+  # - type: web
+  #   name: markinsight-superset
+  #   runtime: docker
+  #   dockerfilePath: ./docker/superset.Dockerfile
+  #   dockerContext: .
+  #   branch: main
+  #   autoDeploy: true
+  #   healthCheckPath: /health
+  #   region: oregon
+  #   plan: standard
+  #   envVars:
+  #     - key: SUPERSET_SECRET_KEY
+  #       sync: false
+  #     - key: SUPERSET_METADATA_DB_URI
+  #       fromDatabase:
+  #         name: markinsight-superset-db
+  #         property: connectionString
+  #     - key: SUPERSET_JWT_SECRET_CURRENT
+  #       sync: false
+  #     - key: SUPERSET_JWT_SECRET_PREVIOUS
+  #       sync: false
+  #     - key: REDIS_URL
+  #       fromService:
+  #         type: redis
+  #         name: markinsight-redis
+  #         property: connectionString
+  #     - key: TALISMAN_ENABLED
+  #       value: "true"
+
+  # # ------------------------------------------
+  # # REDIS: IN-MEMORY CACHE & QUEUE
+  # # ------------------------------------------
+  # - type: redis
+  #   name: markinsight-redis
+  #   plan: starter
+  #   region: oregon
+  #   ipAllowList:
+  #     - source: 0.0.0.0/0
+  #       description: Allow access from Render services and approved external clients
 
 # ============================================
 # DATABASE: POSTGRES
 # ============================================
 databases:
-  - name: signals-ai-db
+  - name: markinsight-db
     databaseName: markinsight
     user: markinsight_user
     plan: basic-256mb
     region: oregon
-    # PostgreSQL version
     postgresMajorVersion: 15
 
-  # Superset metadata database (separate from application data)
-  - name: markinsight-superset-db
-    databaseName: superset_metadata
-    user: superset_user
-    plan: basic-256mb
-    region: oregon
-    postgresMajorVersion: 15
+  # # Superset metadata database (uncomment when deploying Superset)
+  # - name: markinsight-superset-db
+  #   databaseName: superset_metadata
+  #   user: superset_user
+  #   plan: basic-256mb
+  #   region: oregon
+  #   postgresMajorVersion: 15
