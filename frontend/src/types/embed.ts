@@ -4,6 +4,8 @@
  * TypeScript interfaces for Superset embedding in Shopify Admin.
  */
 
+import type { ReactNode } from 'react';
+
 /**
  * Access surface type for analytics embedding.
  * - 'shopify_embed': Embedded within Shopify Admin iframe
@@ -74,9 +76,9 @@ export interface ShopifyEmbeddedSupersetProps {
   /** Show loading skeleton while loading */
   showLoadingSkeleton?: boolean;
   /** Custom loading component */
-  loadingComponent?: React.ReactNode;
+  loadingComponent?: ReactNode;
   /** Custom error component */
-  errorComponent?: React.ReactNode;
+  errorComponent?: ReactNode;
 }
 
 /**

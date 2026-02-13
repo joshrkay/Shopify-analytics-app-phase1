@@ -12,7 +12,6 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import type { SourcePlatform } from '../types/sources';
 import type {
   DataSourceDefinition,
   ConnectionWizardState,

@@ -47,7 +47,7 @@ export function ConnectionSteps({ currentStep }: ConnectionStepsProps) {
             )}
             <InlineStack gap="100" blockAlign="center">
               <Badge tone={isActive ? 'info' : isCompleted ? 'success' : undefined}>
-                {step.order}
+                {String(step.order)}
               </Badge>
               <Text
                 as="span"

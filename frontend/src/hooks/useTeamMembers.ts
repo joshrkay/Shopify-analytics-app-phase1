@@ -57,7 +57,7 @@ function subscribeToTeamMembersStore(listener: () => void): () => void {
   };
 }
 
-function flushPendingRemovals(reason: string) {
+function flushPendingRemovals(_reason: string) {
   pendingRemovalMap.forEach((pending, memberId) => {
     clearTimeout(pending.timeoutId);
     pending.resolve({ success: false, undone: true });

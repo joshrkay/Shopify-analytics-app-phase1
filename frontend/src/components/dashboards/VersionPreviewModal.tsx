@@ -113,13 +113,13 @@ export function VersionPreviewModal({
       secondaryActions={[
         { content: 'Close', onAction: onClose },
       ]}
-      large
+      size="large"
     >
       <Modal.Section>
         <BlockStack gap="400">
           {/* Version metadata */}
           <InlineStack gap="300" align="start" blockAlign="center">
-            <Badge>v{version.version_number}</Badge>
+            <Badge>{`v${version.version_number}`}</Badge>
             <Text as="span" variant="bodySm" tone="subdued">
               {formatRelativeTime(version.created_at, { verbose: true })}
               {' '}({formatDate(version.created_at)})

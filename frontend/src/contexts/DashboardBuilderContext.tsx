@@ -46,7 +46,7 @@ import {
   createReport,
   updateReport as apiUpdateReport,
   deleteReport,
-  reorderReports,
+  reorderReports as _reorderReports,
 } from '../services/customReportsApi';
 import { getErrorMessage, getErrorStatus } from '../services/apiUtils';
 import DOMPurify from 'dompurify';
@@ -109,6 +109,7 @@ interface DashboardBuilderActions {
   setSelectedCategory: (category?: ChartType) => void;
   addCatalogWidget: (item: WidgetCatalogItem) => void;
   removeWizardWidget: (reportId: string) => void;
+  moveWizardWidget: (reportId: string, newPosition: GridPosition) => void;
   updateWizardWidget: (widgetId: string, updates: Partial<Report>) => void;
   openWizardWidgetConfig: (widgetId: string) => void;
   bulkUpdateWizardWidgets: (widgets: Report[]) => void;
@@ -1150,6 +1151,7 @@ export function DashboardBuilderProvider({
     setSelectedCategory,
     addCatalogWidget,
     removeWizardWidget,
+    moveWizardWidget,
     updateWizardWidget,
     openWizardWidgetConfig,
     bulkUpdateWizardWidgets,

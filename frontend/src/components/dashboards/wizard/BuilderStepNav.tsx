@@ -119,7 +119,7 @@ export function BuilderStepNav({
               <Box
                 width="40px"
                 borderBlockStartWidth="025"
-                borderColor="border-subdued"
+                borderColor="border"
               />
             )}
           </InlineStack>

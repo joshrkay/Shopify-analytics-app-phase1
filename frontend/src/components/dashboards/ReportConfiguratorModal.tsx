@@ -44,7 +44,6 @@ import type {
   CreateReportRequest,
   UpdateReportRequest,
   Dataset,
-  ColumnMetadata,
   ChartPreviewRequest,
   MetricDefinition,
   FilterDefinition,

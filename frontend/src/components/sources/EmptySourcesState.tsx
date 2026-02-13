@@ -67,7 +67,7 @@ export function EmptySourcesState({ catalog, onConnect, onBrowseAll }: EmptySour
       {catalog.length > 4 && (
         <InlineStack align="center">
           <Button onClick={onBrowseAll}>
-            Browse all {catalog.length}+ sources
+            {`Browse all ${catalog.length}+ sources`}
           </Button>
         </InlineStack>
       )}

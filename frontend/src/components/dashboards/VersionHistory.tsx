@@ -228,7 +228,7 @@ export function VersionHistory({
         open={open}
         onClose={onClose}
         title="Version History"
-        large
+        size="large"
       >
         <Modal.Section>
           <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
