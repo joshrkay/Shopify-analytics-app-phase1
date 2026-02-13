@@ -136,7 +136,7 @@ describe('ConnectSourceWizard', () => {
       platform: mockPlatform,
       step: 'accounts',
       accounts: [
-        { id: 'acc-1', accountId: 'act_111', accountName: 'Test Account', platform: 'meta_ads', isEnabled: true },
+        { id: 'acc-1', accountId: 'act_111', accountName: 'Test Account', platform: 'meta_ads', isEnabled: true, last30dSpend: 250.00 },
       ],
       selectedAccountIds: ['acc-1'],
     };

@@ -95,7 +95,7 @@ export interface OAuthCompleteResponse {
 /**
  * Sync frequency options
  */
-export type SyncFrequency = 'hourly' | 'daily' | 'weekly';
+export type SyncFrequency = 'hourly' | 'six_hourly' | 'daily' | 'weekly';
 
 /**
  * Sync configuration for a data source connection
@@ -231,6 +231,7 @@ export interface AccountOption {
   accountName: string;
   platform: string;
   isEnabled: boolean;
+  last30dSpend: number | null;
 }
 
 /**

@@ -150,7 +150,9 @@ function AppWithOrg() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/builder" element={
               <FeatureGateRoute feature="custom_reports" entitlements={entitlements} entitlementsLoading={entitlementsLoading} entitlementsError={entitlementsError} onRetry={refetchEntitlements}>
-                <DashboardList />
+                <DashboardBuilderProvider>
+                  <WizardFlow />
+                </DashboardBuilderProvider>
               </FeatureGateRoute>
             } />
             <Route path="/sources" element={<DataSources />} />

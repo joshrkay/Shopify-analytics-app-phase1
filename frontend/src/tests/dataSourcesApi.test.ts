@@ -303,6 +303,7 @@ describe('getAvailableAccounts', () => {
     expect(result).toHaveLength(1);
     expect(result[0].accountName).toBe('Summer Campaign');
     expect(result[0].accountId).toBe('act_123');
+    expect(result[0].last30dSpend).toBeNull();
   });
 });
 

@@ -108,4 +108,19 @@ describe('SyncConfigStep', () => {
 
     expect(screen.getByText(/5-10 minutes/i)).toBeInTheDocument();
   });
+
+  it('frequency dropdown includes "Every 6 hours" option', async () => {
+    const user = userEvent.setup();
+    const onUpdateConfig = vi.fn();
+
+    renderWithPolaris(
+      <SyncConfigStep {...defaultProps} onUpdateConfig={onUpdateConfig} />,
+    );
+
+    const frequencySelect = screen.getByLabelText(/sync frequency/i) as HTMLSelectElement;
+
+    // Change to 6 hours
+    await user.selectOptions(frequencySelect, 'six_hourly');
+    expect(onUpdateConfig).toHaveBeenCalledWith({ frequency: 'six_hourly' });
+  });
 });

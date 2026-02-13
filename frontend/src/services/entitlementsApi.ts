@@ -35,10 +35,9 @@ export interface EntitlementsResponse {
  * Fetch current entitlements for the tenant.
  */
 export async function fetchEntitlements(): Promise<EntitlementsResponse> {
-  const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/billing/entitlements`, {
+  const response = await fetch(`${API_BASE_URL}/api/billing/entitlements`, {
     method: 'GET',
-    headers,
+    headers: await createHeadersAsync(),
   });
 
   return handleResponse<EntitlementsResponse>(response);

@@ -15,8 +15,8 @@
  * Phase 3 — Subphase 3.4/3.5: Connection Wizard
  */
 
-import { useEffect, useCallback } from 'react';
-import { Modal, BlockStack, Banner } from '@shopify/polaris';
+import { useState, useEffect, useCallback } from 'react';
+import { Modal, BlockStack, Banner, Text, InlineStack, Button } from '@shopify/polaris';
 import { useNavigate } from 'react-router-dom';
 import type { DataSourceDefinition } from '../../types/sourceConnection';
 import { useConnectSourceWizard } from '../../hooks/useConnectSourceWizard';
@@ -37,6 +37,9 @@ interface ConnectSourceWizardProps {
   onSuccess?: (connectionId: string) => void;
 }
 
+/** Steps where closing should prompt for confirmation */
+const MID_FLOW_STEPS = new Set(['oauth', 'accounts', 'syncConfig', 'syncing']);
+
 export function ConnectSourceWizard({
   open,
   platform,
@@ -46,6 +49,7 @@ export function ConnectSourceWizard({
   const navigate = useNavigate();
   const wizard = useConnectSourceWizard();
   const { state } = wizard;
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   // Initialize wizard when modal opens with a platform
   useEffect(() => {
@@ -54,26 +58,42 @@ export function ConnectSourceWizard({
     }
   }, [open, platform, wizard.initWithPlatform]);
 
-  const handleClose = useCallback(() => {
+  // Reset confirmation state when modal closes
+  useEffect(() => {
+    if (!open) {
+      setShowCloseConfirm(false);
+    }
+  }, [open]);
+
+  const doClose = useCallback(() => {
+    setShowCloseConfirm(false);
     wizard.reset();
     onClose();
   }, [wizard, onClose]);
+
+  const handleClose = useCallback(() => {
+    if (MID_FLOW_STEPS.has(state.step)) {
+      setShowCloseConfirm(true);
+    } else {
+      doClose();
+    }
+  }, [state.step, doClose]);
 
   const handleViewDashboard = useCallback(() => {
     if (state.connectionId && onSuccess) {
       onSuccess(state.connectionId);
     }
-    handleClose();
+    doClose();
     navigate('/');
-  }, [state.connectionId, onSuccess, handleClose, navigate]);
+  }, [state.connectionId, onSuccess, doClose, navigate]);
 
   const handleConnectAnother = useCallback(() => {
     if (state.connectionId && onSuccess) {
       onSuccess(state.connectionId);
     }
-    handleClose();
+    doClose();
     navigate('/sources');
-  }, [state.connectionId, onSuccess, handleClose, navigate]);
+  }, [state.connectionId, onSuccess, doClose, navigate]);
 
   const activePlatform = state.platform ?? platform;
   if (!activePlatform) return null;
@@ -86,10 +106,27 @@ export function ConnectSourceWizard({
       onClose={handleClose}
       title={title}
       size="large"
-      primaryAction={undefined}
     >
       <Modal.Section>
         <BlockStack gap="400">
+          {showCloseConfirm && (
+            <Banner tone="warning" title="Leave connection wizard?">
+              <BlockStack gap="200">
+                <Text as="p" variant="bodyMd">
+                  Your progress will be lost if you close now.
+                </Text>
+                <InlineStack gap="200">
+                  <Button onClick={() => setShowCloseConfirm(false)}>
+                    Continue Setup
+                  </Button>
+                  <Button variant="primary" tone="critical" onClick={doClose}>
+                    Leave Wizard
+                  </Button>
+                </InlineStack>
+              </BlockStack>
+            </Banner>
+          )}
+
           <WizardSteps currentStep={state.step} />
 
           {state.error && state.step !== 'syncing' && (

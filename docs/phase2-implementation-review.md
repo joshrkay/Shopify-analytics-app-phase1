@@ -842,3 +842,181 @@ Subphase 2.4 is complete when:
 3. Toolbar save/duplicate actions are payload-verified and regression-tested.
 4. Error/retry behavior is explicit and tested for backend failures.
 5. Route-level Step 1 flow works without regressing existing builder experiences.
+
+## Subphase 2.5 gap-closure plan (Step 2 layout customizer + FE↔BE validation)
+
+This section expands **Subphase 2.5** into an implementation plan focused on making Step 2 (`Customize Layout`) functionally complete and verifiably connected to backend-relevant data/configuration flows.
+
+### Objective
+
+Deliver a production-safe Step 2 layout experience where widget arrangement, size controls, and configurator edits are validated end-to-end from UI interactions through context state and save-ready payload contracts.
+
+---
+
+### Scope of FE ↔ BE coupling in Subphase 2.5
+
+Although Step 2 is mostly UI/state driven, it directly affects backend-bound behavior via:
+
+1. **Widget config edits through settings flow**
+   - Opening widget settings must bridge to existing configurator pipelines that shape API-bound report configs.
+
+2. **Layout state persistence**
+   - Position/size edits in Step 2 must produce deterministic state that serializes correctly into save/update payloads.
+
+3. **Mutation compatibility**
+   - Any Step 2 layout/config change must remain compatible with existing dashboard/report mutation contracts.
+
+---
+
+### Confirmed 2.5 gaps to close
+
+1. **Layout component test coverage is incomplete**
+   - Requested unit/integration tests for `LayoutCustomizer`, `LayoutWidgetPlaceholder`, and `LayoutControls` are not fully present.
+
+2. **Settings-bridge verification is under-specified**
+   - Need explicit tests proving Step 2 settings actions open/configure via existing report configurator and persist changes.
+
+3. **Auto-arrange/reset determinism requires stronger assertions**
+   - Layout recalculation behavior should be deterministic for mixed widget sizes and repeated invocations.
+
+4. **Payload-level compatibility checks are missing at Step 2 boundary**
+   - Need contract checks that Step 2 state maps cleanly to backend save/update payload shape before Step 3 actions.
+
+---
+
+### Target architecture for “correct fix”
+
+Use a **state-contract-first approach** in Step 2:
+
+1. UI controls dispatch deterministic context actions.
+2. Context holds canonical widget layout/config state.
+3. Save path consumes same canonical state without Step 2-only transformation hacks.
+4. Regression suite protects legacy configurator/grid behavior.
+
+---
+
+### Implementation plan (sequenced)
+
+#### Step 1 — Complete Step 2 component contracts
+
+Add/complete unit tests for:
+
+- `LayoutWidgetPlaceholder`
+  - title/size rendering,
+  - size-to-grid-span mapping (`small/medium/large/full`),
+  - action callbacks (`configure`, `maximize`, `remove`).
+- `LayoutControls`
+  - reset and auto-arrange callback dispatches,
+  - disabled/empty behavior when no widgets.
+- `LayoutCustomizer`
+  - empty state,
+  - Step 1/Step 3 navigation callbacks,
+  - info banner and grid presence.
+
+Acceptance criteria:
+- Step 2 UI behavior is independently validated and deterministic.
+
+#### Step 2 — Verify settings bridge to configurator flow
+
+Add integration tests proving:
+
+1. Step 2 settings action opens existing configurator/modal.
+2. Config changes (metric/dimension/chart options) are saved back into context widget config.
+3. Updated config is visible in Step 2 and survives navigation to Step 3.
+
+Acceptance criteria:
+- Step 2 edits are not visual-only; they mutate canonical widget config state.
+
+#### Step 3 — Enforce deterministic layout algorithms
+
+Add/validate pure helpers for layout operations:
+
+- `cycleWidgetSize` behavior (`small → medium → large → full → small`).
+- `autoArrangeWidgets` stable output for identical input order/sizes.
+- `resetLayout` predictable baseline positions.
+
+Acceptance criteria:
+- Repeated operations with same input yield identical layout output.
+
+#### Step 4 — Validate save-payload readiness from Step 2 state
+
+Add contract tests ensuring Step 2-produced state maps into save/update payload:
+
+- positions (`x`, `y`, `w`, `h`) valid and bounded,
+- widget config persisted,
+- no missing required report/dashboard fields after Step 2 edits.
+
+Acceptance criteria:
+- Step 2 state can be serialized without lossy conversion before save.
+
+#### Step 5 — Route-level + regression verification
+
+Add/expand integration/regression tests for `/dashboards/wizard` Step 2:
+
+- Step 1 → Step 2 transition with selected widgets,
+- Step 2 actions do not break legacy DashboardGrid/read-only render paths,
+- report configurator lifecycle still works outside wizard.
+
+Acceptance criteria:
+- Step 2 works in wizard without regressing existing report/configurator features.
+
+---
+
+### FE ↔ BE verification checklist for Subphase 2.5
+
+Use this checklist before marking 2.5 complete:
+
+1. **Configuration linkage**
+   - Step 2 settings actions persist config changes that are later used by save/update mutations.
+
+2. **Layout serialization**
+   - All Step 2 layout edits serialize to payload-compatible coordinates/sizes.
+
+3. **State continuity**
+   - Step 2 changes persist across step navigation and are visible in Step 3 preview/save.
+
+4. **Determinism**
+   - Auto-arrange/reset/cycle behaviors are reproducible for fixed inputs.
+
+5. **Failure semantics**
+   - Invalid layout/config operations fail gracefully in UI without corrupting context state.
+
+---
+
+### Recommended test matrix for 2.5 completion
+
+1. **Unit tests**
+   - placeholder sizing/actions, layout controls, layout helper determinism.
+
+2. **Integration tests (Step 2 assembly)**
+   - layout customizer + context + configurator bridge.
+
+3. **Payload contract tests**
+   - Step 2 state to save/update payload mapping.
+
+4. **Regression tests**
+   - existing grid/configurator/dashboard view behavior preserved.
+
+5. **Optional e2e smoke**
+   - select widgets → customize layout actions → preview reflects edits.
+
+---
+
+### Low-risk PR slicing for 2.5
+
+1. **PR 1: Step 2 unit test completion**
+2. **PR 2: configurator bridge integration tests**
+3. **PR 3: layout determinism + payload contract tests**
+4. **PR 4: route-level regression + cleanup**
+
+---
+
+### Definition of done for Subphase 2.5
+
+Subphase 2.5 is complete when:
+
+1. Step 2 component contracts are fully covered.
+2. Settings bridge to configurator is integration-tested and state-persistent.
+3. Layout algorithms (cycle/reset/auto-arrange) are deterministic and tested.
+4. Step 2 output is payload-compatible for save/update backend mutations.
+5. Step 2 flow does not regress legacy grid/configurator/dashboard behavior.
