@@ -202,6 +202,138 @@ async def get_connection_status(
         )
 
 
+class AccountInfo(BaseModel):
+    """Discoverable ad account info."""
+    id: str
+    account_id: str
+    account_name: str
+    platform: str
+    is_enabled: bool
+
+
+class AccountListResponse(BaseModel):
+    """Response for listing available accounts."""
+    accounts: List[AccountInfo]
+
+
+class UpdateAccountsRequest(BaseModel):
+    """Request body for updating selected accounts."""
+    account_ids: List[str]
+
+
+@router.get(
+    "/connections/{connection_id}/accounts",
+    response_model=AccountListResponse,
+)
+async def list_available_accounts(
+    request: Request,
+    connection_id: str,
+    db_session=Depends(get_db_session),
+):
+    """
+    List discoverable ad accounts for a connection after OAuth.
+
+    Returns all accounts the authenticated user has access to on
+    the ad platform, so they can select which ones to sync.
+
+    SECURITY: Only returns accounts for connections belonging to the tenant.
+    """
+    tenant_ctx = get_tenant_context(request)
+    service = AdIngestionService(db_session, tenant_ctx.tenant_id)
+
+    account = service.get_ad_account(connection_id)
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Connection not found: {connection_id}",
+        )
+
+    # List all ad accounts for the same platform
+    platform_enum = None
+    try:
+        platform_enum = AdPlatform(account.platform)
+    except ValueError:
+        pass
+
+    all_accounts = service.list_ad_accounts(platform=platform_enum)
+
+    accounts = [
+        AccountInfo(
+            id=a.id,
+            account_id=a.account_id,
+            account_name=a.account_name,
+            platform=a.platform,
+            is_enabled=a.is_enabled,
+        )
+        for a in all_accounts
+    ]
+
+    logger.info(
+        "Listed available accounts",
+        extra={
+            "tenant_id": tenant_ctx.tenant_id,
+            "connection_id": connection_id,
+            "count": len(accounts),
+        },
+    )
+
+    return AccountListResponse(accounts=accounts)
+
+
+@router.put(
+    "/connections/{connection_id}/accounts",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def update_selected_accounts(
+    request: Request,
+    connection_id: str,
+    body: UpdateAccountsRequest,
+    db_session=Depends(get_db_session),
+):
+    """
+    Update which ad accounts are selected for syncing.
+
+    Enables the specified accounts and disables all others.
+
+    SECURITY: Only modifies accounts belonging to the tenant.
+    """
+    tenant_ctx = get_tenant_context(request)
+    service = AdIngestionService(db_session, tenant_ctx.tenant_id)
+
+    # Verify connection exists
+    account = service.get_ad_account(connection_id)
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Connection not found: {connection_id}",
+        )
+
+    # Get all accounts for this platform
+    platform_enum = None
+    try:
+        platform_enum = AdPlatform(account.platform)
+    except ValueError:
+        pass
+
+    all_accounts = service.list_ad_accounts(platform=platform_enum)
+
+    # Enable selected, disable unselected
+    for acct in all_accounts:
+        if acct.id in body.account_ids:
+            service.enable_ad_account(acct.id)
+        else:
+            service.disable_ad_account(acct.id)
+
+    logger.info(
+        "Updated selected accounts",
+        extra={
+            "tenant_id": tenant_ctx.tenant_id,
+            "connection_id": connection_id,
+            "selected_count": len(body.account_ids),
+        },
+    )
+
+
 @router.post(
     "/connections/{connection_id}/trigger-sync",
     response_model=TriggerSyncResponse,

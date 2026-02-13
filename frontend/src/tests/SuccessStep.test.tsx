@@ -36,7 +36,7 @@ const mockPlatform: DataSourceDefinition = {
 
 const defaultProps = {
   platform: mockPlatform,
-  onDone: vi.fn(),
+  onConnectAnother: vi.fn(),
   onViewDashboard: vi.fn(),
 };
 
@@ -48,14 +48,14 @@ describe('SuccessStep', () => {
     expect(screen.getByText(/meta ads is now connected/i)).toBeInTheDocument();
   });
 
-  it('calls onDone when Done button is clicked', async () => {
+  it('calls onConnectAnother when Connect Another Source button is clicked', async () => {
     const user = userEvent.setup();
-    const onDone = vi.fn();
+    const onConnectAnother = vi.fn();
 
-    renderWithPolaris(<SuccessStep {...defaultProps} onDone={onDone} />);
+    renderWithPolaris(<SuccessStep {...defaultProps} onConnectAnother={onConnectAnother} />);
 
-    await user.click(screen.getByRole('button', { name: /done/i }));
-    expect(onDone).toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /connect another source/i }));
+    expect(onConnectAnother).toHaveBeenCalled();
   });
 
   it('calls onViewDashboard when Go to Dashboard button is clicked', async () => {

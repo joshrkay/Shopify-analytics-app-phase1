@@ -55,7 +55,9 @@ export { SOURCES_KEY, CATALOG_KEY, GLOBAL_SETTINGS_KEY };
 // =============================================================================
 
 interface UseDataSourcesResult {
+  /** @deprecated Use `sources` instead */
   connections: Source[];
+  sources: Source[];
   isLoading: boolean;
   error: unknown;
   hasConnectedSources: boolean;
@@ -79,11 +81,14 @@ export function useDataSources(): UseDataSourcesResult {
     return () => clearInterval(interval);
   }, []);
 
+  const sources = query.data ?? [];
+
   return {
-    connections: query.data ?? [],
+    connections: sources,
+    sources,
     isLoading: query.isLoading,
     error: query.error,
-    hasConnectedSources: (query.data?.length ?? 0) > 0,
+    hasConnectedSources: sources.length > 0,
     refetch: query.refetch,
   };
 }
