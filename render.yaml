@@ -55,9 +55,9 @@ services:
       # ── CORS ──────────────────────────────────────────────────────
       # Comma-separated origins. The backend always appends
       # https://admin.shopify.com automatically.
-      # Production value: https://markinsight.net,https://www.markinsight.net
+      # Production value: https://app.markinsight.net
       - key: CORS_ORIGINS
-        value: "https://markinsight.net,https://www.markinsight.net"
+        value: "https://app.markinsight.net"
 
       # ── Shopify ───────────────────────────────────────────────────
       - key: SHOPIFY_API_KEY
@@ -66,7 +66,7 @@ services:
         sync: false
       # Where Shopify redirects after billing approval/decline.
       - key: SHOPIFY_BILLING_RETURN_URL
-        value: "https://markinsight.net/api/billing/callback"
+        value: "https://app.markinsight.net/api/billing/callback"
 
       # ── AI / LLM ─────────────────────────────────────────────────
       - key: OPENROUTER_API_KEY
