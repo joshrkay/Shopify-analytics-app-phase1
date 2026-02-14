@@ -26,37 +26,54 @@ services:
     region: oregon
     # Environment variables
     envVars:
-      # Environment identifier
+      # ── Core ──────────────────────────────────────────────────────
       - key: ENV
         value: production
-      # Database connection (auto-injected from database service)
+      # Database connection (auto-injected from Render Postgres)
       - key: DATABASE_URL
         fromDatabase:
           name: markinsight-db
           property: connectionString
-      # Clerk authentication (set via Render dashboard)
+
+      # ── Clerk Authentication ──────────────────────────────────────
+      # CLERK_FRONTEND_API — REQUIRED. The backend uses this to build
+      # the JWKS URL (https://<value>/.well-known/jwks.json) for JWT
+      # verification. Without it, ALL protected endpoints return 503.
+      # Set to your Clerk production domain: https://clerk.markinsight.net
+      - key: CLERK_FRONTEND_API
+        sync: false
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLERK_WEBHOOK_SECRET
         sync: false
-      # Clerk Frontend API URL — REQUIRED for JWT verification via JWKS.
-      # Without this, the backend returns 503 for ALL protected endpoints.
-      - key: CLERK_FRONTEND_API
+      # Clerk publishable key — passed as Docker build arg so Vite
+      # inlines it into the frontend bundle at build time.
+      # Must match the key in frontend/.env.production.
+      - key: VITE_CLERK_PUBLISHABLE_KEY
         sync: false
-      # Shopify API credentials (set via Render dashboard)
+
+      # ── CORS ──────────────────────────────────────────────────────
+      # Comma-separated origins. The backend always appends
+      # https://admin.shopify.com automatically.
+      # Production value: https://markinsight.net,https://www.markinsight.net
+      - key: CORS_ORIGINS
+        value: "https://markinsight.net,https://www.markinsight.net"
+
+      # ── Shopify ───────────────────────────────────────────────────
       - key: SHOPIFY_API_KEY
         sync: false
       - key: SHOPIFY_API_SECRET
         sync: false
-      # OpenRouter API key for AI features (set via Render dashboard)
+      # Where Shopify redirects after billing approval/decline.
+      - key: SHOPIFY_BILLING_RETURN_URL
+        value: "https://markinsight.net/api/billing/callback"
+
+      # ── AI / LLM ─────────────────────────────────────────────────
       - key: OPENROUTER_API_KEY
         sync: false
-      # Encryption key for secrets (set via Render dashboard)
+
+      # ── Security ──────────────────────────────────────────────────
       - key: ENCRYPTION_KEY
-        sync: false
-      # Clerk publishable key — passed as Docker build arg so Vite can
-      # inline it into the frontend bundle at build time.
-      - key: VITE_CLERK_PUBLISHABLE_KEY
         sync: false
 
   # ============================================
