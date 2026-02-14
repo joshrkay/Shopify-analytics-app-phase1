@@ -19,7 +19,7 @@ COPY frontend/ ./
 # be baked into the frontend bundle at build time.
 # Hardcoded here because Render's Docker build does not reliably pass
 # build-args or preserve .env files in the build context.
-RUN VITE_CLERK_PUBLISHABLE_KEY="pk_test_d2VsY29tZS1sYW1iLTM3LmNsZXJrLmFjY291bnRzLmRldiQ" npx vite build
+RUN VITE_CLERK_PUBLISHABLE_KEY="pk_live_Y2xlcmsubWFya2luc2lnaHQubmV0JA" npx vite build
 
 ###############################################################################
 # Stage 2: Python backend + built frontend static files
