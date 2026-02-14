@@ -1,6 +1,8 @@
 """
 Debug endpoints for environment and deployment status.
 These endpoints bypass authentication for troubleshooting.
+
+SECURITY: Disabled in production (ENV=production) to prevent information leakage.
 """
 
 import os
@@ -11,9 +13,17 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _production_guard():
+    """Return a 404 response if running in production, else None."""
+    if os.getenv("ENV") == "production":
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    return None
 
 
 @router.get("/debug/env-status")
@@ -22,6 +32,9 @@ def env_status():
     Check which environment variables are configured.
     Returns status without exposing sensitive values.
     """
+    blocked = _production_guard()
+    if blocked:
+        return blocked
     # Environment variables to check
     env_vars = [
         "ENV",
@@ -78,6 +91,10 @@ async def auth_check(request: Request):
     4. If Authorization header is provided, decodes (without verifying)
        the JWT payload to show issuer/expiry/org_id for comparison
     """
+    blocked = _production_guard()
+    if blocked:
+        return blocked
+
     results: dict = {"checks": {}, "token_info": None}
 
     # 1. Check CLERK_FRONTEND_API

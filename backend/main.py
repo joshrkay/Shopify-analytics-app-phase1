@@ -96,6 +96,34 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Clerk authentication configured", extra={"env_status": env_status})
 
+        # JWKS reachability probe — informational only, does not block startup.
+        # Logs whether the Clerk JWKS endpoint is reachable so that DNS/config
+        # issues are visible in deploy logs before the first request fails.
+        clerk_api = os.getenv("CLERK_FRONTEND_API", "").rstrip("/")
+        if not clerk_api.startswith("http"):
+            clerk_api = f"https://{clerk_api}"
+        jwks_url = f"{clerk_api}/.well-known/jwks.json"
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(jwks_url)
+            if resp.status_code == 200:
+                key_count = len(resp.json().get("keys", []))
+                logger.info(
+                    "JWKS probe: reachable",
+                    extra={"url": jwks_url, "key_count": key_count},
+                )
+            else:
+                logger.warning(
+                    "JWKS probe: unexpected status",
+                    extra={"url": jwks_url, "status": resp.status_code},
+                )
+        except Exception as e:
+            logger.warning(
+                "JWKS probe: unreachable",
+                extra={"url": jwks_url, "error": f"{type(e).__name__}: {e}"},
+            )
+
     # Check identity schema readiness (required for fail-closed auth enforcement)
     app.state.identity_schema_ready = False
     app.state.identity_schema_missing_tables = []

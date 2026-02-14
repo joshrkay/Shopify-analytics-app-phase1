@@ -20,7 +20,7 @@ from src.models.user_tenant_roles import UserTenantRole
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 # --- Request/Response Models ---

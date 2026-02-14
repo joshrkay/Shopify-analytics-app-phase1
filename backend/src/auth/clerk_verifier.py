@@ -1,6 +1,17 @@
 """
 Clerk JWT Verifier for authenticating Clerk-issued JWTs.
 
+DEPRECATED: This module is NOT used in production. JWT verification in the
+live app is handled by TenantContextMiddleware (src/platform/tenant_context.py),
+which uses the CLERK_FRONTEND_API env var to locate JWKS.
+
+This module uses a DIFFERENT env var (CLERK_ISSUER_URL) that is not set in
+render.yaml or any deployment config. It exists only because test files
+(test_clerk_auth.py, test_jwt_auth.py) import it for mock-based testing.
+
+TODO: Migrate tests to use the same verification path as production, then
+delete this file.
+
 This module handles:
 - Fetching and caching JWKS from Clerk
 - JWT signature verification

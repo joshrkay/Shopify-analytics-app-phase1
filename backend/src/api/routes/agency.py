@@ -31,7 +31,7 @@ from src.services.billing_entitlements import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/agency", tags=["agency"])
+router = APIRouter(prefix="/api/agency", tags=["agency"])
 
 
 # --- Request/Response Models ---

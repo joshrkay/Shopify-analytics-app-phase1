@@ -17,9 +17,10 @@ COPY frontend/ ./
 
 # VITE_CLERK_PUBLISHABLE_KEY is a public key (pk_test_/pk_live_) that must
 # be baked into the frontend bundle at build time.
-# Hardcoded here because Render's Docker build does not reliably pass
-# build-args or preserve .env files in the build context.
-RUN VITE_CLERK_PUBLISHABLE_KEY="pk_live_Y2xlcmsubWFya2luc2lnaHQubmV0JA" npx vite build
+# Passed as a Docker build arg. Falls back to the value in frontend/.env.production
+# when the arg is empty (Vite reads .env.production automatically during build).
+ARG VITE_CLERK_PUBLISHABLE_KEY
+RUN VITE_CLERK_PUBLISHABLE_KEY="${VITE_CLERK_PUBLISHABLE_KEY}" npx vite build
 
 ###############################################################################
 # Stage 2: Python backend + built frontend static files
