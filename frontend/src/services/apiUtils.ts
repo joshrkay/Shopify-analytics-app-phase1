@@ -19,6 +19,7 @@ const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 interface FetchRetryOptions {
   maxRetries?: number;
   baseDelayMs?: number;
+  maxDelayMs?: number;
 }
 
 /**
@@ -137,16 +138,36 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function getRetryDelayMs(response: Response | null, attempt: number, baseDelayMs: number): number {
+function getRetryDelayMs(
+  response: Response | null,
+  attempt: number,
+  baseDelayMs: number,
+  maxDelayMs: number,
+): number {
   const retryAfter = response?.headers.get('retry-after');
   if (retryAfter) {
     const parsedSeconds = Number.parseInt(retryAfter, 10);
     if (!Number.isNaN(parsedSeconds) && parsedSeconds >= 0) {
-      return parsedSeconds * 1000;
+      return Math.min(parsedSeconds * 1000, maxDelayMs);
+    }
+
+    const parsedDate = Date.parse(retryAfter);
+    if (!Number.isNaN(parsedDate)) {
+      const msUntilRetry = parsedDate - Date.now();
+      if (msUntilRetry > 0) {
+        return Math.min(msUntilRetry, maxDelayMs);
+      }
     }
   }
 
-  return baseDelayMs * 2 ** attempt;
+  return Math.min(baseDelayMs * 2 ** attempt, maxDelayMs);
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return false;
+  }
+  return error instanceof TypeError;
 }
 
 /**
@@ -166,6 +187,7 @@ export async function fetchWithRetry(
 
   const maxRetries = options.maxRetries ?? 2;
   const baseDelayMs = options.baseDelayMs ?? 300;
+  const maxDelayMs = options.maxDelayMs ?? 5000;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
@@ -174,16 +196,16 @@ export async function fetchWithRetry(
         return response;
       }
 
-      await sleep(getRetryDelayMs(response, attempt, baseDelayMs));
+      await sleep(getRetryDelayMs(response, attempt, baseDelayMs, maxDelayMs));
     } catch (error) {
-      if (!(error instanceof TypeError) || attempt === maxRetries) {
+      if (!isRetryableNetworkError(error) || attempt === maxRetries) {
         throw error;
       }
-      await sleep(baseDelayMs * 2 ** attempt);
+      await sleep(Math.min(baseDelayMs * 2 ** attempt, maxDelayMs));
     }
   }
 
-  return fetch(input, init);
+  throw new Error('fetchWithRetry exhausted retries without returning a response.');
 }
 
 /**
