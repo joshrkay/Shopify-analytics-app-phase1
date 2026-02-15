@@ -13,13 +13,13 @@ import type {
   SwitchStoreResponse,
   UserContext,
 } from '../types/agency';
-import { API_BASE_URL, createHeadersAsync, handleResponse, setAuthToken } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, fetchWithRetry, handleResponse, setAuthToken } from './apiUtils';
 
 /**
  * Fetch assigned stores for the current agency user.
  */
 export async function fetchAssignedStores(): Promise<AssignedStoresResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/agency/stores`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/api/agency/stores`, {
     method: 'GET',
     headers: await createHeadersAsync(),
   });
@@ -56,7 +56,7 @@ export async function switchActiveStore(
  * Get the current user context from JWT.
  */
 export async function fetchUserContext(): Promise<UserContext> {
-  const response = await fetch(`${API_BASE_URL}/api/agency/me`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/api/agency/me`, {
     method: 'GET',
     headers: await createHeadersAsync(),
   });
@@ -95,7 +95,7 @@ export async function refreshJwtToken(
 export async function checkStoreAccess(
   tenantId: string
 ): Promise<{ has_access: boolean; reason?: string }> {
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `${API_BASE_URL}/api/agency/stores/${tenantId}/access`,
     {
       method: 'GET',

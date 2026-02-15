@@ -8,7 +8,7 @@
  * Phase 3 — Subphase 3.2: Extended API Service
  */
 
-import { API_BASE_URL, createHeadersAsync, handleResponse } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, fetchWithRetry, handleResponse } from './apiUtils';
 import { normalizeApiSource, type RawApiSource } from './sourceNormalizer';
 import type { Source, SourcePlatform } from '../types/sources';
 import type {
@@ -37,7 +37,7 @@ interface RawSourceListResponse {
  */
 export async function listSources(): Promise<Source[]> {
   const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/sources`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/api/sources`, {
     method: 'GET',
     headers,
   });
@@ -57,7 +57,7 @@ export async function listSources(): Promise<Source[]> {
  */
 export async function getAvailableSources(): Promise<DataSourceDefinition[]> {
   const headers = await createHeadersAsync();
-  const response = await fetch(`${API_BASE_URL}/api/sources/catalog`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/api/sources/catalog`, {
     method: 'GET',
     headers,
   });

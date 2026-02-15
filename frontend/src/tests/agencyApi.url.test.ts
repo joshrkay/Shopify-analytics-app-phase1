@@ -11,6 +11,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 vi.mock('../services/apiUtils', () => ({
   API_BASE_URL: '',
   createHeadersAsync: vi.fn(async () => ({ 'Content-Type': 'application/json' })),
+  fetchWithRetry: vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => fetch(url, init)),
   handleResponse: vi.fn(async () => ({ success: true, jwt_token: 'tok' })),
   setAuthToken: vi.fn(),
 }));

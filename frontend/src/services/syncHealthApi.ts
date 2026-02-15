@@ -141,7 +141,7 @@ export interface MerchantDataHealthResponse {
 // API Configuration
 // =============================================================================
 
-import { API_BASE_URL, createHeadersAsync, handleResponse } from './apiUtils';
+import { API_BASE_URL, createHeadersAsync, fetchWithRetry, handleResponse } from './apiUtils';
 
 // =============================================================================
 // Sync Health API Functions
@@ -252,7 +252,7 @@ export async function getDashboardBlockStatus(): Promise<DashboardBlockStatus> {
  * @returns Compact health status
  */
 export async function getCompactHealth(): Promise<CompactHealth> {
-  const response = await fetch(`${API_BASE_URL}/api/sync-health/compact`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/api/sync-health/compact`, {
     method: 'GET',
     headers: await createHeadersAsync(),
   });
@@ -269,7 +269,7 @@ export async function getCompactHealth(): Promise<CompactHealth> {
  * @returns Active incidents response
  */
 export async function getActiveIncidents(): Promise<ActiveIncidentsResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/sync-health/incidents/active`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/api/sync-health/incidents/active`, {
     method: 'GET',
     headers: await createHeadersAsync(),
   });
@@ -457,7 +457,7 @@ export function calculateBackfillDateRange(
  * Story 4.3 - Merchant Data Health Trust Layer
  */
 export async function getMerchantDataHealth(): Promise<MerchantDataHealthResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/data-health/merchant`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/api/data-health/merchant`, {
     method: 'GET',
     headers: await createHeadersAsync(),
   });
