@@ -124,6 +124,20 @@ async def lifespan(app: FastAPI):
                 extra={"url": jwks_url, "error": f"{type(e).__name__}: {e}"},
             )
 
+    # Database connectivity check — surface misconfigurations in deploy logs
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        logger.error(
+            "DATABASE_URL is not set. All authenticated endpoints will return 503. "
+            "Set DATABASE_URL in the Render environment or fix the fromDatabase binding in render.yaml."
+        )
+        app.state.database_configured = False
+    else:
+        # Mask credentials for safe logging
+        masked = database_url.split("@")[-1] if "@" in database_url else "(no @ found — URL may be malformed)"
+        logger.info("DATABASE_URL configured", extra={"host_db": masked})
+        app.state.database_configured = True
+
     # Check identity schema readiness (required for fail-closed auth enforcement)
     app.state.identity_schema_ready = False
     app.state.identity_schema_missing_tables = []

@@ -113,6 +113,8 @@ export function DataHealthProvider({
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPendingRef = useRef(false);
   const consecutiveErrorsRef = useRef(0);
+  // Ref breaks circular dependency: schedulePoll ↔ refresh ↔ schedulePoll
+  const schedulePollRef = useRef<() => void>(() => {});
 
   // Fetch health and incidents data
   const fetchData = useCallback(async () => {
@@ -158,29 +160,6 @@ export function DataHealthProvider({
     }
   }, []);
 
-  // Public refresh function (resets error backoff)
-  const refresh = useCallback(async () => {
-    consecutiveErrorsRef.current = 0;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    await fetchData();
-    schedulePoll();
-  }, [fetchData, schedulePoll]);
-
-  // Acknowledge incident
-  const acknowledgeIncident = useCallback(async (incidentId: string) => {
-    try {
-      await acknowledgeIncidentApi(incidentId);
-      // Remove from local state immediately
-      setState((prev) => ({
-        ...prev,
-        activeIncidents: prev.activeIncidents.filter((i) => i.id !== incidentId),
-      }));
-    } catch (err) {
-      console.error('Failed to acknowledge incident:', err);
-      throw err;
-    }
-  }, []);
-
   // Get poll interval based on current health status
   const getPollInterval = useCallback((): number => {
     const status = state.health?.overall_status;
@@ -209,20 +188,46 @@ export function DataHealthProvider({
       : baseInterval;
 
     pollTimeoutRef.current = setTimeout(() => {
-      fetchData().then(schedulePoll);
+      fetchData().then(() => schedulePollRef.current());
     }, interval);
   }, [disablePolling, getPollInterval, fetchData]);
 
+  // Keep ref in sync so callbacks always use the latest schedulePoll
+  schedulePollRef.current = schedulePoll;
+
+  // Public refresh function (resets error backoff)
+  const refresh = useCallback(async () => {
+    consecutiveErrorsRef.current = 0;
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    await fetchData();
+    schedulePollRef.current();
+  }, [fetchData]);
+
+  // Acknowledge incident
+  const acknowledgeIncident = useCallback(async (incidentId: string) => {
+    try {
+      await acknowledgeIncidentApi(incidentId);
+      // Remove from local state immediately
+      setState((prev) => ({
+        ...prev,
+        activeIncidents: prev.activeIncidents.filter((i) => i.id !== incidentId),
+      }));
+    } catch (err) {
+      console.error('Failed to acknowledge incident:', err);
+      throw err;
+    }
+  }, []);
+
   // Initial fetch and polling setup
   useEffect(() => {
-    fetchData().then(schedulePoll);
+    fetchData().then(() => schedulePollRef.current());
 
     return () => {
       if (pollTimeoutRef.current) {
         clearTimeout(pollTimeoutRef.current);
       }
     };
-  }, [fetchData, schedulePoll]);
+  }, [fetchData]);
 
   // Pause polling when tab is hidden
   useEffect(() => {
@@ -237,7 +242,7 @@ export function DataHealthProvider({
         }
       } else {
         // Resume polling and fetch immediately
-        fetchData().then(schedulePoll);
+        fetchData().then(() => schedulePollRef.current());
       }
     };
 
@@ -245,7 +250,7 @@ export function DataHealthProvider({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [disablePolling, fetchData, schedulePoll]);
+  }, [disablePolling, fetchData]);
 
   // Computed values
   const hasStaleData = (state.health?.stale_count ?? 0) > 0;
