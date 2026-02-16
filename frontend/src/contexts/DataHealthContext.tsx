@@ -29,6 +29,7 @@ import {
   type ActiveIncidentBanner,
   type MerchantDataHealthResponse,
 } from '../services/syncHealthApi';
+import { isBackendDown, resetCircuitBreaker } from '../services/apiUtils';
 import type { MerchantHealthState } from '../utils/data_health_copy';
 
 // =============================================================================
@@ -120,6 +121,8 @@ export function DataHealthProvider({
   const fetchData = useCallback(async () => {
     // Prevent concurrent fetches
     if (isPendingRef.current) return;
+    // Skip if global circuit breaker says backend is down
+    if (isBackendDown()) return;
     isPendingRef.current = true;
 
     try {
@@ -195,9 +198,10 @@ export function DataHealthProvider({
   // Keep ref in sync so callbacks always use the latest schedulePoll
   schedulePollRef.current = schedulePoll;
 
-  // Public refresh function (resets error backoff)
+  // Public refresh function (resets error backoff and circuit breaker)
   const refresh = useCallback(async () => {
     consecutiveErrorsRef.current = 0;
+    resetCircuitBreaker();
     setState((prev) => ({ ...prev, loading: true, error: null }));
     await fetchData();
     schedulePollRef.current();

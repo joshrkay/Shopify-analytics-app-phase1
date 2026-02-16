@@ -28,6 +28,7 @@ import {
   fetchUserContext,
 } from '../services/agencyApi';
 import { refreshTenantToken } from '../utils/auth';
+import { isBackendDown, isApiError } from '../services/apiUtils';
 
 interface AgencyState {
   // User information
@@ -92,8 +93,18 @@ export function AgencyProvider({
     allowedTenants: initialUserContext?.allowed_tenants || [],
   }));
 
-  // Initialize user context and fetch stores
-  const initialize = useCallback(async () => {
+  // Initialize user context and fetch stores (with retry for 5xx errors)
+  const initialize = useCallback(async (retryCount = 0) => {
+    // Skip if circuit breaker is open (backend is down)
+    if (retryCount === 0 && isBackendDown()) {
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: 'Backend unavailable — waiting for recovery',
+      }));
+      return;
+    }
+
     try {
       setState((prev) => ({ ...prev, loading: true, error: null }));
 
@@ -122,7 +133,16 @@ export function AgencyProvider({
         error: null,
       });
     } catch (err) {
-      console.error('Failed to initialize agency context:', err);
+      const is5xx = isApiError(err) && err.status >= 500;
+      // Retry up to 2 times on server errors with exponential backoff
+      if (is5xx && retryCount < 2) {
+        const delay = Math.min(5000 * Math.pow(2, retryCount), 30000);
+        setTimeout(() => initialize(retryCount + 1), delay);
+        return;
+      }
+      if (retryCount === 0) {
+        console.error('Failed to initialize agency context:', err);
+      }
       setState((prev) => ({
         ...prev,
         loading: false,

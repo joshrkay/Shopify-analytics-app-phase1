@@ -132,6 +132,10 @@ export function createHeaders(): HeadersInit {
   return headers;
 }
 
+// =============================================================================
+// Fetch Retry Helper
+// =============================================================================
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -208,6 +212,50 @@ export async function fetchWithRetry(
   throw new Error('fetchWithRetry exhausted retries without returning a response.');
 }
 
+// =============================================================================
+// API Circuit Breaker
+// =============================================================================
+// Tracks consecutive 5xx errors across ALL API calls. When the backend is down,
+// this prevents every context/hook from independently flooding it with requests.
+
+let _consecutiveServerErrors = 0;
+let _lastServerErrorTs = 0;
+
+/** Number of consecutive 5xx responses before the circuit opens. */
+const CIRCUIT_OPEN_THRESHOLD = 3;
+/** How long (ms) the circuit stays open before allowing a probe request. */
+const CIRCUIT_OPEN_DURATION_MS = 30_000; // 30 seconds
+
+function _recordServerError(): void {
+  _consecutiveServerErrors++;
+  _lastServerErrorTs = Date.now();
+}
+
+function _recordSuccess(): void {
+  _consecutiveServerErrors = 0;
+}
+
+/**
+ * Returns true when the backend appears down (too many consecutive 5xx errors).
+ * After CIRCUIT_OPEN_DURATION_MS, the circuit enters half-open state to allow
+ * a single probe request through.
+ */
+export function isBackendDown(): boolean {
+  if (_consecutiveServerErrors < CIRCUIT_OPEN_THRESHOLD) return false;
+  const elapsed = Date.now() - _lastServerErrorTs;
+  if (elapsed > CIRCUIT_OPEN_DURATION_MS) {
+    // Half-open: allow one request through to probe backend health
+    _consecutiveServerErrors = CIRCUIT_OPEN_THRESHOLD - 1;
+    return false;
+  }
+  return true;
+}
+
+/** Reset circuit breaker (e.g., after manual refresh action). */
+export function resetCircuitBreaker(): void {
+  _consecutiveServerErrors = 0;
+}
+
 /**
  * Handle API response and throw on error.
  * Extracts error details from the response body.
@@ -217,6 +265,11 @@ export async function handleResponse<T>(response: Response): Promise<T> {
   const isJson = contentType.includes('application/json');
 
   if (!response.ok) {
+    // Track server errors for circuit breaker
+    if (response.status >= 500) {
+      _recordServerError();
+    }
+
     let errorDetail = `API error: ${response.status}`;
 
     if (isJson) {
@@ -238,6 +291,9 @@ export async function handleResponse<T>(response: Response): Promise<T> {
     error.detail = errorDetail;
     throw error;
   }
+
+  // Successful response — reset circuit breaker
+  _recordSuccess();
 
   if (!isJson) {
     const raw = await response.text().catch(() => '');
