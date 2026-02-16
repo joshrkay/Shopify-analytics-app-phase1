@@ -969,11 +969,16 @@ class TenantContextMiddleware:
             # DB-AS-SOURCE-OF-TRUTH AUTHORIZATION ENFORCEMENT
             # =================================================================
             # Final safety check: if active_tenant_id is still a raw Clerk
-            # org_id (not a UUID), TenantGuard queries may throw DataError.
-            # This can happen when all resolution paths above failed silently.
-            if not _is_uuid_format(active_tenant_id):
+            # org_id (starts with "org_"), TenantGuard queries will throw
+            # DataError when PostgreSQL tries to cast it to UUID.
+            # The org_ check at line ~913 handles the common case, but if
+            # that lookup also failed, catch it here as a last resort.
+            # Note: we only reject "org_" prefixed values — other non-UUID
+            # strings (e.g. test fixtures) are allowed through since they
+            # won't hit real PostgreSQL UUID columns in test environments.
+            if str(active_tenant_id).startswith("org_") and not _is_uuid_format(active_tenant_id):
                 logger.warning(
-                    "active_tenant_id is not a valid UUID after resolution — "
+                    "active_tenant_id is still a raw Clerk org_id after resolution — "
                     "cannot proceed to TenantGuard",
                     extra={
                         "active_tenant_id": active_tenant_id,

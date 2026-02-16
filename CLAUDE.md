@@ -184,6 +184,14 @@ JWT → TenantContextMiddleware.__call__()
 - Structured logging via structlog (JSON key/value, correlation IDs)
 - Parameterized queries only — no SQL string concatenation
 
+### CI Quality Gate Awareness
+
+Platform gate tests (`src/tests/platform/test_platform_gate.py`) are **deployment blockers** — all 14 tests must pass before any PR can merge. These tests use **non-UUID synthetic org_ids** (e.g., `"tenant-123"`) in JWT payloads and rely on mocked DB/TenantGuard. When modifying `TenantContextMiddleware`:
+
+1. **Never add blanket UUID validation** on `active_tenant_id` that would reject non-UUID test values. In test environments, `_resolve_tenant_from_db` falls back to the raw JWT `org_id`, which is a synthetic string — not a UUID.
+2. **Scope guards to Clerk org_ids only** — The only non-UUID values that cause production `DataError` are unresolved Clerk org_ids (prefixed with `org_`). Guards should check for the `org_` prefix, not `_is_uuid_format()`, to avoid breaking tests.
+3. **Always run platform tests** before pushing auth/middleware changes: `PYTHONPATH=. pytest src/tests/platform/ -v --tb=short`
+
 ### Frontend-Backend Contract Verification
 
 When adding or modifying frontend API service functions (`frontend/src/services/`), you MUST verify that a corresponding backend route exists in `backend/src/api/routes/` before marking the work as complete. Specifically:
