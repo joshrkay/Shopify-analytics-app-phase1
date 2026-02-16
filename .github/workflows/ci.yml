@@ -485,10 +485,49 @@ jobs:
           echo "Schema/logic changes validated before merge."
 
   # Block PR merge if quality gates fail
+  frontend-ci:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run frontend lint
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Run frontend typecheck
+        working-directory: ./frontend
+        run: npx tsc --noEmit -p tsconfig.build.json
+
+      - name: Run frontend tests
+        working-directory: ./frontend
+        run: npm test -- --run
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: codecov/codecov-action@v3
+        with:
+          flags: frontend
+          name: frontend-tests
+
+  # Block PR merge if quality gates fail
   pr-check:
     name: PR Merge Gate
     runs-on: ubuntu-latest
-    needs: [quality-gates, platform-tests, billing-regression-tests, dbt-validation]
+    needs: [quality-gates, platform-tests, billing-regression-tests, dbt-validation, frontend-ci]
     if: github.event_name == 'pull_request'
     
     steps:

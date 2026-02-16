@@ -84,7 +84,7 @@ describe('AnalyticsHealthBanner', () => {
     );
 
     const button = screen.getByRole('button');
-    expect(button).toHaveProperty('disabled', true);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('reports health incident on mount via fetch', () => {
