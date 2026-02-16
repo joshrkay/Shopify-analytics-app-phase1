@@ -6,7 +6,7 @@ client_id = "659b64a20473522b3602d790278711cc"
 
 name = "MarkInsight"
 handle = "markinsight"
-application_url = "https://shopify-analytics-app-pmsl.onrender.com"
+application_url = "https://shopify-analytics-app-phase1.onrender.com"
 
 # Embedded app configuration
 embedded = true
@@ -22,8 +22,8 @@ scopes = "read_orders,read_products,read_customers,read_analytics"
 # Allowed redirect URLs for OAuth flow
 [auth]
 redirect_urls = [
-  "https://shopify-analytics-app-pmsl.onrender.com/api/auth/callback",
-  "https://shopify-analytics-app-pmsl.onrender.com/api/billing/callback"
+  "https://shopify-analytics-app-phase1.onrender.com/api/auth/callback",
+  "https://shopify-analytics-app-phase1.onrender.com/api/billing/callback"
 ]
 
 # Webhooks configuration

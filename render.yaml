@@ -11,7 +11,7 @@ services:
   # WEB API SERVICE (FastAPI + bundled React frontend)
   # ============================================
   - type: web
-    name: markinsight-api
+    name: shopify-analytics-app-phase1
     runtime: docker
     # Dockerfile path relative to repo root
     dockerfilePath: ./docker/backend.Dockerfile
@@ -32,7 +32,7 @@ services:
       # Database connection (auto-injected from Render Postgres)
       - key: DATABASE_URL
         fromDatabase:
-          name: markinsight-db
+          name: shopify-analytics-app-phase1-db
           property: connectionString
 
       # ── Clerk Authentication ──────────────────────────────────────
@@ -55,9 +55,9 @@ services:
       # ── CORS ──────────────────────────────────────────────────────
       # Comma-separated origins. The backend always appends
       # https://admin.shopify.com automatically.
-      # Production value: https://app.markinsight.net
+      # Production value: https://shopify-analytics-app-phase1.onrender.com
       - key: CORS_ORIGINS
-        value: "https://app.markinsight.net"
+        value: "https://shopify-analytics-app-phase1.onrender.com"
 
       # ── Shopify ───────────────────────────────────────────────────
       - key: SHOPIFY_API_KEY
@@ -66,7 +66,7 @@ services:
         sync: false
       # Where Shopify redirects after billing approval/decline.
       - key: SHOPIFY_BILLING_RETURN_URL
-        value: "https://app.markinsight.net/api/billing/callback"
+        value: "https://shopify-analytics-app-phase1.onrender.com/api/billing/callback"
 
       # ── AI / LLM ─────────────────────────────────────────────────
       - key: OPENROUTER_API_KEY
@@ -86,7 +86,7 @@ services:
   # # Not needed when frontend is bundled into the API Docker image.
   # # ------------------------------------------
   # - type: web
-  #   name: markinsight-frontend
+  #   name: shopify-analytics-app-phase1-frontend
   #   runtime: static
   #   buildCommand: cd frontend && npm install && npm run build:deploy
   #   staticPublishPath: frontend/dist
@@ -107,7 +107,7 @@ services:
   #     - key: VITE_API_URL
   #       fromService:
   #         type: web
-  #         name: markinsight-api
+  #         name: shopify-analytics-app-phase1
   #         property: host
   #     - key: VITE_CLERK_PUBLISHABLE_KEY
   #       sync: false
@@ -116,7 +116,7 @@ services:
   # # BACKGROUND WORKER SERVICE
   # # ------------------------------------------
   # - type: worker
-  #   name: markinsight-worker
+  #   name: shopify-analytics-app-phase1-worker
   #   runtime: docker
   #   dockerfilePath: ./docker/worker.Dockerfile
   #   dockerContext: .
@@ -128,12 +128,12 @@ services:
   #       value: production
   #     - key: DATABASE_URL
   #       fromDatabase:
-  #         name: markinsight-db
+  #         name: shopify-analytics-app-phase1-db
   #         property: connectionString
   #     - key: REDIS_URL
   #       fromService:
   #         type: redis
-  #         name: markinsight-redis
+  #         name: shopify-analytics-app-phase1-redis
   #         property: connectionString
   #     - key: CLERK_SECRET_KEY
   #       sync: false
@@ -164,7 +164,7 @@ services:
   # # CRON JOB: RECONCILE SUBSCRIPTIONS
   # # ------------------------------------------
   # - type: cron
-  #   name: markinsight-reconcile-subscriptions
+  #   name: shopify-analytics-app-phase1-reconcile-subscriptions
   #   runtime: docker
   #   schedule: "0 * * * *"
   #   dockerfilePath: ./docker/worker.Dockerfile
@@ -176,12 +176,12 @@ services:
   #       value: production
   #     - key: DATABASE_URL
   #       fromDatabase:
-  #         name: markinsight-db
+  #         name: shopify-analytics-app-phase1-db
   #         property: connectionString
   #     - key: REDIS_URL
   #       fromService:
   #         type: redis
-  #         name: markinsight-redis
+  #         name: shopify-analytics-app-phase1-redis
   #         property: connectionString
   #     - key: CLERK_SECRET_KEY
   #       sync: false
@@ -202,7 +202,7 @@ services:
   # # SUPERSET (Embedded Analytics)
   # # ------------------------------------------
   # - type: web
-  #   name: markinsight-superset
+  #   name: shopify-analytics-app-phase1-superset
   #   runtime: docker
   #   dockerfilePath: ./docker/superset.Dockerfile
   #   dockerContext: .
@@ -216,7 +216,7 @@ services:
   #       sync: false
   #     - key: SUPERSET_METADATA_DB_URI
   #       fromDatabase:
-  #         name: markinsight-superset-db
+  #         name: shopify-analytics-app-phase1-superset-db
   #         property: connectionString
   #     - key: SUPERSET_JWT_SECRET_CURRENT
   #       sync: false
@@ -225,7 +225,7 @@ services:
   #     - key: REDIS_URL
   #       fromService:
   #         type: redis
-  #         name: markinsight-redis
+  #         name: shopify-analytics-app-phase1-redis
   #         property: connectionString
   #     - key: TALISMAN_ENABLED
   #       value: "true"
@@ -234,7 +234,7 @@ services:
   # # REDIS: IN-MEMORY CACHE & QUEUE
   # # ------------------------------------------
   # - type: redis
-  #   name: markinsight-redis
+  #   name: shopify-analytics-app-phase1-redis
   #   plan: starter
   #   region: oregon
   #   ipAllowList:
@@ -245,15 +245,15 @@ services:
 # DATABASE: POSTGRES
 # ============================================
 databases:
-  - name: markinsight-db
-    databaseName: markinsight
-    user: markinsight_user
+  - name: shopify-analytics-app-phase1-db
+    databaseName: markinsight_phase1
+    user: markinsight_phase1_user
     plan: basic-256mb
     region: oregon
     postgresMajorVersion: 15
 
   # # Superset metadata database (uncomment when deploying Superset)
-  # - name: markinsight-superset-db
+  # - name: shopify-analytics-app-phase1-superset-db
   #   databaseName: superset_metadata
   #   user: superset_user
   #   plan: basic-256mb
