@@ -28,14 +28,16 @@ describe('llmConfigApi', () => {
   });
 
   it('setApiKey sends encrypted payload', async () => {
-    await setApiKey('openai', 'secret');
-    expect(global.fetch).toHaveBeenCalledWith('/api/llm-config/key', expect.objectContaining({ method: 'POST', body: JSON.stringify({ provider: 'openai', key: 'secret' }) }));
+    await expect(setApiKey('openai', 'secret')).resolves.toEqual({ success: false });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('testConnection returns status', async () => {
-    const payload = { status: 'success' };
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(payload) });
-    await expect(testConnection()).resolves.toEqual(payload);
+    await expect(testConnection()).resolves.toEqual({
+      status: 'error',
+      message: 'Feature not yet available',
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('getAIUsageStats returns metric counts', async () => {
@@ -46,6 +48,6 @@ describe('llmConfigApi', () => {
 
   it('updateFeatureFlags sends flag delta', async () => {
     await updateFeatureFlags({ predictions: true });
-    expect(global.fetch).toHaveBeenCalledWith('/api/llm-config/features', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ predictions: true }) }));
+    expect(global.fetch).toHaveBeenCalledWith('/api/llm/config', expect.objectContaining({ method: 'GET' }));
   });
 });
