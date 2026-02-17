@@ -1,0 +1,53 @@
+# Render API key — get from https://dashboard.render.com/account/api-keys
+render_api_key = ""
+
+# Render owner/team ID — get from Render dashboard URL or API (usr-... / tea-...)
+render_owner_id = ""
+
+# Database name — defaults to shopify_analytics in variables.tf
+database_name = ""
+
+# Database user — defaults to shopify_analytics_user in variables.tf
+database_user = ""
+
+# Render region — defaults to oregon
+region = ""
+
+# Clerk frontend API URL/domain — get from Clerk Dashboard
+clerk_frontend_api = ""
+
+# Clerk secret key — get from Clerk Dashboard -> API Keys
+clerk_secret_key = ""
+
+# Clerk webhook secret — get from Clerk Dashboard -> Webhooks -> Signing Secret
+clerk_webhook_secret = ""
+
+# Clerk publishable key for Vite frontend — get from Clerk Dashboard -> API Keys
+vite_clerk_publishable_key = ""
+
+# Shopify API key — get from Shopify Partner Dashboard app credentials
+shopify_api_key = ""
+
+# Shopify API secret — get from Shopify Partner Dashboard app credentials
+shopify_api_secret = ""
+
+# Shopify billing callback URL — defaults to phase1 callback URL in variables.tf
+shopify_billing_return_url = ""
+
+# OpenRouter API key — get from https://openrouter.ai/settings/keys
+openrouter_api_key = ""
+
+# App encryption key (32-byte base64) — generate with: openssl rand -base64 32
+encryption_key = ""
+
+# CORS origins — defaults to phase1 Render domain
+cors_origins = ""
+
+# DigitalOcean API token — get from https://cloud.digitalocean.com/account/api/tokens
+do_token = ""
+
+# DigitalOcean region — defaults to nyc3
+do_region = ""
+
+# DigitalOcean droplet size — defaults to s-2vcpu-4gb
+do_droplet_size = ""
